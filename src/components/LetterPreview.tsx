@@ -65,9 +65,11 @@ export function LetterPreview({
                 {igrejaOrigem && (
                   <div>
                     <p className="text-sm font-semibold text-foreground">{igrejaOrigem.nome}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {igrejaOrigem.cidade} - {igrejaOrigem.uf}
-                    </p>
+                    {(igrejaOrigem.cidade || igrejaOrigem.uf) && (
+                      <p className="text-xs text-muted-foreground">
+                        {igrejaOrigem.cidade} {igrejaOrigem.cidade && igrejaOrigem.uf ? "-" : ""} {igrejaOrigem.uf}
+                      </p>
+                    )}
                   </div>
                 )}
                 {igrejaOrigem && igrejaDestino && (
@@ -76,9 +78,11 @@ export function LetterPreview({
                 {igrejaDestino && (
                   <div>
                     <p className="text-sm font-semibold text-foreground">{igrejaDestino.nome}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {igrejaDestino.cidade} - {igrejaDestino.uf}
-                    </p>
+                    {(igrejaDestino.cidade || igrejaDestino.uf) && (
+                      <p className="text-xs text-muted-foreground">
+                        {igrejaDestino.cidade} {igrejaDestino.cidade && igrejaDestino.uf ? "-" : ""} {igrejaDestino.uf}
+                      </p>
+                    )}
                   </div>
                 )}
               </div>

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -6,35 +6,187 @@ import { Button } from "@/components/ui/button";
 import { ChurchSearch, Church } from "@/components/ChurchSearch";
 import { LetterPreview } from "@/components/LetterPreview";
 import { igrejasMock } from "@/data/mockChurches";
-import { FileText, RotateCcw, Send, Church as ChurchIcon } from "lucide-react";
+import { FileText, RotateCcw, Send } from "lucide-react";
 import { toast } from "sonner";
+import { useForm } from "react-hook-form";
+import { z } from "zod";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { useQuery } from "@tanstack/react-query";
+import { fetchChurches } from "@/services/churchService";
+import { createCarta } from "@/services/letterService";
+import { format } from "date-fns";
+import { ptBR } from "date-fns/locale";
+import { useUser } from "@/context/UserContext";
+import { getIgrejaByTotvs } from "@/services/userService";
+import { useNavigate } from "react-router-dom";
 
 const Index = () => {
-  const [pregadorNome, setPregadorNome] = useState("");
+  const { usuario, telefone, setUsuario, setTelefone } = useUser();
+  const nav = useNavigate();
   const [igrejaOrigem, setIgrejaOrigem] = useState<Church | undefined>();
   const [igrejaDestino, setIgrejaDestino] = useState<Church | undefined>();
-  const [dataPregacao, setDataPregacao] = useState("");
-  const [dataEmissao, setDataEmissao] = useState("");
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    // TODO: Integration with backend (Supabase + n8n) will be added here
-    toast.success(
-      "Solicitação registrada (modo demonstração). Integração com backend será adicionada depois.",
-      {
-        duration: 5000,
+  const [destinoOutros, setDestinoOutros] = useState("");
+  const schema = useMemo(
+    () =>
+      z
+        .object({
+          pregadorNome: z.string().min(2),
+          telefone: z.string().min(1),
+          dataPregacao: z.string().min(1),
+          dataEmissao: z.string().min(1),
+          origemId: z.number().int().positive(),
+          destinoId: z.number().int().positive().optional(),
+          destinoOutros: z.string().optional(),
+        })
+        .refine(
+          (v) => new Date(v.dataEmissao).getTime() <= new Date(v.dataPregacao).getTime(),
+          {
+            path: ["dataEmissao"],
+            message: "Data de emissão não pode ser após a pregação",
+          },
+        )
+        .refine(
+          (v) => !!v.destinoId || !!(v.destinoOutros && v.destinoOutros.trim().length >= 2),
+          { path: ["destinoId"], message: "Selecione a igreja de destino ou informe em Outros" },
+        ),
+    [],
+  );
+  const {
+    register,
+    handleSubmit,
+    reset,
+    setValue,
+    watch,
+    formState: { errors },
+  } = useForm<{
+    pregadorNome: string;
+    telefone: string;
+    dataPregacao: string;
+    dataEmissao: string;
+    origemId: number;
+    destinoId?: number;
+    destinoOutros?: string;
+  }>({
+    resolver: zodResolver(schema),
+    defaultValues: {
+      pregadorNome: "",
+      telefone: "",
+      dataPregacao: "",
+      dataEmissao: format(new Date(), "yyyy-MM-dd", { locale: ptBR }),
+      destinoOutros: "",
+    },
+  });
+  const { data: churches = igrejasMock } = useQuery({ queryKey: ["churches"], queryFn: fetchChurches, staleTime: 60_000 });
+  useEffect(() => {
+    if (usuario?.nome) setValue("pregadorNome", usuario.nome, { shouldValidate: true });
+    if (usuario?.telefone || telefone) setValue("telefone", usuario?.telefone || telefone || "", { shouldValidate: true });
+    (async () => {
+      if (usuario?.totvs) {
+        try {
+          const found = await getIgrejaByTotvs(usuario.totvs);
+          if (found) {
+            const c: Church = { id: Number(found.codigoTotvs) || Date.now(), codigoTotvs: found.codigoTotvs, nome: found.nome, cidade: "", uf: "", carimboIgreja: "", carimboPastor: "" };
+            setIgrejaOrigem(c);
+            setValue("origemId", c.id, { shouldValidate: true });
+          }
+        } catch {}
       }
-    );
+    })();
+  }, [usuario, telefone, setValue]);
+
+  useEffect(() => {
+    if (!usuario && !telefone) nav("/");
+  }, [usuario, telefone, nav]);
+
+  const onSubmit = async (values: {
+    pregadorNome: string;
+    telefone: string;
+    dataPregacao: string;
+    dataEmissao: string;
+    origemId: number;
+    destinoId?: number;
+    destinoOutros?: string;
+  }) => {
+    const origemText = igrejaOrigem ? `${igrejaOrigem.codigoTotvs} - ${igrejaOrigem.nome}` : "";
+    const destinoText = (watch("destinoOutros") && watch("destinoOutros")!.trim())
+      ? watch("destinoOutros")!.trim()
+      : (igrejaDestino ? `${igrejaDestino.codigoTotvs} - ${igrejaDestino.nome}` : "");
+    let saved = false;
+    try {
+      await createCarta({
+        nome: values.pregadorNome,
+        igreja_origem: origemText,
+        igreja_destino: destinoText,
+        dia_pregacao: values.dataPregacao ? format(new Date(values.dataPregacao), "dd/MM/yyyy", { locale: ptBR }) : "",
+        data_emissao: values.dataEmissao,
+      });
+      saved = true;
+    } catch (e) {
+      toast.error("Falha ao salvar na tabela carta. Verifique RLS.");
+    }
+    try {
+      const webhookUrl = (import.meta as any).env?.VITE_WEBHOOK_CARTA_PREGACAO || "https://n8n-n8n.ynlng8.easypanel.host/webhook/carta-pregacao";
+      const ac = new AbortController();
+      const res = await fetch(webhookUrl, {
+        method: "POST",
+        mode: "cors",
+        headers: { "Content-Type": "application/json", Accept: "application/json" },
+        body: JSON.stringify({
+          nome: values.pregadorNome,
+          telefone: values.telefone,
+          igreja_origem: origemText,
+          igreja_destino: destinoText,
+          dia_pregacao: values.dataPregacao ? format(new Date(values.dataPregacao), "dd/MM/yyyy", { locale: ptBR }) : "",
+          data_emissao: values.dataEmissao ? format(new Date(values.dataEmissao), "dd/MM/yyyy", { locale: ptBR }) : "",
+          origem_totvs: igrejaOrigem?.codigoTotvs,
+          destino_totvs: (watch("destinoOutros") && watch("destinoOutros")!.trim()) ? undefined : igrejaDestino?.codigoTotvs,
+          origem_nome: igrejaOrigem?.nome,
+          destino_nome: (watch("destinoOutros") && watch("destinoOutros")!.trim()) ? watch("destinoOutros")!.trim() : igrejaDestino?.nome,
+        }),
+        signal: ac.signal,
+        referrerPolicy: "no-referrer",
+      });
+      if (!res.ok) throw new Error("webhook-failed");
+      toast.success("Olá!", {
+        description:
+          "A sua resposta foi registrada com sucesso. Solicitamos que, por favor, entre em contato com o seu pastor do Campo da Setorial ou da Central, pois a sua carta de pregação já foi enviada para ele.\n\nPermanecemos à disposição para quaisquer dúvidas.\n\nAtenciosamente,\nEstadual de Vitória",
+        duration: 12000,
+      });
+    } catch {
+      toast.error("Falha ao chamar o webhook. Verifique se está ativo.");
+    }
+    if (saved) {
+      setIgrejaOrigem(undefined);
+      setIgrejaDestino(undefined);
+      reset({
+        pregadorNome: "",
+        telefone: "",
+        dataPregacao: "",
+        dataEmissao: format(new Date(), "yyyy-MM-dd", { locale: ptBR }),
+        origemId: undefined as unknown as number,
+        destinoId: undefined as unknown as number,
+      });
+      setUsuario(undefined);
+      setTelefone(undefined);
+      setDestinoOutros("");
+      nav("/");
+    }
   };
 
   const handleClear = () => {
-    setPregadorNome("");
     setIgrejaOrigem(undefined);
     setIgrejaDestino(undefined);
-    setDataPregacao("");
-    setDataEmissao("");
-    toast.info("Formulário limpo");
+    reset({
+      pregadorNome: "",
+      telefone: "",
+      dataPregacao: "",
+      dataEmissao: format(new Date(), "yyyy-MM-dd", { locale: ptBR }),
+      origemId: undefined as unknown as number,
+      destinoId: undefined as unknown as number,
+      destinoOutros: "",
+    });
+    setTelefone(undefined);
+    setDestinoOutros("");
   };
 
   return (
@@ -43,10 +195,7 @@ const Index = () => {
       <header className="bg-gradient-to-r from-primary to-accent text-primary-foreground shadow-lg">
         <div className="container mx-auto px-4 py-8">
           <div className="flex flex-col items-center text-center space-y-3">
-            <div className="flex items-center justify-center gap-3 bg-white/10 backdrop-blur-sm rounded-lg px-6 py-3">
-              <ChurchIcon className="h-8 w-8" />
-              <span className="text-2xl font-bold">LOGO IPDA</span>
-            </div>
+            <img src="/Polish_20220810_001501268%20(2).png" alt="Logo" className="h-16 w-auto rounded-md" />
             <h1 className="text-3xl md:text-4xl font-bold">
               Sistema de Cartas – IPDA Estadual de Vitória
             </h1>
@@ -72,7 +221,7 @@ const Index = () => {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <form onSubmit={handleSubmit} className="space-y-6">
+              <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
                 {/* Nome do Pregador */}
                 <div className="space-y-2">
                   <Label htmlFor="pregador" className="text-sm font-medium text-foreground">
@@ -82,30 +231,77 @@ const Index = () => {
                     id="pregador"
                     type="text"
                     placeholder="Digite o nome completo"
-                    value={pregadorNome}
-                    onChange={(e) => setPregadorNome(e.target.value)}
+                    {...register("pregadorNome")}
                     className="bg-card border-input focus:border-primary focus:ring-primary transition-colors"
                     required
                   />
+                  {errors.pregadorNome && <p className="text-xs text-destructive">{errors.pregadorNome.message as string}</p>}
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="telefone" className="text-sm font-medium text-foreground">
+                    Telefone
+                  </Label>
+                  <Input
+                    id="telefone"
+                    type="tel"
+                    placeholder="Digite o telefone"
+                    {...register("telefone")}
+                    className="bg-card border-input focus:border-primary focus:ring-primary transition-colors"
+                    required
+                  />
+                  {errors.telefone && <p className="text-xs text-destructive">{errors.telefone.message as string}</p>}
                 </div>
 
                 {/* Igreja Origem */}
                 <ChurchSearch
                   label="Igreja que faz a carta (origem)"
                   placeholder="Buscar por nome ou código TOTVS"
-                  churches={igrejasMock}
-                  onSelect={setIgrejaOrigem}
+                  churches={churches}
+                  onSelect={(c) => {
+                    setIgrejaOrigem(c);
+                    setValue("origemId", c.id, { shouldValidate: true });
+                  }}
                   value={igrejaOrigem ? `${igrejaOrigem.codigoTotvs} - ${igrejaOrigem.nome}` : ""}
+                  inputId="church-origem"
                 />
+                {errors.origemId && <p className="text-xs text-destructive">Selecione a igreja de origem</p>}
 
                 {/* Igreja Destino */}
                 <ChurchSearch
                   label="Igreja que vai pregar (destino)"
                   placeholder="Buscar por nome ou código TOTVS"
-                  churches={igrejasMock}
-                  onSelect={setIgrejaDestino}
+                  churches={churches}
+                  onSelect={(c) => {
+                    setIgrejaDestino(c);
+                    setValue("destinoId", c.id, { shouldValidate: true });
+                    setDestinoOutros("");
+                    setValue("destinoOutros", "", { shouldValidate: true });
+                  }}
                   value={igrejaDestino ? `${igrejaDestino.codigoTotvs} - ${igrejaDestino.nome}` : ""}
+                  disabled={Boolean(destinoOutros.trim())}
+                  inputId="church-destino"
                 />
+                <div className="space-y-2">
+                  <Label htmlFor="destinoOutros" className="text-sm font-medium text-foreground">Outros (se não encontrar)</Label>
+                  <Input
+                    id="destinoOutros"
+                    type="text"
+                    value={destinoOutros}
+                    onChange={(e) => {
+                      setDestinoOutros(e.target.value);
+                      setValue("destinoOutros", e.target.value, { shouldValidate: true });
+                      if (e.target.value.trim()) {
+                        setIgrejaDestino(undefined);
+                        setValue("destinoId", undefined as unknown as number, { shouldValidate: true });
+                      }
+                    }}
+                    placeholder="Digite a igreja manualmente"
+                    disabled={Boolean(igrejaDestino)}
+                    className="bg-card border-input focus:border-primary focus:ring-primary transition-colors"
+                  />
+                  {errors.destinoId && <p className="text-xs text-destructive">Selecione a igreja de destino ou informe em Outros</p>}
+                </div>
 
                 {/* Datas */}
                 <div className="grid md:grid-cols-2 gap-4">
@@ -116,11 +312,11 @@ const Index = () => {
                     <Input
                       id="dataPregacao"
                       type="date"
-                      value={dataPregacao}
-                      onChange={(e) => setDataPregacao(e.target.value)}
+                      {...register("dataPregacao")}
                       className="bg-card border-input focus:border-primary focus:ring-primary transition-colors"
                       required
                     />
+                    {errors.dataPregacao && <p className="text-xs text-destructive">{errors.dataPregacao.message as string}</p>}
                   </div>
 
                   <div className="space-y-2">
@@ -130,11 +326,12 @@ const Index = () => {
                     <Input
                       id="dataEmissao"
                       type="date"
-                      value={dataEmissao}
-                      onChange={(e) => setDataEmissao(e.target.value)}
+                      {...register("dataEmissao")}
+                      disabled
                       className="bg-card border-input focus:border-primary focus:ring-primary transition-colors"
                       required
                     />
+                    {errors.dataEmissao && <p className="text-xs text-destructive">{errors.dataEmissao.message as string}</p>}
                   </div>
                 </div>
 
@@ -145,7 +342,7 @@ const Index = () => {
                     className="flex-1 bg-primary hover:bg-primary/90 text-primary-foreground font-semibold shadow-md hover:shadow-lg transition-all"
                   >
                     <Send className="h-4 w-4 mr-2" />
-                    Registrar solicitação
+                    Registrar Carta de Pregação
                   </Button>
                   <Button
                     type="button"
@@ -164,11 +361,11 @@ const Index = () => {
           {/* Preview Card */}
           <div className="lg:sticky lg:top-8 h-fit">
             <LetterPreview
-              pregadorNome={pregadorNome}
+              pregadorNome={watch("pregadorNome")}
               igrejaOrigem={igrejaOrigem}
-              igrejaDestino={igrejaDestino}
-              dataPregacao={dataPregacao}
-              dataEmissao={dataEmissao}
+              igrejaDestino={destinoOutros.trim() ? { id: 0, codigoTotvs: "", nome: destinoOutros.trim(), cidade: "", uf: "", carimboIgreja: "", carimboPastor: "" } : igrejaDestino}
+              dataPregacao={watch("dataPregacao")}
+              dataEmissao={watch("dataEmissao")}
             />
           </div>
         </div>
