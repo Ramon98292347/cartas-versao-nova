@@ -1,6 +1,8 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { FileText, User, Calendar, Building2, ArrowRight } from "lucide-react";
 import { Church } from "./ChurchSearch";
+import { format, parse } from "date-fns";
+import { ptBR } from "date-fns/locale";
 
 interface LetterPreviewProps {
   pregadorNome: string;
@@ -97,7 +99,13 @@ export function LetterPreview({
               <div>
                 <p className="text-xs font-medium text-muted-foreground uppercase">Data da Pregação</p>
                 <p className="text-sm font-semibold text-foreground">
-                  {new Date(dataPregacao).toLocaleDateString("pt-BR")}
+                  {(() => {
+                    try {
+                      return format(parse(dataPregacao, "yyyy-MM-dd", new Date()), "dd/MM/yyyy", { locale: ptBR });
+                    } catch {
+                      return dataPregacao;
+                    }
+                  })()}
                 </p>
               </div>
             </div>
@@ -109,7 +117,13 @@ export function LetterPreview({
               <div>
                 <p className="text-xs font-medium text-muted-foreground uppercase">Data de Emissão</p>
                 <p className="text-sm font-semibold text-foreground">
-                  {new Date(dataEmissao).toLocaleDateString("pt-BR")}
+                  {(() => {
+                    try {
+                      return format(parse(dataEmissao, "yyyy-MM-dd", new Date()), "dd/MM/yyyy", { locale: ptBR });
+                    } catch {
+                      return dataEmissao;
+                    }
+                  })()}
                 </p>
               </div>
             </div>

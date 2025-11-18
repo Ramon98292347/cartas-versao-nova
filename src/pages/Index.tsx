@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { ChurchSearch, Church } from "@/components/ChurchSearch";
 import { LetterPreview } from "@/components/LetterPreview";
 import { igrejasMock } from "@/data/mockChurches";
-import { FileText, RotateCcw, Send } from "lucide-react";
+import { FileText, RotateCcw, Send, Calendar as CalendarIcon } from "lucide-react";
 import { toast } from "sonner";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
@@ -14,11 +14,13 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useQuery } from "@tanstack/react-query";
 import { fetchChurches } from "@/services/churchService";
 import { createCarta } from "@/services/letterService";
-import { format } from "date-fns";
+import { format, parse } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { useUser } from "@/context/UserContext";
 import { getIgrejaByTotvs } from "@/services/userService";
 import { useNavigate } from "react-router-dom";
+import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
 
 const Index = () => {
   const { usuario, telefone, setUsuario, setTelefone } = useUser();
@@ -77,6 +79,22 @@ const Index = () => {
     },
   });
   const { data: churches = igrejasMock } = useQuery({ queryKey: ["churches"], queryFn: fetchChurches, staleTime: 60_000 });
+  const toBr = (iso: string) => {
+    if (!iso) return "";
+    try {
+      return format(parse(iso, "yyyy-MM-dd", new Date()), "dd/MM/yyyy", { locale: ptBR });
+    } catch {
+      return iso;
+    }
+  };
+  const brToIso = (br: string) => {
+    try {
+      const d = parse(br, "dd/MM/yyyy", new Date());
+      return format(d, "yyyy-MM-dd");
+    } catch {
+      return br;
+    }
+  };
   useEffect(() => {
     if (usuario?.nome) setValue("pregadorNome", usuario.nome, { shouldValidate: true });
     if (usuario?.telefone || telefone) setValue("telefone", usuario?.telefone || telefone || "", { shouldValidate: true });
@@ -117,8 +135,8 @@ const Index = () => {
         nome: values.pregadorNome,
         igreja_origem: origemText,
         igreja_destino: destinoText,
-        dia_pregacao: values.dataPregacao ? format(new Date(values.dataPregacao), "dd/MM/yyyy", { locale: ptBR }) : "",
-        data_emissao: values.dataEmissao,
+        dia_pregacao: values.dataPregacao ? format(parse(values.dataPregacao, "yyyy-MM-dd", new Date()), "dd/MM/yyyy", { locale: ptBR }) : "",
+        data_emissao: values.dataEmissao ? format(parse(values.dataEmissao, "yyyy-MM-dd", new Date()), "dd/MM/yyyy", { locale: ptBR }) : "",
       });
       saved = true;
     } catch (e) {
@@ -136,8 +154,8 @@ const Index = () => {
           telefone: values.telefone,
           igreja_origem: origemText,
           igreja_destino: destinoText,
-          dia_pregacao: values.dataPregacao ? format(new Date(values.dataPregacao), "dd/MM/yyyy", { locale: ptBR }) : "",
-          data_emissao: values.dataEmissao ? format(new Date(values.dataEmissao), "dd/MM/yyyy", { locale: ptBR }) : "",
+          dia_pregacao: values.dataPregacao ? format(parse(values.dataPregacao, "yyyy-MM-dd", new Date()), "dd/MM/yyyy", { locale: ptBR }) : "",
+          data_emissao: values.dataEmissao ? format(parse(values.dataEmissao, "yyyy-MM-dd", new Date()), "dd/MM/yyyy", { locale: ptBR }) : "",
           origem_totvs: igrejaOrigem?.codigoTotvs,
           destino_totvs: (watch("destinoOutros") && watch("destinoOutros")!.trim()) ? undefined : igrejaDestino?.codigoTotvs,
           origem_nome: igrejaOrigem?.nome,
@@ -309,13 +327,48 @@ const Index = () => {
                     <Label htmlFor="dataPregacao" className="text-sm font-medium text-foreground">
                       Data da pregação
                     </Label>
-                    <Input
-                      id="dataPregacao"
-                      type="date"
-                      {...register("dataPregacao")}
-                      className="bg-card border-input focus:border-primary focus:ring-primary transition-colors"
-                      required
-                    />
+                    <div className="flex gap-2">
+                      {(() => {
+                        const { name, ref, onBlur } = register("dataPregacao");
+                        return (
+                          <Input
+                            id="dataPregacao"
+                            type="text"
+                            inputMode="numeric"
+                            placeholder="dd/mm/aaaa"
+                            name={name}
+                            ref={ref}
+                            onBlur={onBlur}
+                            value={toBr(watch("dataPregacao"))}
+                            onChange={(e) => {
+                              const iso = brToIso(e.target.value);
+                              setValue("dataPregacao", iso, { shouldValidate: true });
+                            }}
+                            className="bg-card border-input focus:border-primary focus:ring-primary transition-colors flex-1"
+                            required
+                          />
+                        );
+                      })()}
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <Button type="button" variant="outline" className="whitespace-nowrap">
+                            <CalendarIcon className="h-4 w-4 mr-2" />
+                            Calendário
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-auto p-0" align="start">
+                          <Calendar
+                            mode="single"
+                            selected={watch("dataPregacao") ? parse(watch("dataPregacao"), "yyyy-MM-dd", new Date()) : undefined}
+                            onSelect={(d) => {
+                              if (!d) return;
+                              setValue("dataPregacao", format(d, "yyyy-MM-dd"), { shouldValidate: true });
+                            }}
+                            initialFocus
+                          />
+                        </PopoverContent>
+                      </Popover>
+                    </div>
                     {errors.dataPregacao && <p className="text-xs text-destructive">{errors.dataPregacao.message as string}</p>}
                   </div>
 
@@ -323,14 +376,24 @@ const Index = () => {
                     <Label htmlFor="dataEmissao" className="text-sm font-medium text-foreground">
                       Data de emissão da carta
                     </Label>
-                    <Input
-                      id="dataEmissao"
-                      type="date"
-                      {...register("dataEmissao")}
-                      disabled
-                      className="bg-card border-input focus:border-primary focus:ring-primary transition-colors"
-                      required
-                    />
+                    {(() => {
+                      const { name, ref, onBlur } = register("dataEmissao");
+                      return (
+                        <Input
+                          id="dataEmissao"
+                          type="text"
+                          inputMode="numeric"
+                          placeholder="dd/mm/aaaa"
+                          name={name}
+                          ref={ref}
+                          onBlur={onBlur}
+                          value={toBr(watch("dataEmissao"))}
+                          disabled
+                          className="bg-card border-input focus:border-primary focus:ring-primary transition-colors"
+                          required
+                        />
+                      );
+                    })()}
                     {errors.dataEmissao && <p className="text-xs text-destructive">{errors.dataEmissao.message as string}</p>}
                   </div>
                 </div>
