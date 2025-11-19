@@ -26,6 +26,9 @@ export async function createCarta(params: {
   igreja_destino: string;
   dia_pregacao: string;
   data_emissao: string;
+  email?: string | null;
+  data_separacao?: string | null;
+  ministerial?: string | null;
 }) {
   if (!supabase) throw new Error("supabase-not-configured");
   const { error } = await supabase.from("carta").insert([
@@ -35,6 +38,9 @@ export async function createCarta(params: {
       igreja_destino: params.igreja_destino,
       "dia_pregação": params.dia_pregacao,
       data_emissao: params.data_emissao,
+      email: params.email ?? null,
+      data_separacao: params.data_separacao ?? null,
+      ministerial: params.ministerial ?? null,
     },
   ]);
   if (error) throw error;

@@ -1,5 +1,5 @@
 import { useNavigate } from "react-router-dom";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -22,9 +22,12 @@ export default function CadastroRapido() {
   const [nome, setNome] = useState("");
   const [email, setEmail] = useState("");
   const [ministerial, setMinisterial] = useState<string>("");
-  const [dataSeparacao, setDataSeparacao] = useState<string>(""); // ISO 'yyyy-MM-dd'
+  const [dataSeparacaoStr, setDataSeparacaoStr] = useState<string>(""); // ISO 'yyyy-MM-dd'
   const [igreja, setIgreja] = useState<Church | undefined>(undefined);
   const [igrejaOutros, setIgrejaOutros] = useState("");
+  const [isSepCalOpen, setIsSepCalOpen] = useState(false);
+  const months = ["janeiro","fevereiro","março","abril","maio","junho","julho","agosto","setembro","outubro","novembro","dezembro"];
+  const [sepViewMonth, setSepViewMonth] = useState<Date>(new Date());
   const { data: churches = [] } = useQuery({ queryKey: ["churches"], queryFn: fetchChurches, staleTime: 60_000 });
   const logo = "/Polish_20220810_001501268%20(2).png";
 
@@ -42,7 +45,7 @@ export default function CadastroRapido() {
         totvs: igreja?.codigoTotvs ?? null,
         igreja_nome: (igreja?.nome ?? igrejaOutros) || null,
         email: email || null,
-        data_separacao: dataSeparacao || null,
+        data_separacao: dataSeparacaoStr || null,
         ministerial: ministerial || null,
       });
       setUsuario({
@@ -92,25 +95,56 @@ export default function CadastroRapido() {
               type="text"
               inputMode="numeric"
               placeholder="dd/mm/aaaa"
-              value={toBr(dataSeparacao)}
+              value={toBr(dataSeparacaoStr)}
               onChange={(e) => {
-                try { const d = parse(e.target.value, "dd/MM/yyyy", new Date()); setDataSeparacao(format(d, "yyyy-MM-dd")); } catch {}
+                try { const d = parse(e.target.value, "dd/MM/yyyy", new Date()); setDataSeparacaoStr(format(d, "yyyy-MM-dd")); } catch {}
               }}
               className="flex-1"
             />
-            <Popover>
+            <Popover open={isSepCalOpen} onOpenChange={setIsSepCalOpen}>
               <PopoverTrigger asChild>
                 <Button type="button" variant="outline" className="whitespace-nowrap">
                   <CalendarIcon className="h-4 w-4 mr-2" /> Calendário
                 </Button>
               </PopoverTrigger>
               <PopoverContent className="w-auto p-0" align="start">
-                <Calendar
-                  mode="single"
-                  selected={dataSeparacao ? parse(dataSeparacao, "yyyy-MM-dd", new Date()) : undefined}
-                  onSelect={(d) => { if (d) setDataSeparacao(format(d, "yyyy-MM-dd")); }}
-                  initialFocus
-                />
+                <div className="p-3 space-y-3">
+                  <div className="grid grid-cols-2 gap-2">
+                    <Select
+                      value={String(sepViewMonth.getMonth())}
+                      onValueChange={(v) => setSepViewMonth(new Date(sepViewMonth.getFullYear(), Number(v), 1))}
+                    >
+                      <SelectTrigger className="w-full"><SelectValue placeholder="Mês" /></SelectTrigger>
+                      <SelectContent>
+                        {months.map((m, idx) => (
+                          <SelectItem key={idx} value={String(idx)}>{m}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <Select
+                      value={String(sepViewMonth.getFullYear())}
+                      onValueChange={(v) => setSepViewMonth(new Date(Number(v), sepViewMonth.getMonth(), 1))}
+                    >
+                      <SelectTrigger className="w-full"><SelectValue placeholder="Ano" /></SelectTrigger>
+                      <SelectContent>
+                        {Array.from({ length: new Date().getFullYear() - 1899 }, (_, i) => 1900 + i)
+                          .reverse()
+                          .map((y) => (
+                            <SelectItem key={y} value={String(y)}>{y}</SelectItem>
+                          ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <Calendar
+                    mode="single"
+                    month={sepViewMonth}
+                    onMonthChange={setSepViewMonth}
+                    selected={dataSeparacaoStr ? parse(dataSeparacaoStr, "yyyy-MM-dd", new Date()) : undefined}
+                    onSelect={(d) => { if (d) { setDataSeparacaoStr(format(d, "yyyy-MM-dd")); setIsSepCalOpen(false); } }}
+                    locale={ptBR}
+                    initialFocus
+                  />
+                </div>
               </PopoverContent>
             </Popover>
           </div>
@@ -123,14 +157,32 @@ export default function CadastroRapido() {
               <SelectItem value="Pastor">Pastor</SelectItem>
               <SelectItem value="Presbítero">Presbítero</SelectItem>
               <SelectItem value="Diácono">Diácono</SelectItem>
+              <SelectItem value="Cooperador">Cooperador</SelectItem>
               <SelectItem value="Membro">Membro</SelectItem>
+            
             </SelectContent>
           </Select>
         </div>
-        <ChurchSearch label="Igreja (congregação)" placeholder="Buscar por nome ou código TOTVS" churches={churches} onSelect={setIgreja} value={igreja ? `${igreja.codigoTotvs} - ${igreja.nome}` : igrejaOutros} inputId="igreja-cadastro" />
+        <ChurchSearch
+          label="Igreja (congregação)"
+          placeholder="Buscar por nome ou código TOTVS"
+          churches={churches}
+          onSelect={(c) => { setIgreja(c); setIgrejaOutros(""); }}
+          value={igreja ? `${igreja.codigoTotvs} - ${igreja.nome}` : ""}
+          inputId="igreja-cadastro"
+          disabled={Boolean(igrejaOutros.trim())}
+          onDisabledClickMessage="Preencha apenas um dos campos"
+        />
         <div className="space-y-2">
           <Label htmlFor="igrejaOutros">Outros (se não encontrar)</Label>
-          <Input id="igrejaOutros" value={igrejaOutros} onChange={(e) => setIgrejaOutros(e.target.value)} placeholder="Descreva a igreja" />
+          <Input
+            id="igrejaOutros"
+            value={igrejaOutros}
+            onChange={(e) => { setIgrejaOutros(e.target.value); if (e.target.value.trim()) setIgreja(undefined); }}
+            onFocus={(e) => { if (igreja) { toast.info("Preencha apenas um dos campos"); e.currentTarget.blur(); } }}
+            placeholder="Descreva a igreja"
+            disabled={Boolean(igreja)}
+          />
         </div>
         <Button onClick={handleSave} className="w-full">Salvar e continuar</Button>
       </div>

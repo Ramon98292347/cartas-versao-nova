@@ -31,6 +31,7 @@ const Index = () => {
   const [usuarioEmail, setUsuarioEmail] = useState<string>("");
   const [usuarioMinisterial, setUsuarioMinisterial] = useState<string>("");
   const [usuarioDataSeparacao, setUsuarioDataSeparacao] = useState<string>("");
+  const [isPregacaoCalOpen, setIsPregacaoCalOpen] = useState(false);
   const schema = useMemo(
     () =>
       z
@@ -211,8 +212,13 @@ const Index = () => {
         nome: values.pregadorNome,
         igreja_origem: origemText,
         igreja_destino: destinoText,
-        dia_pregacao: values.dataPregacao ? format(parse(values.dataPregacao, "yyyy-MM-dd", new Date()), "dd/MM/yyyy", { locale: ptBR }) : "",
-        data_emissao: values.dataEmissao ? format(parse(values.dataEmissao, "yyyy-MM-dd", new Date()), "dd/MM/yyyy", { locale: ptBR }) : "",
+        dia_pregacao: values.dataPregacao
+          ? format(parse(values.dataPregacao, "yyyy-MM-dd", new Date()), "dd/MM/yyyy", { locale: ptBR })
+          : "",
+        data_emissao: values.dataEmissao, // ISO yyyy-MM-dd, compatível com coluna date
+        email: usuarioEmail || (usuario as any)?.email || null,
+        ministerial: usuarioMinisterial || (usuario as any)?.ministerial || null,
+        data_separacao: usuarioDataSeparacao || (usuario as any)?.data_separacao || null,
       });
       saved = true;
     } catch (e) {
@@ -221,22 +227,37 @@ const Index = () => {
     try {
       const webhookUrl = (import.meta as any).env?.VITE_WEBHOOK_CARTA_PREGACAO || "https://n8n-n8n.ynlng8.easypanel.host/webhook/carta-pregacao";
       const ac = new AbortController();
+      const payload = {
+        nome: values.pregadorNome,
+        telefone: values.telefone,
+        igreja_origem: origemText,
+        origem: origemText,
+        igreja_destino: destinoText,
+        destino: destinoText,
+        dia_pregacao: values.dataPregacao ? format(parse(values.dataPregacao, "yyyy-MM-dd", new Date()), "dd/MM/yyyy", { locale: ptBR }) : "",
+        data_emissao: values.dataEmissao ? format(parse(values.dataEmissao, "yyyy-MM-dd", new Date()), "dd/MM/yyyy", { locale: ptBR }) : "",
+        origem_totvs: igrejaOrigem?.codigoTotvs,
+        destino_totvs: (watch("destinoOutros") && watch("destinoOutros")!.trim()) ? undefined : igrejaDestino?.codigoTotvs,
+        origem_nome: igrejaOrigem?.nome,
+        destino_nome: (watch("destinoOutros") && watch("destinoOutros")!.trim()) ? watch("destinoOutros")!.trim() : igrejaDestino?.nome,
+        email: usuarioEmail || (usuario as any)?.email || "",
+        email_pregador: usuarioEmail || (usuario as any)?.email || "",
+        ministerial: usuarioMinisterial || (usuario as any)?.ministerial || "",
+        dados_ministeriais: usuarioMinisterial || (usuario as any)?.ministerial || "",
+        data_separacao: (usuarioDataSeparacao || (usuario as any)?.data_separacao)
+          ? format(parse((usuarioDataSeparacao || (usuario as any)?.data_separacao) as string, "yyyy-MM-dd", new Date()), "dd/MM/yyyy", { locale: ptBR })
+          : "",
+        data_da_separacao: (usuarioDataSeparacao || (usuario as any)?.data_separacao)
+          ? format(parse((usuarioDataSeparacao || (usuario as any)?.data_separacao) as string, "yyyy-MM-dd", new Date()), "dd/MM/yyyy", { locale: ptBR })
+          : "",
+      };
+      // eslint-disable-next-line no-console
+      console.log("webhook_payload", payload);
       const res = await fetch(webhookUrl, {
         method: "POST",
         mode: "cors",
         headers: { "Content-Type": "application/json", Accept: "application/json" },
-        body: JSON.stringify({
-          nome: values.pregadorNome,
-          telefone: values.telefone,
-          igreja_origem: origemText,
-          igreja_destino: destinoText,
-          dia_pregacao: values.dataPregacao ? format(parse(values.dataPregacao, "yyyy-MM-dd", new Date()), "dd/MM/yyyy", { locale: ptBR }) : "",
-          data_emissao: values.dataEmissao ? format(parse(values.dataEmissao, "yyyy-MM-dd", new Date()), "dd/MM/yyyy", { locale: ptBR }) : "",
-          origem_totvs: igrejaOrigem?.codigoTotvs,
-          destino_totvs: (watch("destinoOutros") && watch("destinoOutros")!.trim()) ? undefined : igrejaDestino?.codigoTotvs,
-          origem_nome: igrejaOrigem?.nome,
-          destino_nome: (watch("destinoOutros") && watch("destinoOutros")!.trim()) ? watch("destinoOutros")!.trim() : igrejaDestino?.nome,
-        }),
+        body: JSON.stringify(payload),
         signal: ac.signal,
         referrerPolicy: "no-referrer",
       });
@@ -308,7 +329,7 @@ const Index = () => {
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-2xl text-foreground">
                 <FileText className="h-6 w-6 text-primary" />
-                Registro de Carta de Recomendação
+                Registro de Carta de Pregação
               </CardTitle>
               <CardDescription className="text-muted-foreground">
                 Preencha os dados para emissão da carta
@@ -432,7 +453,13 @@ const Index = () => {
                           />
                         );
                       })()}
-                      <Popover>
+                      <Popover
+                        open={isPregacaoCalOpen}
+                        onOpenChange={(open) => {
+                          if (disableByPhone) { setIsPregacaoCalOpen(false); return; }
+                          setIsPregacaoCalOpen(open);
+                        }}
+                      >
                         <PopoverTrigger asChild>
                           <Button
                             type="button"
@@ -446,7 +473,6 @@ const Index = () => {
                               }
                             }}
                           >
-                            {/* manter aviso pelo telefone */}
                             <CalendarIcon className="h-4 w-4 mr-2" />
                             Calendário
                           </Button>
@@ -458,7 +484,9 @@ const Index = () => {
                             onSelect={(d) => {
                               if (!d) return;
                               setValue("dataPregacao", format(d, "yyyy-MM-dd"), { shouldValidate: true });
+                              setIsPregacaoCalOpen(false);
                             }}
+                            disabled={{ before: new Date() }}
                             initialFocus
                           />
                         </PopoverContent>
