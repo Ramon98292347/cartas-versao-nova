@@ -1,11 +1,11 @@
 import { useNavigate } from "react-router-dom";
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { ChurchSearch, Church } from "@/components/ChurchSearch";
 import { useUser } from "@/context/UserContext";
-import { insertUsuario } from "@/services/userService";
+import { getUsuarioByTelefone, insertUsuario } from "@/services/userService";
 import { useQuery } from "@tanstack/react-query";
 import { fetchChurches } from "@/services/churchService";
 import { fetchCentralChurches } from "@/services/centralChurchService";
@@ -45,9 +45,89 @@ export default function CadastroRapido() {
     try { return format(parse(iso, "yyyy-MM-dd", new Date()), "dd/MM/yyyy", { locale: ptBR }); } catch { return iso; }
   };
 
+  const igrejaOutrosSuggestions = useMemo(() => {
+    const q = igrejaOutros.trim();
+    if (!q || Boolean(igreja)) return [];
+    const qLower = q.toLowerCase();
+    const digits = q.replace(/\D/g, "");
+    const byTotvs = digits ? churches.filter((c) => (c.codigoTotvs || "").includes(digits)) : [];
+    const byName = churches.filter((c) => (c.nome || "").toLowerCase().includes(qLower));
+    const merged: Church[] = [...byTotvs, ...byName];
+    const uniq: Church[] = [];
+    const seen = new Set<string>();
+    for (const c of merged) {
+      const key = `${c.codigoTotvs}-${c.nome}`;
+      if (!seen.has(key)) {
+        seen.add(key);
+        uniq.push(c);
+      }
+      if (uniq.length >= 6) break;
+    }
+    return uniq;
+  }, [igrejaOutros, igreja, churches]);
+
+  const igrejaCentralOutrosSuggestions = useMemo(() => {
+    const q = igrejaCentralOutros.trim();
+    if (!q || Boolean(igrejaCentral)) return [];
+    const qLower = q.toLowerCase();
+    const digits = q.replace(/\D/g, "");
+    const byTotvs = digits ? centralChurches.filter((c) => (c.codigoTotvs || "").includes(digits)) : [];
+    const byName = centralChurches.filter((c) => (c.nome || "").toLowerCase().includes(qLower));
+    const merged: Church[] = [...byTotvs, ...byName];
+    const uniq: Church[] = [];
+    const seen = new Set<string>();
+    for (const c of merged) {
+      const key = `${c.codigoTotvs}-${c.nome}`;
+      if (!seen.has(key)) {
+        seen.add(key);
+        uniq.push(c);
+      }
+      if (uniq.length >= 6) break;
+    }
+    return uniq;
+  }, [igrejaCentralOutros, igrejaCentral, centralChurches]);
+
   async function handleSave() {
     if (!nome || !telefone) { toast.error("Preencha nome e telefone"); return; }
     try {
+      let existente: unknown = null;
+      try {
+        existente = await getUsuarioByTelefone(telefone);
+      } catch {
+        existente = null;
+      }
+
+      if (existente && typeof existente === "object") {
+        const rec = existente as Record<string, unknown>;
+        const centralTotvsRaw = "central_totvs" in rec ? rec.central_totvs : null;
+        const centralNomeRaw = "central_nome" in rec ? rec.central_nome : null;
+        const asNullableString = (v: unknown) => (typeof v === "string" ? v : v == null ? null : String(v));
+        const asOptionalNumber = (v: unknown) => {
+          if (typeof v === "number") return v;
+          if (typeof v === "string" && v.trim()) {
+            const n = Number(v);
+            return Number.isFinite(n) ? n : undefined;
+          }
+          return undefined;
+        };
+
+        toast.info("Telefone já cadastrado. Redirecionando para a carta.");
+        setUsuario({
+          id: asOptionalNumber(rec.id),
+          nome: asNullableString(rec.nome) ?? "",
+          telefone: asNullableString(rec.telefone) ?? "",
+          totvs: asNullableString(rec.totvs),
+          igreja_nome: asNullableString(rec.igreja_nome),
+          email: asNullableString(rec.email),
+          ministerial: asNullableString(rec.ministerial),
+          data_separacao: asNullableString(rec.data_separacao),
+          central_totvs: asNullableString(centralTotvsRaw),
+          central_nome: asNullableString(centralNomeRaw),
+        });
+        setTelefone(asNullableString(rec.telefone) ?? "");
+        nav("/carta");
+        return;
+      }
       let totvsValue: string | null = igreja?.codigoTotvs ?? null;
       let igrejaNomeValue: string | null = igreja?.nome ?? null;
       if (!igreja && igrejaOutros.trim()) {
@@ -131,7 +211,7 @@ export default function CadastroRapido() {
               placeholder="dd/mm/aaaa"
               value={toBr(dataSeparacaoStr)}
               onChange={(e) => {
-                try { const d = parse(e.target.value, "dd/MM/yyyy", new Date()); setDataSeparacaoStr(format(d, "yyyy-MM-dd")); } catch {}
+                try { const d = parse(e.target.value, "dd/MM/yyyy", new Date()); setDataSeparacaoStr(format(d, "yyyy-MM-dd")); } catch { return; }
               }}
               className="flex-1"
             />
@@ -230,6 +310,24 @@ export default function CadastroRapido() {
             disabled={Boolean(igreja)}
           />
           {igrejaOutrosError ? (<p className="text-sm text-red-600">{igrejaOutrosError}</p>) : null}
+          {igrejaOutrosSuggestions.length ? (
+            <div className="border rounded-md overflow-hidden">
+              {igrejaOutrosSuggestions.map((c) => (
+                <button
+                  key={`${c.codigoTotvs}-${c.nome}`}
+                  type="button"
+                  className="w-full text-left px-3 py-2 hover:bg-muted"
+                  onClick={() => {
+                    setIgreja(undefined);
+                    setIgrejaOutros(`${c.codigoTotvs} - ${c.nome}`);
+                    setIgrejaOutrosError("");
+                  }}
+                >
+                  {c.codigoTotvs} - {c.nome}
+                </button>
+              ))}
+            </div>
+          ) : null}
         </div>
 
         <ChurchSearch
@@ -279,6 +377,24 @@ export default function CadastroRapido() {
             </p>
           ) : null}
           {igrejaCentralOutrosError ? (<p className="text-sm text-red-600">{igrejaCentralOutrosError}</p>) : null}
+          {igrejaCentralOutrosSuggestions.length ? (
+            <div className="border rounded-md overflow-hidden">
+              {igrejaCentralOutrosSuggestions.map((c) => (
+                <button
+                  key={`${c.codigoTotvs}-${c.nome}`}
+                  type="button"
+                  className="w-full text-left px-3 py-2 hover:bg-muted"
+                  onClick={() => {
+                    setIgrejaCentral(undefined);
+                    setIgrejaCentralOutros(`${c.codigoTotvs} - ${c.nome}`);
+                    setIgrejaCentralOutrosError("");
+                  }}
+                >
+                  {c.codigoTotvs} - {c.nome}
+                </button>
+              ))}
+            </div>
+          ) : null}
         </div>
         <Button onClick={handleSave} className="w-full">Salvar e continuar</Button>
       </div>
