@@ -387,7 +387,11 @@ const Index = () => {
                 <p className="text-sm text-white/90">Emissão de Carta</p>
               </div>
             </div>
-            <Button variant="outline" className="bg-white/20 text-white hover:bg-white/30" onClick={() => nav("/usuario")}>
+            <Button
+              variant="outline"
+              className="bg-white/20 text-white hover:bg-white/30 h-8 px-3 text-xs md:h-10 md:px-4 md:text-sm"
+              onClick={() => nav("/usuario")}
+            >
               Voltar ao Dashboard
             </Button>
           </div>

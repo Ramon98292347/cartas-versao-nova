@@ -126,8 +126,8 @@ export default function UsuarioDashboard() {
         </Card>
 
         <div className="flex gap-3">
-          <Button className="flex-1" onClick={() => nav("/carta")}>Gerar carta</Button>
-          <Button variant="outline" onClick={() => nav("/")}>Sair</Button>
+          <Button className="flex-1 h-8 px-3 text-xs md:h-10 md:px-4 md:text-sm" onClick={() => nav("/carta")}>Gerar carta</Button>
+          <Button variant="outline" className="h-8 px-3 text-xs md:h-10 md:px-4 md:text-sm" onClick={() => nav("/")}>Sair</Button>
         </div>
 
         <Card>
@@ -233,7 +233,7 @@ export default function UsuarioDashboard() {
                                   },
                                 })
                               }
-                            >
+                            className="h-8 px-2 text-xs md:h-9 md:px-3 md:text-sm">
                               Reemitir
                             </Button>
                           </div>
