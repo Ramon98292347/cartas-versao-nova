@@ -61,7 +61,7 @@ export default function PhoneIdentify() {
             await getIgrejaByTotvs(u.totvs);
           } catch {}
         }
-        nav("/carta");
+        nav("/usuario");
       } else {
         setUsuario(undefined);
         setTelefone(telefoneRaw);

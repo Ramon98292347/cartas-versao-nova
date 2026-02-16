@@ -45,3 +45,40 @@ export async function createCarta(params: {
   ]);
   if (error) throw error;
 }
+
+type CartaRow = {
+  id: number;
+  created_at: string;
+  nome: string;
+  igreja_origem: string;
+  igreja_destino: string;
+  ["dia_pregação"]?: string | null;
+  data_emissao: string | null;
+  email?: string | null;
+  data_separacao?: string | null;
+  ministerial?: string | null;
+};
+
+export async function listCartasByIntervalo(params: { nome: string; dataInicio: string; dataFim: string }) {
+  if (!supabase) throw new Error("supabase-not-configured");
+  const nomeNorm = (params.nome || "").trim().replace(/\s+/g, " ");
+  const dataInicio = (params.dataInicio || "").trim();
+  const dataFim = (params.dataFim || "").trim();
+  if (!nomeNorm || !dataInicio || !dataFim) return [];
+
+  const escapeForIlike = (s: string) => s.replace(/[\\%_]/g, (m) => `\\${m}`);
+  const nomePattern = `%${escapeForIlike(nomeNorm)}%`;
+
+  const startTs = `${dataInicio}T00:00:00.000Z`;
+  const endTs = `${dataFim}T23:59:59.999Z`;
+  const { data, error } = await supabase
+    .from("carta")
+    .select('id, created_at, nome, igreja_origem, igreja_destino, "dia_pregação", data_emissao, email, data_separacao, ministerial')
+    .ilike("nome", nomePattern)
+    .gte("created_at", startTs)
+    .lte("created_at", endTs)
+    .order("created_at", { ascending: false });
+  if (error) throw error;
+  if (!Array.isArray(data)) return [];
+  return data as CartaRow[];
+}

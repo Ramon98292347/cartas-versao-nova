@@ -28,6 +28,16 @@ const App = () => (
               }
             />
             <Route
+              path="/usuario"
+              element={
+                <RequirePhoneOrUser>
+                  <Suspense fallback={<div />}>
+                    <UsuarioDashboardPage />
+                  </Suspense>
+                </RequirePhoneOrUser>
+              }
+            />
+            <Route
               path="/carta"
               element={
                 <RequirePhoneOrUser>
@@ -63,13 +73,15 @@ function OnReloadRedirect() {
   const { usuario, telefone } = useUser();
   useEffect(() => {
     try {
-      const entries = performance.getEntriesByType("navigation") as any[];
-      const type = entries && entries.length ? entries[entries.length - 1]?.type : undefined;
+      const entries = performance.getEntriesByType("navigation") as PerformanceEntry[];
+      const last = entries && entries.length ? entries[entries.length - 1] : undefined;
+      const type = (last && (last as unknown as { type?: string }).type) ?? undefined;
       if (type === "reload" && loc.pathname !== "/" && !usuario && !telefone) {
         nav("/", { replace: true });
       }
-    } catch {}
-  }, []);
+    } catch { return; }
+  }, [nav, loc.pathname, usuario, telefone]);
   return null;
 }
 const CartaPage = lazy(() => import("./pages/Index"));
+const UsuarioDashboardPage = lazy(() => import("./pages/UsuarioDashboard"));

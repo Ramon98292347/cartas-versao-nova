@@ -18,14 +18,15 @@ import { format, parse } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { useUser } from "@/context/UserContext";
 import { getIgrejaByTotvs, getUsuarioByTelefone } from "@/services/userService";
-import { getPastorByTotvs } from "@/services/churchService";
-import { useNavigate } from "react-router-dom";
+import { getPastorByTotvs, getIgrejaAssetsByTotvs } from "@/services/churchService";
+import { useNavigate, useLocation } from "react-router-dom";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 
 const Index = () => {
   const { usuario, telefone, setUsuario, setTelefone } = useUser();
   const nav = useNavigate();
+  const loc = useLocation();
   const [igrejaOrigem, setIgrejaOrigem] = useState<Church | undefined>();
   const [igrejaDestino, setIgrejaDestino] = useState<Church | undefined>();
   const [destinoOutros, setDestinoOutros] = useState("");
@@ -134,6 +135,33 @@ const Index = () => {
   }, [usuario, telefone, setValue]);
 
   // redirecionamento agora é tratado via guarda de rota em App.tsx
+
+  useEffect(() => {
+    const st = loc.state as unknown as { reemitir?: { nome?: string; igreja_origem?: string; igreja_destino?: string; ["dia_pregação"]?: string; data_emissao?: string } } | null;
+    const r = st?.reemitir;
+    if (r) {
+      if (r.nome) setValue("pregadorNome", r.nome, { shouldValidate: true });
+      if (r["dia_pregação"]) setValue("dataPregacao", brToIso(r["dia_pregação"]), { shouldValidate: true });
+      if (r.data_emissao) setValue("dataEmissao", r.data_emissao, { shouldValidate: true });
+      if (r.igreja_destino) {
+        setDestinoOutros(r.igreja_destino);
+        setValue("destinoOutros", r.igreja_destino, { shouldValidate: true });
+        setIgrejaDestino(undefined);
+        setValue("destinoId", undefined as unknown as number, { shouldValidate: true });
+      }
+      if (r.igreja_origem) {
+        const m = r.igreja_origem.match(/^\\s*(\\d+)/);
+        const code = m ? m[1] : "";
+        if (code) {
+          const found = churches.find((c) => (c.codigoTotvs || "") === code);
+          if (found) {
+            setIgrejaOrigem(found);
+            setValue("origemId", found.id, { shouldValidate: true });
+          }
+        }
+      }
+    }
+  }, [loc.state, churches, setValue]);
 
   useEffect(() => {
     const t = setTimeout(async () => {
@@ -254,6 +282,14 @@ const Index = () => {
       const webhookUrl = (import.meta as any).env?.VITE_WEBHOOK_CARTA_PREGACAO || "https://n8n-n8n.ynlng8.easypanel.host/webhook/carta-pregacao";
       const ac = new AbortController();
       const origemTotvsComputed = igrejaOrigem?.codigoTotvs || computeTotvs(origemText);
+      let pastorInfo: { pastor?: string | null; telefone?: string | null; email?: string | null; endereco?: string | null } | null = null;
+      let assets: { assinatura_url?: string | null; carimbo_igreja_url?: string | null; carimbo_pastor_url?: string | null; cidade?: string | null } | null = null;
+      try {
+        if (origemTotvsComputed) {
+          pastorInfo = await getPastorByTotvs(origemTotvsComputed);
+          assets = await getIgrejaAssetsByTotvs(origemTotvsComputed);
+        }
+      } catch {}
       const payload = {
         nome: values.pregadorNome,
         telefone: values.telefone,
@@ -279,6 +315,12 @@ const Index = () => {
           : "",
         pastor_responsavel: pastorResponsavel || "",
         telefone_pastor: telefonePastorResponsavel || "",
+        email_pastor: pastorInfo?.email || "",
+        endereco: pastorInfo?.endereco || "",
+        assinatura_url: assets?.assinatura_url || "",
+        carimbo_pastor_url: assets?.carimbo_pastor_url || "",
+        carimbo_igreja_url: assets?.carimbo_igreja_url || "",
+        Cidade: assets?.cidade || (igrejaOrigem?.cidade || ""),
       };
       // eslint-disable-next-line no-console
       console.log("webhook_payload", payload);
@@ -335,17 +377,19 @@ const Index = () => {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Header */}
       <header className="bg-gradient-to-r from-primary to-accent text-primary-foreground shadow-lg">
-        <div className="container mx-auto px-4 py-8">
-          <div className="flex flex-col items-center text-center space-y-3">
-            <img src="/Polish_20220810_001501268%20(2).png" alt="Logo" className="h-16 w-auto rounded-md" />
-            <h1 className="text-3xl md:text-4xl font-bold">
-              Sistema de Cartas – IPDA Estadual de Vitória
-            </h1>
-            <p className="text-lg md:text-xl font-semibold tracking-wide bg-white/10 backdrop-blur-sm px-6 py-2 rounded-full">
-              MAIS QUE IGREJA, UMA FAMÍLIA
-            </p>
+        <div className="container mx-auto px-4 py-6">
+          <div className="flex items-center gap-4 justify-between">
+            <div className="flex items-center gap-4">
+              <img src="/Polish_20220810_001501268%20(2).png" alt="Logo" className="h-12 w-auto rounded-md" />
+              <div>
+                <h1 className="text-xl md:text-2xl font-bold">Sistema de Cartas de Pregação</h1>
+                <p className="text-sm text-white/90">Emissão de Carta</p>
+              </div>
+            </div>
+            <Button variant="outline" className="bg-white/20 text-white hover:bg-white/30" onClick={() => nav("/usuario")}>
+              Voltar ao Dashboard
+            </Button>
           </div>
         </div>
       </header>
@@ -452,6 +496,7 @@ const Index = () => {
                   />
                   {errors.destinoId && <p className="text-xs text-destructive">Selecione a igreja de destino ou informe em Outros</p>}
                 </div>
+
 
                 {/* Datas */}
                 <div className="grid md:grid-cols-2 gap-4">
