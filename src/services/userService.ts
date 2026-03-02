@@ -27,8 +27,12 @@ export async function insertUsuario(usuario: { nome: string; telefone: string; t
 
 export async function getIgrejaByTotvs(totvs: string) {
   if (!supabase) throw new Error("supabase-not-configured");
-  const { data, error } = await supabase.from("igreja").select('totvs:"TOtvs", nome:"Nome da IPDA"').eq('"TOtvs"', totvs).limit(1);
+  const { data, error } = await supabase
+    .from("churches")
+    .select("totvs_id, church_name")
+    .eq("totvs_id", totvs)
+    .limit(1);
   if (error) throw error;
   const row = Array.isArray(data) && data[0] ? data[0] : null;
-  return row ? { codigoTotvs: row.totvs as string, nome: row.nome as string } : null;
+  return row ? { codigoTotvs: row.totvs_id as string, nome: row.church_name as string } : null;
 }

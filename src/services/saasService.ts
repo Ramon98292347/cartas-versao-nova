@@ -1,4 +1,4 @@
-import { getSession } from "@/lib/api";
+﻿import { getSession } from "@/lib/api";
 import { api } from "@/lib/endpoints";
 import { supabase } from "@/lib/supabase";
 import type { AppSession, PendingChurch } from "@/context/UserContext";
@@ -79,6 +79,15 @@ export type UserListItem = {
   phone?: string | null;
   email?: string | null;
   minister_role?: string | null;
+  birth_date?: string | null;
+  avatar_url?: string | null;
+  cep?: string | null;
+  address_street?: string | null;
+  address_number?: string | null;
+  address_complement?: string | null;
+  address_neighborhood?: string | null;
+  address_city?: string | null;
+  address_state?: string | null;
   default_totvs_id?: string | null;
   totvs_access?: string[] | null;
   is_active?: boolean | null;
@@ -354,7 +363,7 @@ function toAnnouncementMediaUrl(input: unknown): string | null {
   return `${base}/storage/v1/object/public/announcements/${normalizedPath}`;
 }
 
-function mapSessionLike(raw: any): AppSession {
+function mapSessionLike(raw: Record<string, unknown> | null | undefined): AppSession {
   const scope = Array.isArray(raw?.scope_totvs_ids)
     ? raw.scope_totvs_ids.filter(Boolean).map(String)
     : Array.isArray(raw?.totvs_access)
@@ -373,7 +382,7 @@ function mapSessionLike(raw: any): AppSession {
   };
 }
 
-function mapUserLike(raw: any): AuthSessionData {
+function mapUserLike(raw: Record<string, unknown> | null | undefined): AuthSessionData {
   return {
     id: String(raw?.id || ""),
     full_name: String(raw?.full_name || raw?.nome || "Usuario"),
@@ -393,7 +402,7 @@ function mapUserLike(raw: any): AuthSessionData {
   };
 }
 
-function mapLetterLike(raw: any): PastorLetter {
+function mapLetterLike(raw: Record<string, unknown> | null | undefined): PastorLetter {
   return {
     id: String(raw?.id || ""),
     church_totvs_id: raw?.church_totvs_id ? String(raw.church_totvs_id) : null,
@@ -410,7 +419,7 @@ function mapLetterLike(raw: any): PastorLetter {
   };
 }
 
-function useMockMode() {
+function isMockMode() {
   return false;
 }
 
@@ -433,7 +442,7 @@ export async function loginWithCpfPassword(cpfInput: string, password: string): 
 
   const churchesRaw = data?.churches || data?.available_churches || data?.totvs_options || [];
   if (Array.isArray(churchesRaw) && churchesRaw.length > 0) {
-    const churches: PendingChurch[] = churchesRaw.map((item: any) => ({
+    const churches: PendingChurch[] = churchesRaw.map((item: Record<string, unknown>) => ({
       totvs_id: String(item?.totvs_id || item?.totvs || item?.code || ""),
       church_name: String(item?.church_name || item?.name || item?.nome || "Igreja"),
       church_class: item?.church_class || item?.class || null,
@@ -458,7 +467,7 @@ export async function selectChurchSession(cpfInput: string, totvsId: string): Pr
 }
 
 export async function getPastorMetrics(): Promise<PastorMetrics> {
-  if (!useMockMode()) {
+  if (!isMockMode()) {
     const data = await api.dashboardStats();
     return {
       totalCartas: Number(data?.total_letters || 0),
@@ -479,7 +488,7 @@ export async function getPastorMetrics(): Promise<PastorMetrics> {
 }
 
 export async function listPastorLetters(_activeTotvsId: string, filters: PastorFilters): Promise<PastorLetter[]> {
-  if (!useMockMode()) {
+  if (!isMockMode()) {
     const payload: Record<string, unknown> = {
       page: filters.page || 1,
       page_size: filters.pageSize || 50,
@@ -512,7 +521,7 @@ export async function listObreiros(_scopeTotvsIds: string[]): Promise<UserListIt
 }
 
 export async function listMembers(params: MemberListParams): Promise<WorkerListResponse> {
-  if (!useMockMode()) {
+  if (!isMockMode()) {
     const data = await api.listMembers({
       search: params.search || undefined,
       minister_role: params.minister_role || undefined,
@@ -524,7 +533,7 @@ export async function listMembers(params: MemberListParams): Promise<WorkerListR
 
     const rows = Array.isArray(data?.members) ? data.members : [];
     return {
-      workers: rows.map((w: any) => ({
+      workers: rows.map((w: Record<string, unknown>) => ({
         id: String(w?.id || ""),
         full_name: String(w?.full_name || ""),
         role: (w?.role || null) as AppRole | null,
@@ -532,6 +541,15 @@ export async function listMembers(params: MemberListParams): Promise<WorkerListR
         phone: w?.phone || null,
         email: w?.email || null,
         minister_role: w?.minister_role || null,
+        birth_date: w?.birth_date || null,
+        avatar_url: w?.avatar_url || null,
+        cep: w?.cep || null,
+        address_street: w?.address_street || null,
+        address_number: w?.address_number || null,
+        address_complement: w?.address_complement || null,
+        address_neighborhood: w?.address_neighborhood || null,
+        address_city: w?.address_city || null,
+        address_state: w?.address_state || null,
         default_totvs_id: w?.default_totvs_id || null,
         totvs_access: w?.totvs_access || null,
         is_active: typeof w?.is_active === "boolean" ? w.is_active : true,
@@ -553,7 +571,7 @@ export async function listMembers(params: MemberListParams): Promise<WorkerListR
 }
 
 export async function listWorkers(params: WorkerListParams): Promise<WorkerListResponse> {
-  if (!useMockMode()) {
+  if (!isMockMode()) {
     const data = await api.listWorkers({
       search: params.search || undefined,
       minister_role: params.minister_role || undefined,
@@ -564,7 +582,7 @@ export async function listWorkers(params: WorkerListParams): Promise<WorkerListR
     });
     const rows = Array.isArray(data?.workers) ? data.workers : [];
     return {
-      workers: rows.map((w: any) => ({
+      workers: rows.map((w: Record<string, unknown>) => ({
         id: String(w?.id || ""),
         full_name: String(w?.full_name || ""),
         role: (w?.role || null) as AppRole | null,
@@ -572,6 +590,15 @@ export async function listWorkers(params: WorkerListParams): Promise<WorkerListR
         phone: w?.phone || null,
         email: w?.email || null,
         minister_role: w?.minister_role || null,
+        birth_date: w?.birth_date || null,
+        avatar_url: w?.avatar_url || null,
+        cep: w?.cep || null,
+        address_street: w?.address_street || null,
+        address_number: w?.address_number || null,
+        address_complement: w?.address_complement || null,
+        address_neighborhood: w?.address_neighborhood || null,
+        address_city: w?.address_city || null,
+        address_state: w?.address_state || null,
         default_totvs_id: w?.default_totvs_id || null,
         totvs_access: w?.totvs_access || null,
         is_active: typeof w?.is_active === "boolean" ? w.is_active : true,
@@ -594,7 +621,7 @@ export async function listWorkers(params: WorkerListParams): Promise<WorkerListR
     minister_role: u.minister_role || null,
     default_totvs_id: u.default_totvs_id || null,
     totvs_access: u.totvs_access || null,
-    is_active: (u as any).is_active ?? true,
+    is_active: (u as AuthSessionData & { is_active?: boolean }).is_active ?? true,
   })) as UserListItem[];
 
   if (params.search) {
@@ -650,7 +677,7 @@ export async function listChurchesInScope(page = 1, pageSize = 200): Promise<Chu
         ? data
         : [];
 
-  return rows.map((item: any) => ({
+  return rows.map((item: Record<string, unknown>) => ({
     totvs_id: String(item?.totvs_id || ""),
     church_name: String(item?.church_name || item?.name || "-"),
     church_class: item?.church_class || item?.class || null,
@@ -676,7 +703,7 @@ export async function listChurchesInScopePaged(page = 1, pageSize = 20): Promise
       : Array.isArray(data)
         ? data
         : [];
-  const churches = rows.map((item: any) => ({
+  const churches = rows.map((item: Record<string, unknown>) => ({
     totvs_id: String(item?.totvs_id || ""),
     church_name: String(item?.church_name || item?.name || "-"),
     church_class: item?.church_class || item?.class || null,
@@ -719,10 +746,10 @@ export async function deactivateChurch(church_totvs_id: string) {
 }
 
 export async function listReleaseRequests(status: "PENDENTE" | "APROVADO" | "NEGADO" = "PENDENTE", page = 1, pageSize = 20): Promise<ReleaseRequest[]> {
-  if (!useMockMode()) {
+  if (!isMockMode()) {
     const data = await api.listReleaseRequests({ status, page, page_size: pageSize });
     const rows = Array.isArray(data?.requests) ? data.requests : Array.isArray(data?.items) ? data.items : [];
-    return rows.map((item: any) => ({
+    return rows.map((item: Record<string, unknown>) => ({
       id: String(item?.id),
       letter_id: String(item?.letter_id || ""),
       requester_user_id: String(item?.requester_user_id || ""),
@@ -752,7 +779,7 @@ export async function listNotifications(page = 1, pageSize = 20, unreadOnly = fa
       : [];
 
   return {
-    notifications: rows.map((item: any) => ({
+    notifications: rows.map((item: Record<string, unknown>) => ({
       id: String(item?.id || ""),
       title: String(item?.title || "Notificacao"),
       message: item?.message || null,
@@ -778,7 +805,7 @@ export async function markAllNotificationsRead() {
 }
 
 export async function listAnnouncements(limit = 10): Promise<AnnouncementItem[]> {
-  if (!useMockMode()) {
+  if (!isMockMode()) {
     const data = await api.listAnnouncements({ limit });
     const rows = Array.isArray(data?.announcements)
       ? data.announcements
@@ -787,7 +814,7 @@ export async function listAnnouncements(limit = 10): Promise<AnnouncementItem[]>
         : Array.isArray(data)
           ? data
           : [];
-    return rows.map((item: any) => ({
+    return rows.map((item: Record<string, unknown>) => ({
       id: String(item?.id || ""),
       title: String(item?.title || "Aviso"),
       type: (item?.type || "text") as "text" | "image" | "video",
@@ -804,12 +831,12 @@ export async function listAnnouncements(limit = 10): Promise<AnnouncementItem[]>
 }
 
 export async function listBirthdaysToday(limit = 10): Promise<BirthdayItem[]> {
-  if (!useMockMode()) {
+  if (!isMockMode()) {
     const data = await api.birthdaysToday();
     const rows = Array.isArray(data?.birthdays) ? data.birthdays : [];
     return rows
       .slice(0, limit)
-      .map((item: any) => ({
+      .map((item: Record<string, unknown>) => ({
         full_name: String(item?.full_name || ""),
         avatar_url: item?.avatar_url || null,
       }))
@@ -849,12 +876,12 @@ export async function listAnnouncementsPublicByTotvs(churchTotvsId: string, limi
   if (error) return [];
 
   return (data || [])
-    .filter((item: any) => {
+    .filter((item: Record<string, unknown>) => {
       const startsOk = !item?.starts_at || String(item.starts_at) <= nowIso;
       const endsOk = !item?.ends_at || String(item.ends_at) >= nowIso;
       return startsOk && endsOk;
     })
-    .map((item: any) => ({
+    .map((item: Record<string, unknown>) => ({
       id: String(item?.id || ""),
       title: String(item?.title || "Aviso"),
       type: (item?.type || "text") as "text" | "image" | "video",
@@ -888,13 +915,13 @@ export async function listBirthdaysTodayPublicByTotvs(churchTotvsId: string, lim
   const d = today.getDate();
 
   return (data || [])
-    .filter((u: any) => {
+    .filter((u: Record<string, unknown>) => {
       if (!u?.birth_date) return false;
       const dt = new Date(String(u.birth_date));
       return dt.getMonth() + 1 === m && dt.getDate() === d;
     })
     .slice(0, Math.max(1, Math.min(10, limit)))
-    .map((u: any) => ({
+    .map((u: Record<string, unknown>) => ({
       full_name: String(u?.full_name || ""),
       avatar_url: u?.avatar_url || null,
     }))
@@ -917,16 +944,16 @@ export async function getPastorByTotvsPublic(churchTotvsId: string): Promise<Pas
 
   if (error || !data) return null;
   return {
-    full_name: String((data as any).full_name || ""),
-    phone: (data as any).phone || null,
-    email: (data as any).email || null,
-    avatar_url: (data as any).avatar_url || null,
-    minister_role: (data as any).minister_role || null,
+    full_name: String((data as Record<string, unknown>).full_name || ""),
+    phone: (data as Record<string, unknown>).phone || null,
+    email: (data as Record<string, unknown>).email || null,
+    avatar_url: (data as Record<string, unknown>).avatar_url || null,
+    minister_role: (data as Record<string, unknown>).minister_role || null,
   };
 }
 
 export async function approveRelease(requestId: string) {
-  if (!useMockMode()) {
+  if (!isMockMode()) {
     await api.approveRelease({ request_id: requestId });
     return;
   }
@@ -937,7 +964,7 @@ export async function approveRelease(requestId: string) {
 }
 
 export async function denyRelease(requestId: string) {
-  if (!useMockMode()) {
+  if (!isMockMode()) {
     await api.denyRelease({ request_id: requestId });
     return;
   }
@@ -948,7 +975,7 @@ export async function denyRelease(requestId: string) {
 }
 
 export async function setLetterStatus(letterId: string, status: string, _blockReason?: string | null) {
-  if (!useMockMode()) {
+  if (!isMockMode()) {
     await api.setLetterStatus({ letter_id: letterId, status });
     return;
   }
@@ -963,7 +990,7 @@ export async function softDeleteLetter(letterId: string) {
 export async function getSignedPdfUrl(value: string) {
   if (!value) return null;
   if (value.startsWith("http")) return value;
-  if (!useMockMode()) {
+  if (!isMockMode()) {
     const data = await api.getLetterPdfUrl({ letter_id: value });
     return String(data?.url || data?.signed_url || data?.signedUrl || "");
   }
@@ -971,7 +998,7 @@ export async function getSignedPdfUrl(value: string) {
 }
 
 export async function requestRelease(letterId: string, _workerId: string, _churchTotvsId: string, message?: string) {
-  if (!useMockMode()) {
+  if (!isMockMode()) {
     await api.requestRelease({ letter_id: letterId, message: message || null });
     return;
   }
@@ -988,7 +1015,7 @@ export async function requestRelease(letterId: string, _workerId: string, _churc
 }
 
 export async function workerDashboard(dateStart?: string, dateEnd?: string, page = 1, pageSize = 20): Promise<WorkerDashboardData> {
-  if (!useMockMode()) {
+  if (!isMockMode()) {
     const data = await api.workerDashboard({
       date_start: dateStart || null,
       date_end: dateEnd || null,
@@ -1031,7 +1058,7 @@ export async function createUserByPastor(payload: UserCreatePayload, actorRole: 
   if (access.length === 0) throw new Error("totvs-access-required");
   if (payload.default_totvs_id && !access.includes(payload.default_totvs_id)) throw new Error("default-totvs-must-be-in-access");
 
-  if (!useMockMode()) {
+  if (!isMockMode()) {
     await api.createUser({
       cpf,
       full_name: payload.full_name.trim(),
@@ -1120,7 +1147,7 @@ export async function upsertWorkerByPastor(payload: {
     password: typeof payload.password === "undefined" ? null : payload.password,
   };
 
-  if (!useMockMode()) {
+  if (!isMockMode()) {
     await api.createUser(body);
     return;
   }
@@ -1151,7 +1178,7 @@ export async function upsertWorkerByPastor(payload: {
           country: "BR",
         },
       };
-      (MOCK_USERS[idx] as any).is_active = body.is_active;
+      (MOCK_USERS[idx] as AuthSessionData & { is_active?: boolean }).is_active = body.is_active;
       return;
     }
   }
@@ -1186,13 +1213,13 @@ export async function upsertWorkerByPastor(payload: {
 }
 
 export async function setWorkerActive(workerId: string, isActive: boolean) {
-  if (!useMockMode()) {
+  if (!isMockMode()) {
     await api.toggleWorkerActive({ worker_id: workerId, is_active: isActive });
     return;
   }
   const user = MOCK_USERS.find((u) => u.id === workerId);
   if (user) {
-    (user as any).is_active = isActive;
+    (user as AuthSessionData & { is_active?: boolean }).is_active = isActive;
   }
 }
 
@@ -1200,7 +1227,7 @@ export async function setChurchPastor(church_totvs_id: string, pastor_user_id: s
   if (!church_totvs_id) throw new Error("church_totvs_required");
   if (!pastor_user_id) throw new Error("pastor_user_required");
 
-  if (!useMockMode()) {
+  if (!isMockMode()) {
     await api.setChurchPastor({ church_totvs_id, pastor_user_id });
     return;
   }
@@ -1213,7 +1240,7 @@ export async function resetWorkerPassword(payload: { cpf?: string; user_id?: str
   const cpf = payload.cpf ? normalizeCpf(payload.cpf) : undefined;
   if (cpf && cpf.length !== 11) throw new Error("cpf-invalid");
 
-  if (!useMockMode()) {
+  if (!isMockMode()) {
     await api.resetPassword({
       cpf,
       user_id: payload.user_id || undefined,
@@ -1233,7 +1260,7 @@ export async function resetWorkerPassword(payload: { cpf?: string; user_id?: str
 }
 
 export async function updateMyProfile(payload: { phone?: string; email?: string; address_city?: string }) {
-  if (!useMockMode()) {
+  if (!isMockMode()) {
     await api.updateMyProfile(payload);
     return;
   }
@@ -1247,14 +1274,14 @@ export async function updateMyProfile(payload: { phone?: string; email?: string;
 }
 
 export async function upsertAnnouncement(payload: Record<string, unknown>) {
-  if (!useMockMode()) {
+  if (!isMockMode()) {
     await api.upsertAnnouncement(payload);
     return;
   }
 }
 
 export async function deleteAnnouncement(id: string) {
-  if (!useMockMode()) {
+  if (!isMockMode()) {
     await api.deleteAnnouncement({ id });
     return;
   }
@@ -1267,8 +1294,8 @@ export async function createLetterByPastor(payload: LetterCreatePayload) {
   if (!payload.church_origin.trim()) throw new Error("origin-required");
   if (!payload.church_destination.trim()) throw new Error("destination-required");
 
-  if (!useMockMode()) {
-    await api.createLetter({
+  if (!isMockMode()) {
+    return await api.createLetter({
       preacher_name: payload.preacher_name.trim(),
       minister_role: payload.minister_role.trim(),
       preach_date: payload.preach_date,
@@ -1278,10 +1305,9 @@ export async function createLetterByPastor(payload: LetterCreatePayload) {
       phone: payload.phone || null,
       email: payload.email || null,
     });
-    return;
   }
 
-  MOCK_LETTERS.unshift({
+  const created = {
     id: `l-${Math.random().toString(36).slice(2, 10)}`,
     church_totvs_id: payload.church_totvs_id,
     created_at: new Date().toISOString(),
@@ -1293,5 +1319,11 @@ export async function createLetterByPastor(payload: LetterCreatePayload) {
     status: "AUTORIZADO",
     storage_path: null,
     preacher_user_id: payload.preacher_user_id || null,
-  });
+  };
+  MOCK_LETTERS.unshift(created);
+  return {
+    ok: true,
+    letter: created,
+    n8n: { ok: true, status: 200 },
+  };
 }

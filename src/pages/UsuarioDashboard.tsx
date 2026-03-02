@@ -37,6 +37,11 @@ function toInputDate(date: Date) {
 
 type QuickRange = "today" | "7" | "15" | "30" | "all";
 
+function getAddressCity(addressJson: unknown) {
+  const address = (addressJson || {}) as Record<string, unknown>;
+  return String(address.city || "");
+}
+
 export default function UsuarioDashboard() {
   const { usuario, session, clearAuth } = useUser();
   const nav = useNavigate();
@@ -99,14 +104,15 @@ export default function UsuarioDashboard() {
     enabled: Boolean(activeTotvs),
   });
 
+  const cityFromProfile = useMemo(() => getAddressCity(profile?.address_json), [profile?.address_json]);
+
   useEffect(() => {
-    const city = String((profile?.address_json as any)?.city || "");
     setProfileForm({
       phone: profile?.phone || "",
       email: profile?.email || "",
-      address_city: city,
+      address_city: cityFromProfile,
     });
-  }, [profile?.phone, profile?.email, (profile?.address_json as any)?.city]);
+  }, [profile?.phone, profile?.email, cityFromProfile]);
 
   const stats = useMemo(() => {
     const now = new Date();

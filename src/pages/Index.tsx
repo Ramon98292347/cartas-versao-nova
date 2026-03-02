@@ -13,15 +13,29 @@ import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useQuery } from "@tanstack/react-query";
 import { fetchChurches } from "@/services/churchService";
-import { createCarta } from "@/services/letterService";
+import { createLetterByPastor } from "@/services/saasService";
 import { format, parse } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { useUser } from "@/context/UserContext";
 import { getIgrejaByTotvs, getUsuarioByTelefone } from "@/services/userService";
-import { getPastorByTotvs, getIgrejaAssetsByTotvs } from "@/services/churchService";
+import { getPastorByTotvs } from "@/services/churchService";
 import { useNavigate, useLocation } from "react-router-dom";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
+
+type LegacyUsuarioExtra = {
+  central_totvs?: string | null;
+  central_nome?: string | null;
+  ministerial?: string | null;
+  data_separacao?: string | null;
+  email?: string | null;
+  totvs?: string | null;
+  default_totvs_id?: string | null;
+};
+
+type CreateLetterResult = {
+  n8n?: { ok?: boolean };
+};
 
 const Index = () => {
   const { usuario, telefone, setUsuario, setTelefone } = useUser();
@@ -86,6 +100,7 @@ const Index = () => {
       destinoOutros: "",
     },
   });
+  const watchedTelefone = watch("telefone");
   const { data: churches = igrejasMock } = useQuery({ queryKey: ["churches"], queryFn: fetchChurches, staleTime: 60_000 });
   const toBr = (iso: string) => {
     if (!iso) return "";
@@ -165,7 +180,7 @@ const Index = () => {
 
   useEffect(() => {
     const t = setTimeout(async () => {
-      const telDigits = (watch("telefone") || "").replace(/\D/g, "");
+      const telDigits = (watchedTelefone || "").replace(/\D/g, "");
       if (telDigits.length >= 10) {
         try {
           const u = await getUsuarioByTelefone(telDigits);
@@ -179,8 +194,8 @@ const Index = () => {
               email: u.email ?? null,
               ministerial: u.ministerial ?? null,
               data_separacao: u.data_separacao ?? null,
-              central_totvs: (u as any)?.central_totvs ?? null,
-              central_nome: (u as any)?.central_nome ?? null,
+              central_totvs: (u as LegacyUsuarioExtra)?.central_totvs ?? null,
+              central_nome: (u as LegacyUsuarioExtra)?.central_nome ?? null,
             });
             setValue("pregadorNome", u.nome, { shouldValidate: true });
             setValue("telefone", u.telefone, { shouldValidate: true });
@@ -195,27 +210,31 @@ const Index = () => {
                   setIgrejaOrigem(c);
                   setValue("origemId", c.id, { shouldValidate: true });
                 }
-              } catch {}
+              } catch {
+                // Comentario: erro ignorado de forma controlada.
+              }
             } else if (u.igreja_nome) {
               const c: Church = { id: Date.now(), codigoTotvs: "", nome: u.igreja_nome, cidade: "", uf: "", carimboIgreja: "", carimboPastor: "" };
               setIgrejaOrigem(c);
               setValue("origemId", c.id, { shouldValidate: true });
             }
           }
-        } catch {}
+        } catch {
+                // Comentario: erro ignorado de forma controlada.
+              }
       }
     }, 400);
     return () => clearTimeout(t);
-  }, [watch("telefone"), setUsuario, setValue]);
+  }, [watchedTelefone, setUsuario, setValue]);
 
-  const phoneDigits = (watch("telefone") || "").replace(/\D/g, "");
+  const phoneDigits = (watchedTelefone || "").replace(/\D/g, "");
   const phoneEmpty = phoneDigits.length < 10;
   const hasUsuario = Boolean(usuario);
   const disableByPhone = phoneEmpty && !hasUsuario;
 
   useEffect(() => {
     if (usuario) {
-      const u = usuario as any;
+      const u = usuario as LegacyUsuarioExtra | null;
       if (u?.email) setUsuarioEmail(u.email);
       if (u?.ministerial) setUsuarioMinisterial(u.ministerial);
       if (u?.data_separacao) setUsuarioDataSeparacao(u.data_separacao);
@@ -226,7 +245,7 @@ const Index = () => {
 
   useEffect(() => {
     (async () => {
-      const u = usuario as any;
+      const u = usuario as LegacyUsuarioExtra | null;
       const centralTotvs: string | undefined = (u?.central_totvs ? String(u.central_totvs).trim() : undefined);
       if (centralTotvs) {
         try {
@@ -237,7 +256,9 @@ const Index = () => {
             setPastorResponsavel(r.pastor || "");
             setTelefonePastorResponsavel(r.telefone || "");
           }
-        } catch {}
+        } catch {
+                // Comentario: erro ignorado de forma controlada.
+              }
       } else {
         setPastorResponsavel("");
         setTelefonePastorResponsavel("");
@@ -254,94 +275,33 @@ const Index = () => {
     destinoId?: number;
     destinoOutros?: string;
   }) => {
+    // Comentario: o front chama apenas `create-letter`.
+    // A Edge Function salva no banco e dispara o n8n.
     const origemText = igrejaOrigem
       ? (igrejaOrigem.codigoTotvs ? `${igrejaOrigem.codigoTotvs} - ${igrejaOrigem.nome}` : igrejaOrigem.nome)
       : (usuario?.igreja_nome ?? "");
     const destinoText = (watch("destinoOutros") && watch("destinoOutros")!.trim())
       ? watch("destinoOutros")!.trim()
       : (igrejaDestino ? `${igrejaDestino.codigoTotvs} - ${igrejaDestino.nome}` : "");
-    let saved = false;
+
     try {
-      await createCarta({
-        nome: values.pregadorNome,
-        igreja_origem: origemText,
-        igreja_destino: destinoText,
-        dia_pregacao: values.dataPregacao
-          ? format(parse(values.dataPregacao, "yyyy-MM-dd", new Date()), "dd/MM/yyyy", { locale: ptBR })
-          : "",
-        data_emissao: values.dataEmissao, // ISO yyyy-MM-dd, compatível com coluna date
-        email: usuarioEmail || (usuario as any)?.email || null,
-        ministerial: usuarioMinisterial || (usuario as any)?.ministerial || null,
-        data_separacao: usuarioDataSeparacao || (usuario as any)?.data_separacao || null,
-      });
-      saved = true;
-    } catch (e) {
-      toast.error("Falha ao salvar na tabela carta. Verifique RLS.");
-    }
-    try {
-      const webhookUrl = (import.meta as any).env?.VITE_WEBHOOK_CARTA_PREGACAO || "https://n8n-n8n.ynlng8.easypanel.host/webhook/carta-pregacao";
-      const ac = new AbortController();
-      const origemTotvsComputed = igrejaOrigem?.codigoTotvs || computeTotvs(origemText);
-      let pastorInfo: { pastor?: string | null; telefone?: string | null; email?: string | null; endereco?: string | null } | null = null;
-      let assets: { assinatura_url?: string | null; carimbo_igreja_url?: string | null; carimbo_pastor_url?: string | null; cidade?: string | null } | null = null;
-      try {
-        if (origemTotvsComputed) {
-          pastorInfo = await getPastorByTotvs(origemTotvsComputed);
-          assets = await getIgrejaAssetsByTotvs(origemTotvsComputed);
-        }
-      } catch {}
-      const payload = {
-        nome: values.pregadorNome,
-        telefone: values.telefone,
-        igreja_origem: origemText,
-        origem: origemText,
-        igreja_destino: destinoText,
-        destino: destinoText,
-        dia_pregacao: values.dataPregacao ? format(parse(values.dataPregacao, "yyyy-MM-dd", new Date()), "dd/MM/yyyy", { locale: ptBR }) : "",
-        data_emissao: values.dataEmissao ? format(parse(values.dataEmissao, "yyyy-MM-dd", new Date()), "dd/MM/yyyy", { locale: ptBR }) : "",
-        origem_totvs: origemTotvsComputed || undefined,
-        destino_totvs: (watch("destinoOutros") && watch("destinoOutros")!.trim()) ? undefined : igrejaDestino?.codigoTotvs,
-        origem_nome: igrejaOrigem?.nome,
-        destino_nome: (watch("destinoOutros") && watch("destinoOutros")!.trim()) ? watch("destinoOutros")!.trim() : igrejaDestino?.nome,
-        email: usuarioEmail || (usuario as any)?.email || "",
-        email_pregador: usuarioEmail || (usuario as any)?.email || "",
-        ministerial: usuarioMinisterial || (usuario as any)?.ministerial || "",
-        dados_ministeriais: usuarioMinisterial || (usuario as any)?.ministerial || "",
-        data_separacao: (usuarioDataSeparacao || (usuario as any)?.data_separacao)
-          ? format(parse((usuarioDataSeparacao || (usuario as any)?.data_separacao) as string, "yyyy-MM-dd", new Date()), "dd/MM/yyyy", { locale: ptBR })
-          : "",
-        data_da_separacao: (usuarioDataSeparacao || (usuario as any)?.data_separacao)
-          ? format(parse((usuarioDataSeparacao || (usuario as any)?.data_separacao) as string, "yyyy-MM-dd", new Date()), "dd/MM/yyyy", { locale: ptBR })
-          : "",
-        pastor_responsavel: pastorResponsavel || "",
-        telefone_pastor: telefonePastorResponsavel || "",
-        email_pastor: pastorInfo?.email || "",
-        endereco: pastorInfo?.endereco || "",
-        assinatura_url: assets?.assinatura_url || "",
-        carimbo_pastor_url: assets?.carimbo_pastor_url || "",
-        carimbo_igreja_url: assets?.carimbo_igreja_url || "",
-        Cidade: assets?.cidade || (igrejaOrigem?.cidade || ""),
-      };
-      // eslint-disable-next-line no-console
-      console.log("webhook_payload", payload);
-      const res = await fetch(webhookUrl, {
-        method: "POST",
-        mode: "cors",
-        headers: { "Content-Type": "application/json", Accept: "application/json" },
-        body: JSON.stringify(payload),
-        signal: ac.signal,
-        referrerPolicy: "no-referrer",
-      });
-      if (!res.ok) throw new Error("webhook-failed");
-      toast.success("Olá!", {
-        description:
-          "A sua resposta foi registrada com sucesso. Solicitamos que, por favor, entre em contato com o seu pastor do Campo da Setorial ou da Central, pois a sua carta de pregação já foi enviada para ele.\n\nPermanecemos à disposição para quaisquer dúvidas.\n\nAtenciosamente,\nEstadual de Vitória",
-        duration: 12000,
-      });
-    } catch {
-      toast.error("Falha ao chamar o webhook. Verifique se está ativo.");
-    }
-    if (saved) {
+      const result = (await createLetterByPastor({
+        church_totvs_id: String((usuario as LegacyUsuarioExtra | null)?.totvs || (usuario as LegacyUsuarioExtra | null)?.default_totvs_id || ""),
+        preacher_name: values.pregadorNome,
+        minister_role: usuarioMinisterial || (usuario as LegacyUsuarioExtra | null)?.ministerial || "Obreiro",
+        preach_date: values.dataPregacao,
+        church_origin: origemText,
+        church_destination: destinoText,
+        phone: (values.telefone || "").replace(/\D/g, ""),
+        email: usuarioEmail || (usuario as LegacyUsuarioExtra | null)?.email || null,
+      })) as CreateLetterResult;
+
+      if ((result as CreateLetterResult)?.n8n?.ok === false) {
+        toast.warning("Carta criada, mas houve falha ao enviar para gera??o do PDF.");
+      } else {
+        toast.success("Carta enviada para gera??o. Aguarde o PDF.");
+      }
+
       setIgrejaOrigem(undefined);
       setIgrejaDestino(undefined);
       reset({
@@ -356,6 +316,8 @@ const Index = () => {
       setTelefone(undefined);
       setDestinoOutros("");
       nav("/");
+    } catch {
+      toast.error("Falha ao criar carta.");
     }
   };
 
@@ -630,9 +592,9 @@ const Index = () => {
             igrejaDestino={destinoOutros.trim() ? { id: 0, codigoTotvs: "", nome: destinoOutros.trim(), cidade: "", uf: "", carimboIgreja: "", carimboPastor: "" } : igrejaDestino}
             dataPregacao={watch("dataPregacao")}
             dataEmissao={watch("dataEmissao")}
-            email={usuarioEmail || (usuario as any)?.email || undefined}
-            ministerial={usuarioMinisterial || (usuario as any)?.ministerial || undefined}
-            dataSeparacao={usuarioDataSeparacao || (usuario as any)?.data_separacao || undefined}
+            email={usuarioEmail || (usuario as LegacyUsuarioExtra | null)?.email || undefined}
+            ministerial={usuarioMinisterial || (usuario as LegacyUsuarioExtra | null)?.ministerial || undefined}
+            dataSeparacao={usuarioDataSeparacao || (usuario as LegacyUsuarioExtra | null)?.data_separacao || undefined}
             pastorResponsavel={pastorResponsavel || undefined}
             telefonePastorResponsavel={telefonePastorResponsavel || undefined}
           />

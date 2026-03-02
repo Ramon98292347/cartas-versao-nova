@@ -78,6 +78,7 @@ export function ObreirosTab({ activeTotvsId }: { activeTotvsId: string }) {
   const [pendingAvatarFile, setPendingAvatarFile] = useState<File | null>(null);
 
   const [openResetModal, setOpenResetModal] = useState(false);
+  const [openViewModal, setOpenViewModal] = useState(false);
   const [selectedWorker, setSelectedWorker] = useState<UserListItem | null>(null);
   const [newPassword, setNewPassword] = useState("");
   const [resetting, setResetting] = useState(false);
@@ -95,7 +96,7 @@ export function ObreirosTab({ activeTotvsId }: { activeTotvsId: string }) {
       }),
   });
 
-  const workers = data?.workers || [];
+  const workers = useMemo(() => data?.workers || [], [data?.workers]);
   const total = data?.total || 0;
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
@@ -125,15 +126,15 @@ export function ObreirosTab({ activeTotvsId }: { activeTotvsId: string }) {
       minister_role: worker.minister_role || "",
       phone: worker.phone || "",
       email: worker.email || "",
-      birth_date: "",
-      avatar_url: "",
-      cep: "",
-      address_street: "",
-      address_number: "",
-      address_complement: "",
-      address_neighborhood: "",
-      address_city: "",
-      address_state: "",
+      birth_date: worker.birth_date || "",
+      avatar_url: worker.avatar_url || "",
+      cep: worker.cep || "",
+      address_street: worker.address_street || "",
+      address_number: worker.address_number || "",
+      address_complement: worker.address_complement || "",
+      address_neighborhood: worker.address_neighborhood || "",
+      address_city: worker.address_city || "",
+      address_state: worker.address_state || "",
       is_active: worker.is_active !== false,
     });
     setPendingAvatarFile(null);
@@ -144,6 +145,11 @@ export function ObreirosTab({ activeTotvsId }: { activeTotvsId: string }) {
     setSelectedWorker(worker);
     setNewPassword("");
     setOpenResetModal(true);
+  }
+
+  function openView(worker: UserListItem) {
+    setSelectedWorker(worker);
+    setOpenViewModal(true);
   }
 
   async function lookupCep() {
@@ -200,10 +206,7 @@ export function ObreirosTab({ activeTotvsId }: { activeTotvsId: string }) {
           contentType: pendingAvatarFile.type || undefined,
           cacheControl: "3600",
         });
-        if (error) {
-          const msg = [error.message, (error as any)?.statusCode, (error as any)?.error].filter(Boolean).join(" | ");
-          throw new Error(msg || "avatar_upload_failed");
-        }
+        if (error) throw new Error(error.message || "avatar_upload_failed");
         const { data } = supabase.storage.from("avatars").getPublicUrl(path);
         avatarUrlToSave = data?.publicUrl || undefined;
       }
@@ -233,7 +236,7 @@ export function ObreirosTab({ activeTotvsId }: { activeTotvsId: string }) {
       setPendingAvatarFile(null);
       setOpenModal(false);
       await refresh();
-    } catch (err: any) {
+    } catch (err: unknown) {
       toast.error(getFriendlyError(err, "workers"));
     } finally {
       setSaving(false);
@@ -248,7 +251,7 @@ export function ObreirosTab({ activeTotvsId }: { activeTotvsId: string }) {
       toast.success(next ? "Obreiro ativado." : "Obreiro desativado.");
       addAuditLog("worker_toggled", { worker_id: String(worker.id), is_active: next });
       await refresh();
-    } catch (err: any) {
+    } catch (err: unknown) {
       toast.error(getFriendlyError(err, "workers"));
     }
   }
@@ -278,7 +281,7 @@ export function ObreirosTab({ activeTotvsId }: { activeTotvsId: string }) {
       setOpenResetModal(false);
       setSelectedWorker(null);
       setNewPassword("");
-    } catch (err: any) {
+    } catch (err: unknown) {
       toast.error(getFriendlyError(err, "workers"));
     } finally {
       setResetting(false);
@@ -332,20 +335,23 @@ export function ObreirosTab({ activeTotvsId }: { activeTotvsId: string }) {
           </div>
 
           <div className="overflow-x-auto rounded-xl border border-slate-200">
-            <div className="min-w-[1100px]">
-              <div className="grid grid-cols-[220px_150px_160px_160px_130px_100px_1fr] border-b bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-700">
+            <div className="min-w-[1350px]">
+              <div className="grid grid-cols-[210px_150px_150px_150px_120px_100px_120px_100px_130px_130px] border-b bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-700">
                 <span>Nome</span>
                 <span>CPF</span>
                 <span>Telefone</span>
                 <span>Cargo</span>
                 <span>Tipo</span>
                 <span>Ativo</span>
-                <span>Acoes</span>
+                <span>Visualizar</span>
+                <span>Editar</span>
+                <span>Resetar senha</span>
+                <span>Excluir/Ativar</span>
               </div>
               {isLoading ? <div className="px-4 py-4 text-sm text-slate-500">Carregando...</div> : null}
               {!isLoading && workers.length === 0 ? <div className="px-4 py-4 text-sm text-slate-500">Nenhum membro encontrado.</div> : null}
               {workers.map((w) => (
-                <div key={w.id} className="grid grid-cols-[220px_150px_160px_160px_130px_100px_1fr] items-center border-b px-4 py-3 text-sm">
+                <div key={w.id} className="grid grid-cols-[210px_150px_150px_150px_120px_100px_120px_100px_130px_130px] items-center border-b px-4 py-3 text-sm">
                   <span className="truncate">{w.full_name}</span>
                   <span>{maskCpf(w.cpf || "")}</span>
                   <span>{w.phone || "-"}</span>
@@ -356,19 +362,14 @@ export function ObreirosTab({ activeTotvsId }: { activeTotvsId: string }) {
                       {w.is_active === false ? "Nao" : "Sim"}
                     </span>
                   </span>
-                  <div className="flex flex-wrap gap-2">
-                    {w.role === "obreiro" ? (
-                      <>
-                        <Button size="sm" variant="outline" onClick={() => openEdit(w)}>Editar</Button>
-                        <Button size="sm" variant="secondary" onClick={() => openResetPassword(w)}>Resetar senha</Button>
-                        <Button size="sm" variant={w.is_active === false ? "default" : "destructive"} onClick={() => toggle(w)}>
-                          {w.is_active === false ? "Ativar" : "Excluir"}
-                        </Button>
-                      </>
-                    ) : (
-                      <span className="text-xs text-slate-400">Somente visualizacao</span>
-                    )}
-                  </div>
+                  <div><Button size="sm" variant="outline" onClick={() => openView(w)}>Visualizar</Button></div>
+                  <div>{w.role === "obreiro" ? <Button size="sm" variant="outline" onClick={() => openEdit(w)}>Editar</Button> : <span className="text-xs text-slate-400">-</span>}</div>
+                  <div>{w.role === "obreiro" ? <Button size="sm" variant="secondary" onClick={() => openResetPassword(w)}>Resetar</Button> : <span className="text-xs text-slate-400">-</span>}</div>
+                  <div>{w.role === "obreiro" ? (
+                    <Button size="sm" variant={w.is_active === false ? "default" : "destructive"} onClick={() => toggle(w)}>
+                      {w.is_active === false ? "Ativar" : "Excluir"}
+                    </Button>
+                  ) : <span className="text-xs text-slate-400">-</span>}</div>
                 </div>
               ))}
             </div>
@@ -519,6 +520,49 @@ export function ObreirosTab({ activeTotvsId }: { activeTotvsId: string }) {
               <Button type="button" variant="outline" onClick={() => setOpenModal(false)}>Cancelar</Button>
             </div>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={openViewModal}
+        onOpenChange={(next) => {
+          setOpenViewModal(next);
+          if (!next) setSelectedWorker(null);
+        }}
+      >
+        <DialogContent className="max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>Dados do Membro</DialogTitle>
+          </DialogHeader>
+          {selectedWorker ? (
+            <div className="grid gap-4 md:grid-cols-[1fr_170px]">
+              <div className="space-y-2 text-sm">
+                <p><span className="font-semibold">Nome:</span> {selectedWorker.full_name || "-"}</p>
+                <p><span className="font-semibold">CPF:</span> {selectedWorker.cpf ? maskCpf(selectedWorker.cpf) : "-"}</p>
+                <p><span className="font-semibold">Tipo:</span> {selectedWorker.role || "-"}</p>
+                <p><span className="font-semibold">Cargo:</span> {selectedWorker.minister_role || "-"}</p>
+                <p><span className="font-semibold">Telefone:</span> {selectedWorker.phone || "-"}</p>
+                <p><span className="font-semibold">Email:</span> {selectedWorker.email || "-"}</p>
+                <p><span className="font-semibold">Nascimento:</span> {selectedWorker.birth_date || "-"}</p>
+                <p><span className="font-semibold">CEP:</span> {selectedWorker.cep || "-"}</p>
+                <p><span className="font-semibold">Rua:</span> {selectedWorker.address_street || "-"}</p>
+                <p><span className="font-semibold">Numero:</span> {selectedWorker.address_number || "-"}</p>
+                <p><span className="font-semibold">Complemento:</span> {selectedWorker.address_complement || "-"}</p>
+                <p><span className="font-semibold">Bairro:</span> {selectedWorker.address_neighborhood || "-"}</p>
+                <p><span className="font-semibold">Cidade:</span> {selectedWorker.address_city || "-"}</p>
+                <p><span className="font-semibold">UF:</span> {selectedWorker.address_state || "-"}</p>
+              </div>
+              <div className="flex items-start justify-end">
+                {selectedWorker.avatar_url ? (
+                  <img src={selectedWorker.avatar_url} alt="Foto 3x4" className="h-52 w-40 rounded-lg border object-cover object-[center_top]" />
+                ) : (
+                  <div className="flex h-52 w-40 items-center justify-center rounded-lg border bg-slate-100 text-6xl font-bold text-slate-400">
+                    {(selectedWorker.full_name || "M").charAt(0).toUpperCase()}
+                  </div>
+                )}
+              </div>
+            </div>
+          ) : null}
         </DialogContent>
       </Dialog>
 

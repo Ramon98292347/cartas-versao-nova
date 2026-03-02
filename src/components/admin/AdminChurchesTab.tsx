@@ -85,7 +85,7 @@ export function AdminChurchesTab({
       setNewOpen(false);
       setNewForm(initialForm);
       await refetchChurches();
-    } catch (err: any) {
+    } catch (err: unknown) {
       toast.error(getFriendlyError(err, "churches"));
     } finally {
       setSavingNew(false);
@@ -100,7 +100,7 @@ export function AdminChurchesTab({
       toast.success("Igreja desativada.");
       addAuditLog("church_deactivated", { church_totvs_id: church.totvs_id });
       await refetchChurches();
-    } catch (err: any) {
+    } catch (err: unknown) {
       toast.error(getFriendlyError(err, "churches"));
     } finally {
       setBusyChurchId(null);

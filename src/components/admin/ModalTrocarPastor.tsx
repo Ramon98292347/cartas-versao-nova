@@ -85,12 +85,12 @@ export function ModalTrocarPastor({
     if (!open || !church) return;
     setSelectedPastorId(church.pastor_user_id || church.pastor?.id || "");
     loadPastors("");
-  }, [open, church?.totvs_id]);
+  }, [open, church]);
 
   async function loadPastors(q: string) {
     setLoadingPastors(true);
     try {
-      const res: any = await api.listPastors({ search: q, page: 1, page_size: 50 });
+      const res = (await api.listPastors({ search: q, page: 1, page_size: 50 })) as { pastors?: Pastor[] };
       setPastors(Array.isArray(res?.pastors) ? res.pastors : []);
     } catch {
       toast.error("Falha ao carregar pastores.");
@@ -134,7 +134,7 @@ export function ModalTrocarPastor({
       addAuditLog("church_pastor_changed", { church_totvs_id: church.totvs_id, pastor_user_id: selectedPastorId });
       onSaved?.();
       onClose();
-    } catch (err: any) {
+    } catch (err: unknown) {
       toast.error(getFriendlyError(err, "churches"));
     } finally {
       setSaving(false);

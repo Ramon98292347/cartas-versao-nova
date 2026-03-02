@@ -123,7 +123,7 @@ export function CartasTab({ letters, scopeTotvsIds }: { letters: PastorLetter[];
     setFlashing(ids);
     const t = window.setTimeout(() => setFlashing([]), 2500);
     return () => window.clearTimeout(t);
-  }, [filtered.map((l) => `${l.id}:${l.status}`).join("|")]);
+  }, [filtered]);
 
   async function refresh() {
     await queryClient.invalidateQueries({ queryKey: ["pastor-letters"] });
@@ -175,7 +175,7 @@ export function CartasTab({ letters, scopeTotvsIds }: { letters: PastorLetter[];
       await setLetterStatus(letter.id, status, reason);
       addAuditLog("letter_status_changed", { letter_id: letter.id, status, reason: reason || null });
       await refresh();
-    } catch (err: any) {
+    } catch (err: unknown) {
       toast.error(getFriendlyError(err, "letters"));
     }
   }
@@ -193,7 +193,7 @@ export function CartasTab({ letters, scopeTotvsIds }: { letters: PastorLetter[];
       await softDeleteLetter(letter.id);
       addAuditLog("letter_status_changed", { letter_id: letter.id, status: "EXCLUIDA" });
       await refresh();
-    } catch (err: any) {
+    } catch (err: unknown) {
       toast.error(getFriendlyError(err, "letters"));
     }
   }

@@ -1,93 +1,107 @@
-import { igrejasMock } from "@/data/mockChurches";
+﻿import { igrejasMock } from "@/data/mockChurches";
 import { supabase } from "@/lib/supabase";
 
 type IgrejaRow = {
-  totvs: string;
-  nome: string;
-  classificacao: string | null;
+  totvs_id: string;
+  church_name: string;
+  class: string | null;
+};
+
+type ChurchPastorRow = {
+  totvs_id: string;
+  pastor_name: string | null;
+  pastor_phone: string | null;
+  pastor_email: string | null;
+  address_full: string | null;
+};
+
+type ChurchAssetsRow = {
+  city: string | null;
 };
 
 export async function fetchChurches() {
   if (!supabase) return igrejasMock;
+
+  // Comentário: usa a tabela nova `churches` (não usar legado `igreja`).
   const { data, error } = await supabase
-    .from("igreja")
-    .select('totvs:"TOtvs", nome:"Nome da IPDA", classificacao:"Classificacao"');
+    .from("churches")
+    .select("totvs_id,church_name,class");
+
   if (error || !Array.isArray(data)) return igrejasMock;
+
   return (data as IgrejaRow[]).map((d, idx) => ({
-    id: Number(d.totvs) || idx + 1,
-    codigoTotvs: d.totvs,
-    nome: d.nome,
+    id: Number(d.totvs_id) || idx + 1,
+    codigoTotvs: d.totvs_id,
+    nome: d.church_name,
     cidade: "",
     uf: "",
     carimboIgreja: "",
     carimboPastor: "",
-    classificacao: d.classificacao ?? undefined,
+    classificacao: d.class ?? undefined,
   }));
 }
 
-type PastorInfo = { totvs: string; pastor: string | null; telefone: string | null; email?: string | null; endereco?: string | null };
-
-function pickField(row: Record<string, unknown>, hints: string[]): string | null {
-  const keys = Object.keys(row || {});
-  const norm = (s: string) =>
-    s
-      .toLowerCase()
-      .normalize("NFD")
-      .replace(/\p{Diacritic}/gu, "");
-  for (const k of keys) {
-    const nk = norm(k);
-    for (const h of hints) {
-      if (nk.includes(norm(h))) {
-        const v = row[k];
-        if (typeof v === "string") return v;
-        if (v == null) return null;
-        return String(v);
-      }
-    }
-  }
-  return null;
-}
+type PastorInfo = {
+  totvs: string;
+  pastor: string | null;
+  telefone: string | null;
+  email?: string | null;
+  endereco?: string | null;
+};
 
 export async function getPastorByTotvs(totvs: string): Promise<PastorInfo | null> {
   if (!supabase) throw new Error("supabase-not-configured");
+
   const t = String(totvs || "").trim();
   if (!t) return null;
+
+  // Comentário: dados de pastor ficam vinculados na igreja ativa.
   const { data, error } = await supabase
-    .from("igreja")
-    .select("*")
-    .eq('"TOtvs"', t)
+    .from("churches")
+    .select("totvs_id,pastor_name,pastor_phone,pastor_email,address_full")
+    .eq("totvs_id", t)
     .limit(1)
     .maybeSingle();
+
   if (error) throw error;
   if (!data) return null;
-  const row = data as Record<string, unknown>;
-  const totvsVal = (row["TOtvs"] as string) || (row["totvs"] as string) || "";
-  const pastorVal = pickField(row, ["Nome completo do Pastor", "Pastor"]);
-  const telefoneVal = pickField(row, ["Telefone"]);
-  const emailVal = pickField(row, ["E-mail", "Email"]);
-  const enderecoVal = pickField(row, ["Endereço", "Endereco"]);
-  return { totvs: totvsVal, pastor: pastorVal, telefone: telefoneVal, email: emailVal, endereco: enderecoVal };
+
+  const row = data as ChurchPastorRow;
+
+  return {
+    totvs: String(row.totvs_id || t),
+    pastor: row.pastor_name || null,
+    telefone: row.pastor_phone || null,
+    email: row.pastor_email || null,
+    endereco: row.address_full || null,
+  };
 }
 
 export async function getPastorByNomeIgreja(nome: string): Promise<PastorInfo | null> {
   if (!supabase) throw new Error("supabase-not-configured");
+
   const n = String(nome || "").trim();
   if (!n) return null;
+
   const { data, error } = await supabase
-    .from("igreja")
-    .select("*")
-    .eq('"Nome da IPDA"', n)
+    .from("churches")
+    .select("totvs_id,pastor_name,pastor_phone,pastor_email,address_full")
+    .eq("church_name", n)
     .limit(1)
     .maybeSingle();
+
   if (error) throw error;
   if (!data) return null;
-  const row = data as Record<string, unknown>;
-  const totvsVal = (row["TOtvs"] as string) || (row["totvs"] as string) || "";
-  const pastorVal = pickField(row, ["Nome completo do Pastor", "Pastor"]);
-  const telefoneVal = pickField(row, ["Telefone"]);
-  const emailVal = pickField(row, ["E-mail", "Email"]);
-  const enderecoVal = pickField(row, ["Endereço", "Endereco"]);
-  return { totvs: totvsVal, pastor: pastorVal, telefone: telefoneVal, email: emailVal, endereco: enderecoVal };
+
+  const row = data as ChurchPastorRow;
+
+  return {
+    totvs: String(row.totvs_id || ""),
+    pastor: row.pastor_name || null,
+    telefone: row.pastor_phone || null,
+    email: row.pastor_email || null,
+    endereco: row.address_full || null,
+  };
 }
 
 export async function getIgrejaAssetsByTotvs(totvs: string): Promise<{
@@ -97,25 +111,25 @@ export async function getIgrejaAssetsByTotvs(totvs: string): Promise<{
   cidade?: string | null;
 } | null> {
   if (!supabase) throw new Error("supabase-not-configured");
+
   const t = String(totvs || "").trim();
   if (!t) return null;
+
+  // Comentário: nesta fase retornamos apenas cidade da igreja.
   const { data, error } = await supabase
-    .from("igreja")
-    .select("*")
-    .eq('"TOtvs"', t)
+    .from("churches")
+    .select("city")
+    .eq("totvs_id", t)
     .limit(1)
     .maybeSingle();
+
   if (error) throw error;
   if (!data) return null;
-  const row = data as Record<string, unknown>;
-  const assinatura = pickField(row, ["assinatura", "assinatura url", "assinatura_url"]);
-  const carimboIgreja = pickField(row, ["carimbo igreja", "carimbo da igreja", "carimbo_igreja"]);
-  const carimboPastor = pickField(row, ["carimbo pastor", "carimbo do pastor", "carimbo_pastor"]);
-  const cidade = pickField(row, ["Cidade"]);
+
   return {
-    assinatura_url: assinatura,
-    carimbo_igreja_url: carimboIgreja,
-    carimbo_pastor_url: carimboPastor,
-    cidade,
+    assinatura_url: null,
+    carimbo_igreja_url: null,
+    carimbo_pastor_url: null,
+    cidade: (data as ChurchAssetsRow).city || null,
   };
 }

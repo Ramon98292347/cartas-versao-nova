@@ -34,7 +34,7 @@ export default function SelectChurch() {
 
   async function confirm() {
     if (!pendingCpf) {
-      toast.error("Sessao de escolha de igreja invalida. Faca login novamente.");
+      toast.error("Sessão de escolha de igreja inválida. Faça login novamente.");
       nav("/");
       return;
     }
@@ -61,6 +61,7 @@ export default function SelectChurch() {
         cpf: data.user.cpf,
         role: data.user.role,
         email: data.user.email || null,
+        avatar_url: data.user.avatar_url || null,
         ministerial: data.user.minister_role || null,
         birth_date: data.user.birth_date || null,
         address_json: data.user.address_json || null,
@@ -74,8 +75,9 @@ export default function SelectChurch() {
       setPendingCpf(undefined);
       setAvailableChurches([]);
       nav(routeByRole(data.user.role), { replace: true });
-    } catch (err: any) {
-      toast.error(String(err?.message || "Falha ao selecionar igreja."));
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Falha ao selecionar igreja.";
+      toast.error(message);
     } finally {
       setLoading(false);
     }

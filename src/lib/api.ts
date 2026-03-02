@@ -1,4 +1,4 @@
-export type Session = {
+﻿export type Session = {
   totvs_id: string;
   root_totvs_id?: string;
   role: "admin" | "pastor" | "obreiro";
@@ -79,9 +79,9 @@ export function logout() {
 export class ApiError extends Error {
   status: number;
   code?: string;
-  details?: any;
+  details?: unknown;
 
-  constructor(message: string, status: number, code?: string, details?: any) {
+  constructor(message: string, status: number, code?: string, details?: unknown) {
     super(message);
     this.status = status;
     this.code = code;
@@ -89,30 +89,35 @@ export class ApiError extends Error {
   }
 }
 
-async function parseJsonSafe(res: Response) {
+async function parseJsonSafe(res: Response): Promise<Record<string, unknown>> {
   const txt = await res.text();
   try {
-    return JSON.parse(txt);
+    return JSON.parse(txt) as Record<string, unknown>;
   } catch {
     return { raw: txt };
   }
 }
 
-export async function post<T = any>(fnName: string, body: any = {}, opts?: { skipAuth?: boolean }): Promise<T> {
+export async function post<T = unknown>(
+  fnName: string,
+  body: Record<string, unknown> = {},
+  opts?: { skipAuth?: boolean }
+): Promise<T> {
   const url = `${FUNCTIONS_BASE}/${fnName}`;
   const token = getToken();
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
   };
+
   if (SUPABASE_ANON_KEY) {
-    headers["apikey"] = SUPABASE_ANON_KEY;
+    headers.apikey = SUPABASE_ANON_KEY;
   }
 
   if (!opts?.skipAuth) {
     if (!token) {
       throw new ApiError("Sem token. Faça login novamente.", 401, "missing_token");
     }
-    headers["Authorization"] = `Bearer ${token}`;
+    headers.Authorization = `Bearer ${token}`;
   }
 
   const res = await fetch(url, {
@@ -123,9 +128,12 @@ export async function post<T = any>(fnName: string, body: any = {}, opts?: { ski
 
   const data = await parseJsonSafe(res);
 
-  if (!res.ok || data?.ok === false) {
-    const code = data?.error || "api_error";
-    const msg = data?.detail || data?.message || (typeof data === "string" ? data : "Erro na requisição");
+  if (!res.ok || data.ok === false) {
+    const code = String(data.error || "api_error");
+    const msg =
+      String(data.detail || data.message || "") ||
+      (typeof data === "string" ? data : "Erro na requisição");
+
     if (res.status === 401) logout();
     throw new ApiError(msg, res.status, code, data);
   }

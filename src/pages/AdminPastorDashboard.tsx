@@ -118,6 +118,9 @@ export default function AdminPastorDashboard() {
   const ultimos7 = isAdmin ? churchRows.reduce((acc, r) => acc + r.cartas_liberadas, 0) : (metrics?.ultimos7Dias || 0);
   const totalObreiros = isAdmin ? churchRows.reduce((acc, r) => acc + r.total_obreiros, 0) : (metrics?.totalObreiros || obreiros.length);
   const pendentes = unreadCount || (isAdmin ? churchRows.reduce((acc, r) => acc + r.pendentes_liberacao, 0) : (metrics?.pendentesLiberacao || 0));
+  const pastorDaLista = obreiros.find((m) => m?.role === "pastor");
+  const headerAvatarUrl = usuario?.avatar_url || pastorDaLista?.avatar_url || null;
+  const headerNome = usuario?.nome || pastorDaLista?.full_name || "Usuário";
 
   return (
     <div className="min-h-screen bg-[#f3f5f9]">
@@ -129,32 +132,38 @@ export default function AdminPastorDashboard() {
                 <FileText className="h-5 w-5 sm:h-6 sm:w-6" />
               </div>
               <div>
-                <h1 className="text-2xl font-bold leading-none text-slate-900 sm:text-3xl">Painel de Gestao</h1>
+                <h1 className="text-2xl font-bold leading-none text-slate-900 sm:text-3xl">Painel de Gestão</h1>
                 <p className="text-base text-slate-500 sm:text-xl">Cartas e Obreiros</p>
               </div>
             </div>
 
-            <div className="flex w-full flex-wrap items-center gap-2 lg:w-auto lg:flex-nowrap lg:justify-end">
-              {!isAdmin ? (
-                <Button className="h-10 px-3 sm:h-11 sm:px-4" onClick={() => nav("/carta")}>
-                  Fazer Carta
-                </Button>
-              ) : null}
-              <Button variant="outline" className="h-10 px-3 sm:h-11 sm:px-4" onClick={() => nav("/config")}>
-                <Megaphone className="mr-2 h-4 w-4" /> Divulgacao
-              </Button>
-              <Button variant="outline" className="relative h-10 w-10 p-0 sm:h-11 sm:w-11" onClick={() => setOpenReleases(true)}>
-                <Bell className="h-5 w-5" />
-                {pendentes > 0 ? (
-                  <span className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-rose-500 text-xs font-semibold text-white">
-                    {pendentes}
-                  </span>
-                ) : null}
-              </Button>
-              <Button variant="outline" className="h-10 px-3 sm:h-11 sm:px-4" onClick={logout}>
-                <LogOut className="mr-2 h-4 w-4" /> Sair
-              </Button>
-              <div className="w-full rounded-xl border border-slate-200 px-3 py-2 text-xs text-slate-600 sm:text-sm lg:w-auto">
+            <div className="w-full space-y-2 lg:w-auto">
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <Button variant="outline" className="relative h-10 w-10 p-0 sm:h-11 sm:w-11" onClick={() => setOpenReleases(true)}>
+                    <Bell className="h-5 w-5" />
+                    {pendentes > 0 ? (
+                      <span className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-rose-500 text-xs font-semibold text-white">
+                        {pendentes}
+                      </span>
+                    ) : null}
+                  </Button>
+                  <Button variant="outline" className="h-10 px-3 sm:h-11 sm:px-4" onClick={logout}>
+                    <LogOut className="mr-2 h-4 w-4" /> Sair
+                  </Button>
+                </div>
+                <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-2 py-1">
+                  {headerAvatarUrl ? (
+                    <img src={headerAvatarUrl} alt="Avatar usuario" className="h-9 w-9 rounded-full border object-cover object-[center_top]" />
+                  ) : (
+                    <div className="flex h-9 w-9 items-center justify-center rounded-full border bg-slate-100 text-sm font-semibold text-slate-600">
+                      {(headerNome || "U").charAt(0).toUpperCase()}
+                    </div>
+                  )}
+                  <span className="max-w-[180px] truncate text-sm font-medium text-slate-700">{headerNome}</span>
+                </div>
+              </div>
+              <div className="rounded-xl border border-slate-200 px-3 py-2 text-xs text-slate-600 sm:text-sm">
                 Igreja: {session?.church_name || usuario?.church_name || "-"}
                 <br />
                 Pastor: {usuario?.nome || "-"}
@@ -167,6 +176,19 @@ export default function AdminPastorDashboard() {
       </header>
 
       <main className="mx-auto w-full max-w-[1600px] space-y-5 px-4 py-5">
+        <section className="mt-[10px] rounded-2xl border border-slate-200 bg-white p-3">
+          <div className="flex flex-wrap gap-2">
+            {!isAdmin ? (
+              <Button className="h-10 px-3 sm:h-11 sm:px-4" onClick={() => nav("/carta")}>
+                Fazer Carta
+              </Button>
+            ) : null}
+            <Button variant="outline" className="h-10 px-3 sm:h-11 sm:px-4" onClick={() => nav("/config")}>
+              <Megaphone className="mr-2 h-4 w-4" /> Divulgação
+            </Button>
+          </div>
+        </section>
+
         {loadingMetrics ? (
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
             <Skeleton className="h-24 rounded-2xl" />
@@ -179,7 +201,7 @@ export default function AdminPastorDashboard() {
             items={[
               { label: "Total de Cartas", value: totalCartas, icon: FileText, gradient: "bg-gradient-to-r from-[#2f63d4] to-[#4b77d5]" },
               { label: isAdmin ? "Total de Igrejas" : "Cartas Hoje", value: cartasHoje, icon: CalendarDays, gradient: "bg-gradient-to-r from-[#2fa86f] to-[#49c280]" },
-              { label: isAdmin ? "Cartas Liberadas" : "Ultimos 7 dias", value: ultimos7, icon: LineChart, gradient: "bg-gradient-to-r from-[#f39b1c] to-[#f3b12c]" },
+              { label: isAdmin ? "Cartas Liberadas" : "Últimos 7 dias", value: ultimos7, icon: LineChart, gradient: "bg-gradient-to-r from-[#f39b1c] to-[#f3b12c]" },
               { label: "Total de Membros", value: totalObreiros, icon: Users, gradient: "bg-gradient-to-r from-[#8f3fd4] to-[#a957e4]" },
             ]}
           />

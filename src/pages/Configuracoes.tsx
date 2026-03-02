@@ -149,9 +149,7 @@ export default function ConfiguracoesPage() {
           cacheControl: "3600",
         });
         if (error) {
-          const details = [error.message, (error as any)?.statusCode, (error as any)?.error]
-            .filter(Boolean)
-            .join(" | ");
+          const details = [error.message].filter(Boolean).join(" | ");
           throw new Error(details || "storage_upload_failed");
         }
         const { data } = supabase.storage.from("announcements").getPublicUrl(path);
@@ -176,8 +174,8 @@ export default function ConfiguracoesPage() {
       setMediaSource("url");
       setPendingMediaFile(null);
       await refresh();
-    } catch (err: any) {
-      const rawMessage = String(err?.message || "");
+    } catch (err: unknown) {
+      const rawMessage = err instanceof Error ? err.message : "";
       if (rawMessage) console.error("Erro upload divulgação:", rawMessage);
       toast.error(getFriendlyError(err, "announcements") || rawMessage || "Falha ao salvar divulgação.");
     } finally {
@@ -192,7 +190,7 @@ export default function ConfiguracoesPage() {
       toast.success("Anuncio excluido.");
       addAuditLog("announcement_deleted", { announcement_id: id });
       await refresh();
-    } catch (err: any) {
+    } catch (err: unknown) {
       toast.error(getFriendlyError(err, "announcements"));
     }
   }
@@ -237,7 +235,7 @@ export default function ConfiguracoesPage() {
                 </div>
 
                 <div className="space-y-1">
-                  <Label>Media URL</Label>
+                  <Label>Midia (URL ou arquivo)</Label>
                   <div className="mb-2 flex gap-2">
                     <Button
                       type="button"

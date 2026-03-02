@@ -16,6 +16,7 @@ export type Usuario = {
   is_active?: boolean | null;
   igreja_nome?: string | null;
   email?: string | null;
+  avatar_url?: string | null;
   birth_date?: string | null;
   address_json?: Record<string, unknown> | null;
   ministerial?: string | null;

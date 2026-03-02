@@ -52,7 +52,7 @@ export default function PhoneIdentify() {
   async function handleContinue() {
     const cpfRaw = cpf.replace(/\D/g, "");
     if (cpfRaw.length !== 11) {
-      toast.error("Informe um CPF valido com 11 digitos.");
+      toast.error("Informe um CPF válido com 11 dígitos.");
       return;
     }
     if (!senha.trim()) {
@@ -91,6 +91,7 @@ export default function PhoneIdentify() {
         cpf: logged.cpf,
         role: logged.role,
         email: logged.email || null,
+        avatar_url: logged.avatar_url || null,
         birth_date: logged.birth_date || null,
         address_json: logged.address_json || null,
         ministerial: logged.minister_role || null,
@@ -104,7 +105,7 @@ export default function PhoneIdentify() {
       });
       setTelefone(undefined);
       nav(routeByRole(logged.role));
-    } catch (err: any) {
+    } catch (err: unknown) {
       toast.error(getFriendlyError(err, "auth"));
     } finally {
       setLoading(false);
@@ -152,7 +153,7 @@ export default function PhoneIdentify() {
         </Button>
       </form>
       <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-lg lg:h-[700px]">
-        <p className="mb-3 text-sm font-semibold text-slate-700">Area de Divulgacao</p>
+        <p className="mb-3 text-sm font-semibold text-slate-700">Área de Divulgação</p>
         <AnnouncementCarousel
           items={announcements}
           birthdays={birthdays.slice(0, 10).map((b) => b.full_name)}
