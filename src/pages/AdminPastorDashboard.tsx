@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { FileText, Bell, LogOut, CalendarDays, LineChart, Users, Megaphone } from "lucide-react";
+import { FileText, Bell, LogOut, CalendarDays, LineChart, Users, Megaphone, Download } from "lucide-react";
 import { useUser } from "@/context/UserContext";
 import { getPastorMetrics, listAdminChurchSummary, listChurchesInScopePaged, listMembers, listNotifications, listPastorLetters, markAllNotificationsRead, markNotificationRead } from "@/services/saasService";
 import { CartasTab } from "@/components/admin/CartasTab";
@@ -11,6 +11,7 @@ import { ObreirosTab } from "@/components/admin/ObreirosTab";
 import { AdminChurchesTab } from "@/components/admin/AdminChurchesTab";
 import { StatCards } from "@/components/shared/StatCards";
 import { Skeleton } from "@/components/ui/skeleton";
+import { usePwaInstall } from "@/hooks/usePwaInstall";
 
 type Tab = "cartas" | "igrejas" | "obreiros";
 
@@ -79,6 +80,7 @@ export default function AdminPastorDashboard() {
   const churchesInScope = churchesPaged?.churches || [];
   const churchesTotal = churchesPaged?.total || churchesInScope.length;
   const churchesPages = Math.max(1, Math.ceil(churchesTotal / churchPageSize));
+  const { canInstall, install } = usePwaInstall();
 
   const { data: notificationsData } = useQuery({
     queryKey: ["notifications", 1, 50],
@@ -113,6 +115,10 @@ export default function AdminPastorDashboard() {
     await refreshAll();
   }
 
+  async function installApp() {
+    await install();
+  }
+
   const totalCartas = isAdmin ? churchRows.reduce((acc, r) => acc + r.total_cartas, 0) : (metrics?.totalCartas || 0);
   const cartasHoje = isAdmin ? churchRows.length : (metrics?.cartasHoje || 0);
   const ultimos7 = isAdmin ? churchRows.reduce((acc, r) => acc + r.cartas_liberadas, 0) : (metrics?.ultimos7Dias || 0);
@@ -140,6 +146,11 @@ export default function AdminPastorDashboard() {
             <div className="w-full space-y-2 lg:w-auto">
               <div className="flex items-center justify-between gap-2">
                 <div className="flex items-center gap-2">
+                  {canInstall ? (
+                    <Button variant="outline" className="h-10 px-3 sm:h-11 sm:px-4" onClick={installApp}>
+                      <Download className="mr-2 h-4 w-4" /> Instalar app
+                    </Button>
+                  ) : null}
                   <Button variant="outline" className="relative h-10 w-10 p-0 sm:h-11 sm:w-11" onClick={() => setOpenReleases(true)}>
                     <Bell className="h-5 w-5" />
                     {pendentes > 0 ? (

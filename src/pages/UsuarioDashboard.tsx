@@ -13,6 +13,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { toast } from "sonner";
 import { getPastorByTotvsPublic, getSignedPdfUrl, requestRelease, updateMyProfile, workerDashboard, type PastorLetter } from "@/services/saasService";
 import { Share2, Download, Unlock, LogOut, Bell, RefreshCw, MoreHorizontal, Eye } from "lucide-react";
+import { usePwaInstall } from "@/hooks/usePwaInstall";
 
 function statusClass(status: string) {
   if (status === "LIBERADA") return "bg-emerald-100 text-emerald-700 border-emerald-200";
@@ -55,6 +56,7 @@ export default function UsuarioDashboard() {
   const [statusFilter, setStatusFilter] = useState("all");
   const [profileForm, setProfileForm] = useState({ phone: "", email: "", address_city: "" });
   const [savingProfile, setSavingProfile] = useState(false);
+  const { canInstall, install } = usePwaInstall();
 
   const userId = String(usuario?.id || "");
 
@@ -214,6 +216,10 @@ export default function UsuarioDashboard() {
     }
   }
 
+  async function installApp() {
+    await install();
+  }
+
   return (
     <div className="min-h-screen bg-[#f3f5f9]">
       <header className="bg-[#2f63d4] text-white shadow-md">
@@ -242,6 +248,26 @@ export default function UsuarioDashboard() {
                 >
                   Visualizar cadastro
                 </Button>
+                {canInstall ? (
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    className="h-9 w-9 border-white/30 bg-white/10 text-white hover:bg-white/20 sm:hidden"
+                    onClick={installApp}
+                    aria-label="Instalar app"
+                  >
+                    <Download className="h-4 w-4" />
+                  </Button>
+                ) : null}
+                {canInstall ? (
+                  <Button
+                    variant="outline"
+                    className="hidden h-10 border-white/30 bg-white/10 px-3 text-white hover:bg-white/20 sm:inline-flex sm:px-4"
+                    onClick={installApp}
+                  >
+                    <Download className="mr-2 h-4 w-4" /> Instalar app
+                  </Button>
+                ) : null}
                 <Button variant="outline" size="icon" className="relative h-9 w-9 border-white/30 bg-white/10 text-white hover:bg-white/20 sm:h-10 sm:w-10">
                   <Bell className="h-4 w-4 sm:h-5 sm:w-5" />
                   {stats.liberadas > 0 ? (
