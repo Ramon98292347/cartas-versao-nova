@@ -76,6 +76,8 @@ export type UserListItem = {
   full_name: string;
   role?: AppRole | null;
   cpf?: string | null;
+  phone?: string | null;
+  email?: string | null;
   minister_role?: string | null;
   default_totvs_id?: string | null;
   totvs_access?: string[] | null;
@@ -86,6 +88,7 @@ export type WorkerListParams = {
   search?: string;
   minister_role?: string;
   is_active?: boolean;
+  include_pastor?: boolean;
   page?: number;
   page_size?: number;
 };
@@ -172,6 +175,13 @@ export type BirthdayItem = {
   full_name: string;
   avatar_url?: string | null;
 };
+
+type MinisterRoleFront = "Pastor" | "Presbitero" | "Diacono" | "Obreiro" | "Membro";
+
+function roleFromMinisterRole(ministerRole: string): "pastor" | "obreiro" {
+  const normalized = String(ministerRole || "").trim().toLowerCase();
+  return normalized === "pastor" ? "pastor" : "obreiro";
+}
 
 export type UserCreatePayload = {
   cpf: string;
@@ -490,6 +500,7 @@ export async function listWorkers(params: WorkerListParams): Promise<WorkerListR
       search: params.search || undefined,
       minister_role: params.minister_role || undefined,
       is_active: typeof params.is_active === "boolean" ? params.is_active : undefined,
+      include_pastor: typeof params.include_pastor === "boolean" ? params.include_pastor : undefined,
       page: params.page || 1,
       page_size: params.page_size || 20,
     });
@@ -500,6 +511,8 @@ export async function listWorkers(params: WorkerListParams): Promise<WorkerListR
         full_name: String(w?.full_name || ""),
         role: (w?.role || null) as AppRole | null,
         cpf: w?.cpf || null,
+        phone: w?.phone || null,
+        email: w?.email || null,
         minister_role: w?.minister_role || null,
         default_totvs_id: w?.default_totvs_id || null,
         totvs_access: w?.totvs_access || null,
@@ -518,6 +531,8 @@ export async function listWorkers(params: WorkerListParams): Promise<WorkerListR
     full_name: u.full_name,
     role: u.role,
     cpf: u.cpf,
+    phone: u.phone || null,
+    email: u.email || null,
     minister_role: u.minister_role || null,
     default_totvs_id: u.default_totvs_id || null,
     totvs_access: u.totvs_access || null,
@@ -997,17 +1012,20 @@ export async function upsertWorkerByPastor(payload: {
   if (!payload.minister_role.trim()) throw new Error("minister_role_required");
   if (!payload.active_totvs_id) throw new Error("active_totvs_required");
 
+  const ministerRole = payload.minister_role.trim() as MinisterRoleFront;
+  const role = roleFromMinisterRole(ministerRole);
+
   const body = {
     id: payload.id || undefined,
     cpf,
     full_name: payload.full_name.trim(),
-    role: "obreiro",
-    totvs_access: [{ totvs_id: payload.active_totvs_id, role: "obreiro" }],
+    role,
+    totvs_access: [{ totvs_id: payload.active_totvs_id, role }],
     default_totvs_id: payload.active_totvs_id,
     phone: payload.phone || null,
     email: payload.email || null,
     birth_date: payload.birth_date || null,
-    minister_role: payload.minister_role.trim(),
+    minister_role: ministerRole,
     avatar_url: payload.avatar_url || null,
     cep: payload.cep || null,
     address_street: payload.address_street || null,
@@ -1031,6 +1049,7 @@ export async function upsertWorkerByPastor(payload: {
       MOCK_USERS[idx] = {
         ...MOCK_USERS[idx],
         full_name: body.full_name,
+        role: body.role,
         cpf: body.cpf,
         minister_role: body.minister_role,
         phone: body.phone,
@@ -1058,7 +1077,7 @@ export async function upsertWorkerByPastor(payload: {
   MOCK_USERS.push({
     id: `u-${Math.random().toString(36).slice(2, 10)}`,
     full_name: body.full_name,
-    role: "obreiro",
+    role: body.role,
     cpf: body.cpf,
     password: body.password || "123456",
     default_totvs_id: body.default_totvs_id,

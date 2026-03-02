@@ -16,7 +16,7 @@ export const api = {
   createUser: (body: any) => post("create-user", body),
   resetPassword: (body: { cpf?: string; user_id?: string; new_password: string }) => post("reset-password", body),
   updateMyProfile: (body: { phone?: string; email?: string; address_city?: string }) => post("update-my-profile", body),
-  listWorkers: (body: { search?: string; minister_role?: string; is_active?: boolean; page?: number; page_size?: number }) =>
+  listWorkers: (body: { search?: string; minister_role?: string; is_active?: boolean; include_pastor?: boolean; page?: number; page_size?: number }) =>
     post("list-workers", body),
   listPastors: (body: any) => post("list-pastors", body),
   setChurchPastor: (body: { church_totvs_id: string; pastor_user_id: string }) => post("set-church-pastor", body),

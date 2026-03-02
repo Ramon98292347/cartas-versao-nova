@@ -135,6 +135,11 @@ export default function AdminPastorDashboard() {
             </div>
 
             <div className="flex w-full flex-wrap items-center gap-2 lg:w-auto lg:flex-nowrap lg:justify-end">
+              {!isAdmin ? (
+                <Button className="h-10 px-3 sm:h-11 sm:px-4" onClick={() => nav("/carta")}>
+                  Fazer Carta
+                </Button>
+              ) : null}
               <Button variant="outline" className="h-10 px-3 sm:h-11 sm:px-4" onClick={() => nav("/config")}>
                 <Megaphone className="mr-2 h-4 w-4" /> Divulgacao
               </Button>
@@ -175,7 +180,7 @@ export default function AdminPastorDashboard() {
               { label: "Total de Cartas", value: totalCartas, icon: FileText, gradient: "bg-gradient-to-r from-[#2f63d4] to-[#4b77d5]" },
               { label: isAdmin ? "Total de Igrejas" : "Cartas Hoje", value: cartasHoje, icon: CalendarDays, gradient: "bg-gradient-to-r from-[#2fa86f] to-[#49c280]" },
               { label: isAdmin ? "Cartas Liberadas" : "Ultimos 7 dias", value: ultimos7, icon: LineChart, gradient: "bg-gradient-to-r from-[#f39b1c] to-[#f3b12c]" },
-              { label: "Total de Obreiros", value: totalObreiros, icon: Users, gradient: "bg-gradient-to-r from-[#8f3fd4] to-[#a957e4]" },
+              { label: "Total de Membros", value: totalObreiros, icon: Users, gradient: "bg-gradient-to-r from-[#8f3fd4] to-[#a957e4]" },
             ]}
           />
         )}
@@ -192,7 +197,7 @@ export default function AdminPastorDashboard() {
               className={`rounded-xl px-4 py-2 text-lg font-semibold ${tab === "obreiros" ? "bg-slate-100 text-slate-900" : "text-slate-500"}`}
               onClick={() => setTab("obreiros")}
             >
-              Obreiros ({obreiros.length})
+              Membros cadastrados ({obreiros.length})
             </button>
           </div>
         </section>

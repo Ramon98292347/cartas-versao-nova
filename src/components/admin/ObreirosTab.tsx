@@ -6,12 +6,12 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Search, PlusCircle } from "lucide-react";
+import { Search, PlusCircle, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { listWorkers, resetWorkerPassword, setWorkerActive, upsertWorkerByPastor, type UserListItem } from "@/services/saasService";
 import { getFriendlyError } from "@/lib/error-map";
 import { addAuditLog } from "@/lib/audit";
-import { useUser } from "@/context/UserContext";
+import { supabase } from "@/lib/supabase";
 
 function normalizeCpf(v: string) {
   return (v || "").replace(/\D/g, "").slice(0, 11);
@@ -62,8 +62,9 @@ const initialForm: WorkerForm = {
   is_active: true,
 };
 
+const ministerRoleOptions = ["Pastor", "Presbitero", "Diacono", "Obreiro", "Membro"];
+
 export function ObreirosTab({ activeTotvsId }: { activeTotvsId: string }) {
-  const { usuario } = useUser();
   const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
   const [ministerRole, setMinisterRole] = useState("all");
@@ -87,35 +88,14 @@ export function ObreirosTab({ activeTotvsId }: { activeTotvsId: string }) {
         search: search || undefined,
         minister_role: ministerRole === "all" ? undefined : ministerRole,
         is_active: activeFilter === "all" ? undefined : activeFilter === "active",
+        include_pastor: true,
         page,
         page_size: pageSize,
       }),
   });
 
-  const workersApi = data?.workers || [];
-  const hasPastorFromApi = workersApi.some((w) => String(w.id) === String(usuario?.id || ""));
-  const pastorHasAccess =
-    usuario?.role === "pastor" &&
-    !!activeTotvsId &&
-    (String(usuario?.default_totvs_id || usuario?.totvs || "") === activeTotvsId ||
-      (Array.isArray(usuario?.totvs_access) && usuario.totvs_access.includes(activeTotvsId)));
-
-  const injectedPastor: UserListItem | null =
-    pastorHasAccess && !hasPastorFromApi
-      ? {
-          id: String(usuario?.id || ""),
-          full_name: String(usuario?.full_name || usuario?.nome || "Pastor"),
-          role: "pastor",
-          cpf: usuario?.cpf || null,
-          minister_role: usuario?.ministerial || "Pastor",
-          default_totvs_id: activeTotvsId,
-          totvs_access: [activeTotvsId],
-          is_active: true,
-        }
-      : null;
-
-  const workers = injectedPastor ? [injectedPastor, ...workersApi] : workersApi;
-  const total = (data?.total || 0) + (injectedPastor ? 1 : 0);
+  const workers = data?.workers || [];
+  const total = data?.total || 0;
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
   const roleOptions = useMemo(() => {
@@ -141,8 +121,8 @@ export function ObreirosTab({ activeTotvsId }: { activeTotvsId: string }) {
       cpf: worker.cpf || "",
       full_name: worker.full_name,
       minister_role: worker.minister_role || "",
-      phone: "",
-      email: "",
+      phone: worker.phone || "",
+      email: worker.email || "",
       birth_date: "",
       avatar_url: "",
       cep: "",
@@ -184,6 +164,69 @@ export function ObreirosTab({ activeTotvsId }: { activeTotvsId: string }) {
     } catch {
       toast.error("Nao foi possivel buscar o CEP.");
     }
+  }
+
+  async function uploadAvatar(file: File) {
+    if (!supabase) {
+      toast.error("Supabase nao configurado para upload.");
+      return;
+    }
+
+    const ext = (file.name.split(".").pop() || "png").toLowerCase();
+    const baseId = normalizeCpf(form.cpf) || `tmp-${Date.now()}`;
+    const path = `users/${baseId}.${ext}`;
+
+    const { error } = await supabase.storage.from("avatars").upload(path, file, {
+      upsert: true,
+      contentType: file.type || undefined,
+      cacheControl: "3600",
+    });
+
+    if (error) {
+      const msg = [error.message, (error as any)?.statusCode, (error as any)?.error].filter(Boolean).join(" | ");
+      throw new Error(msg || "avatar_upload_failed");
+    }
+
+    const { data } = supabase.storage.from("avatars").getPublicUrl(path);
+    const publicUrl = data?.publicUrl || "";
+    if (!publicUrl) throw new Error("avatar_url_not_generated");
+
+    setForm((prev) => ({ ...prev, avatar_url: publicUrl }));
+
+    // Comentário: se já tiver dados mínimos, salva no banco imediatamente.
+    const hasMinimumToPersist =
+      !!activeTotvsId &&
+      normalizeCpf(form.cpf).length === 11 &&
+      !!form.full_name.trim() &&
+      !!form.minister_role.trim();
+
+    if (hasMinimumToPersist) {
+      await upsertWorkerByPastor({
+        id: form.id,
+        active_totvs_id: activeTotvsId,
+        cpf: form.cpf,
+        full_name: form.full_name,
+        minister_role: form.minister_role,
+        phone: form.phone || undefined,
+        email: form.email || undefined,
+        birth_date: form.birth_date || undefined,
+        avatar_url: publicUrl,
+        cep: form.cep || undefined,
+        address_street: form.address_street || undefined,
+        address_number: form.address_number || undefined,
+        address_complement: form.address_complement || undefined,
+        address_neighborhood: form.address_neighborhood || undefined,
+        address_city: form.address_city || undefined,
+        address_state: form.address_state || undefined,
+        is_active: form.is_active,
+        password: null,
+      });
+      await refresh();
+      toast.success("Foto enviada e salva no cadastro.");
+      return;
+    }
+
+    toast.success("Foto enviada. Complete os dados e clique em Salvar.");
   }
 
   async function save(e: FormEvent) {
@@ -294,7 +337,7 @@ export function ObreirosTab({ activeTotvsId }: { activeTotvsId: string }) {
     <div className="space-y-4">
       <Card className="border border-slate-200 bg-white shadow-sm">
         <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle>Obreiros</CardTitle>
+          <CardTitle>Membros cadastrados</CardTitle>
           <Button onClick={openNew}><PlusCircle className="mr-2 h-4 w-4" /> Novo Obreiro</Button>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -341,13 +384,11 @@ export function ObreirosTab({ activeTotvsId }: { activeTotvsId: string }) {
               </div>
               {isLoading ? <div className="px-4 py-4 text-sm text-slate-500">Carregando...</div> : null}
               {!isLoading && workers.length === 0 ? <div className="px-4 py-4 text-sm text-slate-500">Nenhum obreiro encontrado.</div> : null}
-              {workers.map((w) => {
-                const isPastorRow = String(w.role || "") === "pastor";
-                return (
+              {workers.map((w) => (
                 <div key={w.id} className="grid grid-cols-[220px_150px_160px_160px_100px_1fr] items-center border-b px-4 py-3 text-sm">
                   <span className="truncate">{w.full_name}</span>
                   <span>{maskCpf(w.cpf || "")}</span>
-                  <span>-</span>
+                  <span>{w.phone || "-"}</span>
                   <span>{w.minister_role || "-"}</span>
                   <span>
                     <span className={`rounded-full px-2 py-1 text-xs ${w.is_active === false ? "bg-rose-100 text-rose-700" : "bg-emerald-100 text-emerald-700"}`}>
@@ -355,20 +396,14 @@ export function ObreirosTab({ activeTotvsId }: { activeTotvsId: string }) {
                     </span>
                   </span>
                   <div className="flex flex-wrap gap-2">
-                    {isPastorRow ? (
-                      <span className="rounded-md bg-slate-100 px-2 py-1 text-xs font-medium text-slate-700">Pastor</span>
-                    ) : (
-                      <>
-                        <Button size="sm" variant="outline" onClick={() => openEdit(w)}>Editar</Button>
-                        <Button size="sm" variant="secondary" onClick={() => openResetPassword(w)}>Resetar senha</Button>
-                        <Button size="sm" variant={w.is_active === false ? "default" : "destructive"} onClick={() => toggle(w)}>
-                          {w.is_active === false ? "Ativar" : "Excluir"}
-                        </Button>
-                      </>
-                    )}
+                    <Button size="sm" variant="outline" onClick={() => openEdit(w)}>Editar</Button>
+                    <Button size="sm" variant="secondary" onClick={() => openResetPassword(w)}>Resetar senha</Button>
+                    <Button size="sm" variant={w.is_active === false ? "default" : "destructive"} onClick={() => toggle(w)}>
+                      {w.is_active === false ? "Ativar" : "Excluir"}
+                    </Button>
                   </div>
                 </div>
-              )})}
+              ))}
             </div>
           </div>
 
@@ -411,7 +446,16 @@ export function ObreirosTab({ activeTotvsId }: { activeTotvsId: string }) {
             <div className="grid gap-3 md:grid-cols-3">
               <div className="space-y-1">
                 <Label>Cargo ministerial *</Label>
-                <Input value={form.minister_role} onChange={(e) => setForm((p) => ({ ...p, minister_role: e.target.value }))} />
+                <Select value={form.minister_role || ""} onValueChange={(v) => setForm((p) => ({ ...p, minister_role: v }))}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecione o cargo" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {ministerRoleOptions.map((role) => (
+                      <SelectItem key={role} value={role}>{role}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
               <div className="space-y-1">
                 <Label>Telefone</Label>
@@ -429,8 +473,41 @@ export function ObreirosTab({ activeTotvsId }: { activeTotvsId: string }) {
                 <Input type="date" value={form.birth_date} onChange={(e) => setForm((p) => ({ ...p, birth_date: e.target.value }))} />
               </div>
               <div className="space-y-1 md:col-span-2">
-                <Label>Avatar URL</Label>
-                <Input value={form.avatar_url} onChange={(e) => setForm((p) => ({ ...p, avatar_url: e.target.value }))} placeholder="https://.../avatars/..." />
+                <Label>Foto</Label>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => document.getElementById("avatar-upload-input")?.click()}
+                  >
+                    <Upload className="mr-2 h-4 w-4" /> Adicionar foto
+                  </Button>
+                  <input
+                    id="avatar-upload-input"
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={async (e) => {
+                      const inputEl = e.currentTarget;
+                      const file = e.target.files?.[0];
+                      if (!file) return;
+                      try {
+                        await uploadAvatar(file);
+                      } catch (err: any) {
+                        toast.error(String(err?.message || "Falha ao enviar foto."));
+                      } finally {
+                        if (inputEl) inputEl.value = "";
+                      }
+                    }}
+                  />
+                  {form.avatar_url ? (
+                    <a href={form.avatar_url} target="_blank" rel="noreferrer" className="text-xs text-blue-600 underline">
+                      Ver foto atual
+                    </a>
+                  ) : (
+                    <span className="text-xs text-slate-500">Nenhuma foto enviada.</span>
+                  )}
+                </div>
               </div>
             </div>
 
