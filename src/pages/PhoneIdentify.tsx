@@ -6,8 +6,13 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { useUser } from "@/context/UserContext";
 import { toast } from "sonner";
-import { listAnnouncements, listBirthdaysToday, loginWithCpfPassword } from "@/services/saasService";
+import {
+  listAnnouncementsPublicByTotvs,
+  listBirthdaysTodayPublicByTotvs,
+  loginWithCpfPassword,
+} from "@/services/saasService";
 import { AnnouncementCarousel } from "@/components/shared/AnnouncementCarousel";
+import { getFriendlyError } from "@/lib/error-map";
 
 function maskCpf(v: string) {
   const d = v.replace(/\D/g, "").slice(0, 11);
@@ -25,21 +30,23 @@ function routeByRole(role: "admin" | "pastor" | "obreiro") {
 
 export default function PhoneIdentify() {
   const nav = useNavigate();
-  const { token, setUsuario, setTelefone, setToken, setSession, setPendingCpf, setAvailableChurches } = useUser();
+  const { setUsuario, setTelefone, setToken, setSession, setPendingCpf, setAvailableChurches } = useUser();
   const logo = "/Polish_20220810_001501268%20(2).png";
 
   const [cpf, setCpf] = useState("");
   const [senha, setSenha] = useState("");
   const [loading, setLoading] = useState(false);
+  const cachedTotvs = typeof window !== "undefined" ? localStorage.getItem("ipda_last_totvs") || "" : "";
+
   const { data: announcements = [] } = useQuery({
-    queryKey: ["announcements-login"],
-    queryFn: () => listAnnouncements(10),
-    enabled: Boolean(token),
+    queryKey: ["announcements-login", cachedTotvs],
+    queryFn: () => listAnnouncementsPublicByTotvs(cachedTotvs, 10),
+    enabled: Boolean(cachedTotvs),
   });
   const { data: birthdays = [] } = useQuery({
-    queryKey: ["birthdays-today-login"],
-    queryFn: () => listBirthdaysToday(10),
-    enabled: Boolean(token),
+    queryKey: ["birthdays-today-login", cachedTotvs],
+    queryFn: () => listBirthdaysTodayPublicByTotvs(cachedTotvs, 10),
+    enabled: Boolean(cachedTotvs),
   });
 
   async function handleContinue() {
@@ -67,8 +74,13 @@ export default function PhoneIdentify() {
       }
 
       const logged = result.user;
+      const fixedSession = {
+        ...result.session,
+        root_totvs_id: result.session.root_totvs_id || result.session.totvs_id,
+      };
       setToken(result.token);
-      setSession(result.session);
+      setSession(fixedSession);
+      if (fixedSession.totvs_id) localStorage.setItem("ipda_last_totvs", fixedSession.totvs_id);
       setPendingCpf(undefined);
       setAvailableChurches([]);
       setUsuario({
@@ -83,24 +95,17 @@ export default function PhoneIdentify() {
         address_json: logged.address_json || null,
         ministerial: logged.minister_role || null,
         data_separacao: null,
-        totvs: result.session.totvs_id || null,
-        default_totvs_id: result.session.totvs_id || null,
-        church_name: result.session.church_name || null,
-        church_class: result.session.church_class || null,
-        totvs_access: result.session.scope_totvs_ids || null,
-        igreja_nome: result.session.church_name || null,
+        totvs: fixedSession.totvs_id || null,
+        default_totvs_id: fixedSession.totvs_id || null,
+        church_name: fixedSession.church_name || null,
+        church_class: fixedSession.church_class || null,
+        totvs_access: fixedSession.scope_totvs_ids || null,
+        igreja_nome: fixedSession.church_name || null,
       });
       setTelefone(undefined);
       nav(routeByRole(logged.role));
     } catch (err: any) {
-      const msg = String(err?.message || "");
-      if (msg.includes("invalid-credentials")) {
-        toast.error("CPF ou senha invalidos.");
-      } else if (msg.includes("supabase-not-configured")) {
-        toast.error("Supabase nao configurado.");
-      } else {
-        toast.error("Falha ao autenticar.");
-      }
+      toast.error(getFriendlyError(err, "auth"));
     } finally {
       setLoading(false);
     }
@@ -146,9 +151,13 @@ export default function PhoneIdentify() {
           {loading ? "Entrando..." : "Entrar"}
         </Button>
       </form>
-      <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-lg lg:h-[720px]">
+      <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-lg lg:h-[700px]">
         <p className="mb-3 text-sm font-semibold text-slate-700">Area de Divulgacao</p>
-        <AnnouncementCarousel items={announcements} birthdays={birthdays.slice(0, 10).map((b) => b.full_name)} />
+        <AnnouncementCarousel
+          items={announcements}
+          birthdays={birthdays.slice(0, 10).map((b) => b.full_name)}
+          heightClass="h-[610px]"
+        />
       </div>
       <div className="mt-4 text-center text-xs text-slate-500">
         <p>Desenvolvedor Ramon Rodrigues</p>

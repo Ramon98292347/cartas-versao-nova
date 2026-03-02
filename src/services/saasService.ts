@@ -1,4 +1,6 @@
+import { getSession } from "@/lib/api";
 import { api } from "@/lib/endpoints";
+import { supabase } from "@/lib/supabase";
 import type { AppSession, PendingChurch } from "@/context/UserContext";
 
 export type AppRole = "admin" | "pastor" | "obreiro";
@@ -72,6 +74,7 @@ export type PastorMetrics = {
 export type UserListItem = {
   id: string;
   full_name: string;
+  role?: AppRole | null;
   cpf?: string | null;
   minister_role?: string | null;
   default_totvs_id?: string | null;
@@ -105,6 +108,20 @@ export type AdminChurchSummary = {
   pendentes_liberacao: number;
 };
 
+export type ChurchInScopeItem = {
+  totvs_id: string;
+  church_name: string;
+  church_class?: string | null;
+  parent_totvs_id?: string | null;
+  is_active?: boolean;
+  workers_count?: number;
+  pastor_user_id?: string | null;
+  pastor?: {
+    id?: string | null;
+    full_name?: string | null;
+  } | null;
+};
+
 export type ReleaseRequest = {
   id: string;
   letter_id: string;
@@ -114,6 +131,15 @@ export type ReleaseRequest = {
   created_at?: string;
   requester_name?: string | null;
   preacher_name?: string | null;
+};
+
+export type AppNotification = {
+  id: string;
+  title: string;
+  message?: string | null;
+  is_read: boolean;
+  created_at?: string | null;
+  type?: string | null;
 };
 
 export type WorkerDashboardData = {
@@ -137,6 +163,9 @@ export type AnnouncementItem = {
   media_url?: string | null;
   link_url?: string | null;
   position?: number | null;
+  starts_at?: string | null;
+  ends_at?: string | null;
+  is_active?: boolean;
 };
 
 export type BirthdayItem = {
@@ -286,6 +315,18 @@ function normalizeCpf(value: string) {
   return (value || "").replace(/\D/g, "").slice(0, 11);
 }
 
+function toAnnouncementMediaUrl(input: unknown): string | null {
+  const raw = String(input || "").trim();
+  if (!raw) return null;
+  if (raw.startsWith("http://") || raw.startsWith("https://")) return raw;
+
+  const base = (import.meta.env.VITE_SUPABASE_URL as string | undefined)?.replace(/\/$/, "");
+  if (!base) return raw;
+
+  const normalizedPath = raw.replace(/^\/+/, "");
+  return `${base}/storage/v1/object/public/announcements/${normalizedPath}`;
+}
+
 function mapSessionLike(raw: any): AppSession {
   const scope = Array.isArray(raw?.scope_totvs_ids)
     ? raw.scope_totvs_ids.filter(Boolean).map(String)
@@ -294,9 +335,10 @@ function mapSessionLike(raw: any): AppSession {
       : raw?.totvs_id
         ? [String(raw.totvs_id)]
         : [];
+  const totvsId = String(raw?.totvs_id || raw?.default_totvs_id || scope[0] || "");
   return {
-    totvs_id: String(raw?.totvs_id || raw?.default_totvs_id || scope[0] || ""),
-    root_totvs_id: raw?.root_totvs_id ? String(raw.root_totvs_id) : undefined,
+    totvs_id: totvsId,
+    root_totvs_id: raw?.root_totvs_id ? String(raw.root_totvs_id) : totvsId || undefined,
     role: (raw?.role || "obreiro") as AppRole,
     church_name: String(raw?.church_name || raw?.nome_igreja || "-"),
     church_class: raw?.church_class || raw?.class || null,
@@ -456,6 +498,7 @@ export async function listWorkers(params: WorkerListParams): Promise<WorkerListR
       workers: rows.map((w: any) => ({
         id: String(w?.id || ""),
         full_name: String(w?.full_name || ""),
+        role: (w?.role || null) as AppRole | null,
         cpf: w?.cpf || null,
         minister_role: w?.minister_role || null,
         default_totvs_id: w?.default_totvs_id || null,
@@ -473,6 +516,7 @@ export async function listWorkers(params: WorkerListParams): Promise<WorkerListR
   let workers = MOCK_USERS.filter((u) => u.role === "obreiro").map((u) => ({
     id: u.id,
     full_name: u.full_name,
+    role: u.role,
     cpf: u.cpf,
     minister_role: u.minister_role || null,
     default_totvs_id: u.default_totvs_id || null,
@@ -523,6 +567,84 @@ export async function listAdminChurchSummary(scopeTotvsIds: string[]): Promise<A
   return Array.from(groups.values()).sort((a, b) => a.church_name.localeCompare(b.church_name));
 }
 
+export async function listChurchesInScope(page = 1, pageSize = 200): Promise<ChurchInScopeItem[]> {
+  const data = await api.listChurchesInScope({ page, page_size: pageSize });
+  const rows = Array.isArray(data?.churches)
+    ? data.churches
+    : Array.isArray(data?.items)
+      ? data.items
+      : Array.isArray(data)
+        ? data
+        : [];
+
+  return rows.map((item: any) => ({
+    totvs_id: String(item?.totvs_id || ""),
+    church_name: String(item?.church_name || item?.name || "-"),
+    church_class: item?.church_class || item?.class || null,
+    parent_totvs_id: item?.parent_totvs_id || null,
+    is_active: typeof item?.is_active === "boolean" ? item.is_active : true,
+    workers_count: Number(item?.workers_count || 0),
+    pastor_user_id: item?.pastor_user_id || item?.pastor?.id || null,
+    pastor: item?.pastor
+      ? {
+          id: item.pastor?.id || null,
+          full_name: item.pastor?.full_name || item.pastor?.name || null,
+        }
+      : null,
+  }));
+}
+
+export async function listChurchesInScopePaged(page = 1, pageSize = 20): Promise<{ churches: ChurchInScopeItem[]; total: number; page: number; page_size: number }> {
+  const data = await api.listChurchesInScope({ page, page_size: pageSize });
+  const rows = Array.isArray(data?.churches)
+    ? data.churches
+    : Array.isArray(data?.items)
+      ? data.items
+      : Array.isArray(data)
+        ? data
+        : [];
+  const churches = rows.map((item: any) => ({
+    totvs_id: String(item?.totvs_id || ""),
+    church_name: String(item?.church_name || item?.name || "-"),
+    church_class: item?.church_class || item?.class || null,
+    parent_totvs_id: item?.parent_totvs_id || null,
+    is_active: typeof item?.is_active === "boolean" ? item.is_active : true,
+    workers_count: Number(item?.workers_count || 0),
+    pastor_user_id: item?.pastor_user_id || item?.pastor?.id || null,
+    pastor: item?.pastor
+      ? {
+          id: item.pastor?.id || null,
+          full_name: item.pastor?.full_name || item.pastor?.name || null,
+        }
+      : null,
+  })) as ChurchInScopeItem[];
+
+  return {
+    churches,
+    total: Number(data?.total || churches.length),
+    page: Number(data?.page || page),
+    page_size: Number(data?.page_size || pageSize),
+  };
+}
+
+export async function createChurch(payload: { totvs_id: string; parent_totvs_id?: string; church_name: string; class: string }) {
+  if (!payload.totvs_id?.trim()) throw new Error("totvs_id_required");
+  if (!payload.church_name?.trim()) throw new Error("church_name_required");
+  if (!payload.class?.trim()) throw new Error("class_required");
+
+  await api.createChurch({
+    totvs_id: payload.totvs_id.trim(),
+    parent_totvs_id: payload.parent_totvs_id?.trim() || null,
+    church_name: payload.church_name.trim(),
+    class: payload.class.trim(),
+  });
+}
+
+export async function deactivateChurch(church_totvs_id: string) {
+  if (!church_totvs_id?.trim()) throw new Error("church_totvs_required");
+  await api.deleteChurch({ church_totvs_id: church_totvs_id.trim() });
+}
+
 export async function listReleaseRequests(status: "PENDENTE" | "APROVADO" | "NEGADO" = "PENDENTE", page = 1, pageSize = 20): Promise<ReleaseRequest[]> {
   if (!useMockMode()) {
     const data = await api.listReleaseRequests({ status, page, page_size: pageSize });
@@ -541,6 +663,47 @@ export async function listReleaseRequests(status: "PENDENTE" | "APROVADO" | "NEG
   return MOCK_RELEASES.filter((r) => r.status === status);
 }
 
+export async function listNotifications(page = 1, pageSize = 20, unreadOnly = false): Promise<{ notifications: AppNotification[]; unread_count: number; total: number }> {
+  const currentSession = getSession();
+  const rootTotvs = currentSession?.root_totvs_id || currentSession?.totvs_id;
+  const data = await api.listNotifications({
+    page,
+    page_size: pageSize,
+    unread_only: unreadOnly,
+    church_totvs_id: rootTotvs,
+  });
+  const rows = Array.isArray(data?.notifications)
+    ? data.notifications
+    : Array.isArray(data?.items)
+      ? data.items
+      : [];
+
+  return {
+    notifications: rows.map((item: any) => ({
+      id: String(item?.id || ""),
+      title: String(item?.title || "Notificacao"),
+      message: item?.message || null,
+      is_read: Boolean(item?.is_read),
+      created_at: item?.created_at || null,
+      type: item?.type || null,
+    })),
+    unread_count: Number(data?.unread_count || 0),
+    total: Number(data?.total || rows.length),
+  };
+}
+
+export async function markNotificationRead(id: string) {
+  const currentSession = getSession();
+  const rootTotvs = currentSession?.root_totvs_id || currentSession?.totvs_id;
+  await api.markNotificationRead({ id, church_totvs_id: rootTotvs });
+}
+
+export async function markAllNotificationsRead() {
+  const currentSession = getSession();
+  const rootTotvs = currentSession?.root_totvs_id || currentSession?.totvs_id;
+  await api.markAllNotificationsRead({ church_totvs_id: rootTotvs });
+}
+
 export async function listAnnouncements(limit = 10): Promise<AnnouncementItem[]> {
   if (!useMockMode()) {
     const data = await api.listAnnouncements({ limit });
@@ -556,9 +719,12 @@ export async function listAnnouncements(limit = 10): Promise<AnnouncementItem[]>
       title: String(item?.title || "Aviso"),
       type: (item?.type || "text") as "text" | "image" | "video",
       body_text: item?.body_text || null,
-      media_url: item?.media_url || null,
+      media_url: toAnnouncementMediaUrl(item?.media_url),
       link_url: item?.link_url || null,
       position: typeof item?.position === "number" ? item.position : null,
+      starts_at: item?.starts_at || null,
+      ends_at: item?.ends_at || null,
+      is_active: typeof item?.is_active === "boolean" ? item.is_active : true,
     }));
   }
   return [...MOCK_ANNOUNCEMENTS].slice(0, limit);
@@ -591,6 +757,75 @@ export async function listBirthdaysToday(limit = 10): Promise<BirthdayItem[]> {
       full_name: u.full_name,
       avatar_url: u.avatar_url || null,
     }));
+}
+
+export async function listAnnouncementsPublicByTotvs(churchTotvsId: string, limit = 10): Promise<AnnouncementItem[]> {
+  const totvs = String(churchTotvsId || "").trim();
+  if (!totvs || !supabase) return [];
+
+  const nowIso = new Date().toISOString();
+  const { data, error } = await supabase
+    .from("announcements")
+    .select("id,title,type,body_text,media_url,link_url,position,starts_at,ends_at,is_active,created_at")
+    .eq("church_totvs_id", totvs)
+    .eq("is_active", true)
+    .order("position", { ascending: true })
+    .order("created_at", { ascending: false })
+    .limit(Math.max(1, Math.min(10, limit)));
+
+  if (error) return [];
+
+  return (data || [])
+    .filter((item: any) => {
+      const startsOk = !item?.starts_at || String(item.starts_at) <= nowIso;
+      const endsOk = !item?.ends_at || String(item.ends_at) >= nowIso;
+      return startsOk && endsOk;
+    })
+    .map((item: any) => ({
+      id: String(item?.id || ""),
+      title: String(item?.title || "Aviso"),
+      type: (item?.type || "text") as "text" | "image" | "video",
+      body_text: item?.body_text || null,
+      media_url: toAnnouncementMediaUrl(item?.media_url),
+      link_url: item?.link_url || null,
+      position: typeof item?.position === "number" ? item.position : null,
+      starts_at: item?.starts_at || null,
+      ends_at: item?.ends_at || null,
+      is_active: typeof item?.is_active === "boolean" ? item.is_active : true,
+    }));
+}
+
+export async function listBirthdaysTodayPublicByTotvs(churchTotvsId: string, limit = 10): Promise<BirthdayItem[]> {
+  const totvs = String(churchTotvsId || "").trim();
+  if (!totvs || !supabase) return [];
+
+  const { data, error } = await supabase
+    .from("users")
+    .select("full_name,avatar_url,birth_date")
+    .eq("role", "obreiro")
+    .eq("default_totvs_id", totvs)
+    .eq("is_active", true)
+    .not("birth_date", "is", null)
+    .limit(500);
+
+  if (error) return [];
+
+  const today = new Date();
+  const m = today.getMonth() + 1;
+  const d = today.getDate();
+
+  return (data || [])
+    .filter((u: any) => {
+      if (!u?.birth_date) return false;
+      const dt = new Date(String(u.birth_date));
+      return dt.getMonth() + 1 === m && dt.getDate() === d;
+    })
+    .slice(0, Math.max(1, Math.min(10, limit)))
+    .map((u: any) => ({
+      full_name: String(u?.full_name || ""),
+      avatar_url: u?.avatar_url || null,
+    }))
+    .filter((x: BirthdayItem) => x.full_name);
 }
 
 export async function approveRelease(requestId: string) {
@@ -857,6 +1092,16 @@ export async function setWorkerActive(workerId: string, isActive: boolean) {
   const user = MOCK_USERS.find((u) => u.id === workerId);
   if (user) {
     (user as any).is_active = isActive;
+  }
+}
+
+export async function setChurchPastor(church_totvs_id: string, pastor_user_id: string) {
+  if (!church_totvs_id) throw new Error("church_totvs_required");
+  if (!pastor_user_id) throw new Error("pastor_user_required");
+
+  if (!useMockMode()) {
+    await api.setChurchPastor({ church_totvs_id, pastor_user_id });
+    return;
   }
 }
 

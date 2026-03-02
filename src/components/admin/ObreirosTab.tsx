@@ -9,6 +9,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Search, PlusCircle } from "lucide-react";
 import { toast } from "sonner";
 import { listWorkers, resetWorkerPassword, setWorkerActive, upsertWorkerByPastor, type UserListItem } from "@/services/saasService";
+import { getFriendlyError } from "@/lib/error-map";
+import { addAuditLog } from "@/lib/audit";
 
 function normalizeCpf(v: string) {
   return (v || "").replace(/\D/g, "").slice(0, 11);
@@ -20,24 +22,6 @@ function maskCpf(v: string) {
   if (d.length <= 6) return `${d.slice(0, 3)}.${d.slice(3)}`;
   if (d.length <= 9) return `${d.slice(0, 3)}.${d.slice(3, 6)}.${d.slice(6)}`;
   return `${d.slice(0, 3)}.${d.slice(3, 6)}.${d.slice(6, 9)}-${d.slice(9)}`;
-}
-
-function mapError(err: any) {
-  const code = String(err?.code || err?.message || "");
-  if (code.includes("cpf_unique") || code.includes("duplicate")) return "CPF ja cadastrado.";
-  if (code.includes("cpf_invalid") || code.includes("cpf-invalid")) return "CPF invalido (11 digitos).";
-  if (code.includes("full_name_required")) return "Nome completo e obrigatorio.";
-  if (code.includes("minister_role_required")) return "Cargo ministerial e obrigatorio.";
-  return "Nao foi possivel salvar o obreiro.";
-}
-
-function mapResetError(err: any) {
-  const code = String(err?.code || err?.message || "");
-  if (code.includes("password-too-short")) return "A nova senha deve ter pelo menos 8 caracteres.";
-  if (code.includes("cpf-invalid") || code.includes("cpf_invalid")) return "CPF invalido para reset.";
-  if (code.includes("worker-not-found")) return "Obreiro nao encontrado.";
-  if (code.includes("forbidden")) return "Somente pastor/admin pode resetar senha.";
-  return "Nao foi possivel resetar a senha.";
 }
 
 type WorkerForm = {
@@ -220,10 +204,11 @@ export function ObreirosTab({ activeTotvsId }: { activeTotvsId: string }) {
         password: null,
       });
       toast.success(form.id ? "Obreiro atualizado." : "Obreiro cadastrado.");
+      addAuditLog("worker_toggled", { worker_id: form.id || null, action: form.id ? "updated" : "created" });
       setOpenModal(false);
       await refresh();
     } catch (err: any) {
-      toast.error(mapError(err));
+      toast.error(getFriendlyError(err, "workers"));
     } finally {
       setSaving(false);
     }
@@ -231,13 +216,14 @@ export function ObreirosTab({ activeTotvsId }: { activeTotvsId: string }) {
 
   async function toggle(worker: UserListItem) {
     const next = worker.is_active === false;
-    if (!window.confirm(`${next ? "Ativar" : "Desativar"} este obreiro?`)) return;
+    if (!window.confirm(next ? "Tem certeza que deseja ativar este obreiro?" : "Tem certeza que deseja desativar este obreiro?")) return;
     try {
       await setWorkerActive(String(worker.id), next);
       toast.success(next ? "Obreiro ativado." : "Obreiro desativado.");
+      addAuditLog("worker_toggled", { worker_id: String(worker.id), is_active: next });
       await refresh();
-    } catch {
-      toast.error("Falha ao atualizar status do obreiro.");
+    } catch (err: any) {
+      toast.error(getFriendlyError(err, "workers"));
     }
   }
 
@@ -256,6 +242,7 @@ export function ObreirosTab({ activeTotvsId }: { activeTotvsId: string }) {
         new_password: newPassword,
       });
       toast.success("Senha resetada com sucesso.");
+      addAuditLog("worker_reset_password", { worker_id: String(selectedWorker.id) });
       try {
         await navigator.clipboard.writeText(newPassword);
         toast.success("Senha copiada para a area de transferencia.");
@@ -266,7 +253,7 @@ export function ObreirosTab({ activeTotvsId }: { activeTotvsId: string }) {
       setSelectedWorker(null);
       setNewPassword("");
     } catch (err: any) {
-      toast.error(mapResetError(err));
+      toast.error(getFriendlyError(err, "workers"));
     } finally {
       setResetting(false);
     }
@@ -345,7 +332,7 @@ export function ObreirosTab({ activeTotvsId }: { activeTotvsId: string }) {
                     <Button size="sm" variant="outline" onClick={() => openEdit(w)}>Editar</Button>
                     <Button size="sm" variant="secondary" onClick={() => openResetPassword(w)}>Resetar senha</Button>
                     <Button size="sm" variant={w.is_active === false ? "default" : "destructive"} onClick={() => toggle(w)}>
-                      {w.is_active === false ? "Ativar" : "Desativar"}
+                      {w.is_active === false ? "Ativar" : "Excluir"}
                     </Button>
                   </div>
                 </div>

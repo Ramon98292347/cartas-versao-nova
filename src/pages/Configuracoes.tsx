@@ -7,9 +7,13 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
+import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
 import { deleteAnnouncement, listAnnouncements, upsertAnnouncement, type AnnouncementItem } from "@/services/saasService";
 import { ArrowLeft, Trash2 } from "lucide-react";
+import { getFriendlyError } from "@/lib/error-map";
+import { addAuditLog } from "@/lib/audit";
+import { supabase } from "@/lib/supabase";
 
 type FormState = {
   id?: string;
@@ -40,7 +44,22 @@ export default function ConfiguracoesPage() {
   const nav = useNavigate();
   const queryClient = useQueryClient();
   const [form, setForm] = useState<FormState>(initialForm);
+  const [mediaSource, setMediaSource] = useState<"url" | "file">("url");
+  const [pendingMediaFile, setPendingMediaFile] = useState<File | null>(null);
   const [saving, setSaving] = useState(false);
+
+  function toDateInputValue(value?: string | null) {
+    if (!value) return "";
+    return String(value).slice(0, 10);
+  }
+
+  function toStartAt(value: string) {
+    return value ? `${value}T00:00:00` : null;
+  }
+
+  function toEndAt(value: string) {
+    return value ? `${value}T23:59:59` : null;
+  }
 
   const { data: announcements = [], isLoading } = useQuery({
     queryKey: ["announcements-config"],
@@ -66,10 +85,31 @@ export default function ConfiguracoesPage() {
       media_url: item.media_url || "",
       link_url: item.link_url || "",
       position: String(item.position || 1),
-      starts_at: "",
-      ends_at: "",
-      is_active: true,
+      starts_at: toDateInputValue(item.starts_at),
+      ends_at: toDateInputValue(item.ends_at),
+      is_active: item.is_active !== false,
     });
+    setMediaSource("url");
+    setPendingMediaFile(null);
+  }
+
+  function onFileSelected(file: File | null) {
+    if (!file) return;
+    if (form.type === "image" && !file.type.startsWith("image/")) {
+      toast.error("Selecione um arquivo de imagem.");
+      return;
+    }
+    if (form.type === "video" && !file.type.startsWith("video/")) {
+      toast.error("Selecione um arquivo de video.");
+      return;
+    }
+    if (file.size > 20 * 1024 * 1024) {
+      toast.error("Arquivo muito grande (max 20MB).");
+      return;
+    }
+    setPendingMediaFile(file);
+    setForm((p) => ({ ...p, media_url: "" }));
+    toast.success("Arquivo pronto. Clique em Salvar para enviar.");
   }
 
   async function submit(e: FormEvent) {
@@ -82,37 +122,64 @@ export default function ConfiguracoesPage() {
       toast.error("Para tipo text, body_text e obrigatorio.");
       return;
     }
-    if ((form.type === "image" || form.type === "video") && !form.media_url.trim()) {
+    if ((form.type === "image" || form.type === "video") && !form.media_url.trim() && !(mediaSource === "file" && pendingMediaFile)) {
       toast.error("Para image/video, media_url e obrigatorio.");
+      return;
+    }
+    if (form.starts_at && form.ends_at && form.ends_at < form.starts_at) {
+      toast.error("Data fim deve ser maior ou igual a data inicio.");
       return;
     }
 
     setSaving(true);
     try {
+      let mediaUrlToSave = form.media_url.trim() || null;
+      if (mediaSource === "file" && pendingMediaFile) {
+        if (!supabase) {
+          toast.error("Supabase nao configurado para upload.");
+          setSaving(false);
+          return;
+        }
+        const ext = (pendingMediaFile.name.split(".").pop() || "bin").toLowerCase();
+        const folder = form.type === "video" ? "video" : "image";
+        const path = `${folder}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+        const { error } = await supabase.storage.from("announcements").upload(path, pendingMediaFile, {
+          upsert: false,
+          contentType: pendingMediaFile.type || undefined,
+          cacheControl: "3600",
+        });
+        if (error) {
+          const details = [error.message, (error as any)?.statusCode, (error as any)?.error]
+            .filter(Boolean)
+            .join(" | ");
+          throw new Error(details || "storage_upload_failed");
+        }
+        const { data } = supabase.storage.from("announcements").getPublicUrl(path);
+        mediaUrlToSave = data.publicUrl || null;
+      }
+
       await upsertAnnouncement({
         id: form.id || undefined,
         title: form.title.trim(),
         type: form.type,
         body_text: form.body_text.trim() || null,
-        media_url: form.media_url.trim() || null,
+        media_url: mediaUrlToSave,
         link_url: form.link_url.trim() || null,
         position: Number(form.position || "1"),
-        starts_at: form.starts_at || null,
-        ends_at: form.ends_at || null,
+        starts_at: toStartAt(form.starts_at),
+        ends_at: toEndAt(form.ends_at),
         is_active: form.is_active,
       });
       toast.success(form.id ? "Divulgacao atualizada." : "Divulgacao criada.");
+      addAuditLog("announcement_saved", { announcement_id: form.id || null, type: form.type });
       setForm(initialForm);
+      setMediaSource("url");
+      setPendingMediaFile(null);
       await refresh();
     } catch (err: any) {
-      const msg = String(err?.message || "");
-      if (msg.includes("body_text")) {
-        toast.error("O campo body_text e obrigatorio para tipo text.");
-      } else if (msg.includes("media_url")) {
-        toast.error("O campo media_url e obrigatorio para image/video.");
-      } else {
-        toast.error("Falha ao salvar divulgacao.");
-      }
+      const rawMessage = String(err?.message || "");
+      if (rawMessage) console.error("Erro upload divulgação:", rawMessage);
+      toast.error(getFriendlyError(err, "announcements") || rawMessage || "Falha ao salvar divulgação.");
     } finally {
       setSaving(false);
     }
@@ -123,9 +190,10 @@ export default function ConfiguracoesPage() {
     try {
       await deleteAnnouncement(id);
       toast.success("Anuncio excluido.");
+      addAuditLog("announcement_deleted", { announcement_id: id });
       await refresh();
-    } catch {
-      toast.error("Falha ao excluir anuncio.");
+    } catch (err: any) {
+      toast.error(getFriendlyError(err, "announcements"));
     }
   }
 
@@ -133,7 +201,7 @@ export default function ConfiguracoesPage() {
     <div className="min-h-screen bg-[#f3f5f9] p-4">
       <div className="mx-auto max-w-6xl space-y-4">
         <div className="flex items-center justify-between">
-          <h1 className="text-2xl font-bold text-slate-900">Configuracoes - Divulgacao</h1>
+          <h1 className="text-2xl font-bold text-slate-900">Configurações - Divulgação</h1>
           <Button variant="outline" onClick={() => nav(-1)}>
             <ArrowLeft className="mr-2 h-4 w-4" /> Voltar
           </Button>
@@ -170,7 +238,46 @@ export default function ConfiguracoesPage() {
 
                 <div className="space-y-1">
                   <Label>Media URL</Label>
-                  <Input value={form.media_url} onChange={(e) => setForm((p) => ({ ...p, media_url: e.target.value }))} />
+                  <div className="mb-2 flex gap-2">
+                    <Button
+                      type="button"
+                      variant={mediaSource === "url" ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => {
+                        setMediaSource("url");
+                        setPendingMediaFile(null);
+                      }}
+                    >
+                      URL
+                    </Button>
+                    <Button
+                      type="button"
+                      variant={mediaSource === "file" ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => setMediaSource("file")}
+                    >
+                      Importar arquivo
+                    </Button>
+                  </div>
+                  {mediaSource === "url" ? (
+                    <Input
+                      key="media-url"
+                      value={form.media_url ?? ""}
+                      onChange={(e) => setForm((p) => ({ ...p, media_url: e.target.value }))}
+                      placeholder="https://..."
+                    />
+                  ) : (
+                    <div className="space-y-1">
+                      <input
+                      key="media-file"
+                      type="file"
+                      accept={form.type === "video" ? "video/*" : "image/*"}
+                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm file:mr-3 file:rounded-md file:border-0 file:bg-slate-100 file:px-3 file:py-1 file:text-sm file:font-medium"
+                      onChange={(e) => onFileSelected(e.target.files?.[0] || null)}
+                      />
+                      <p className="text-xs text-slate-500">{pendingMediaFile ? `Arquivo selecionado: ${pendingMediaFile.name}` : "Nenhum arquivo selecionado."}</p>
+                    </div>
+                  )}
                 </div>
 
                 <div className="space-y-1">
@@ -185,11 +292,11 @@ export default function ConfiguracoesPage() {
                   </div>
                   <div className="space-y-1">
                     <Label>Inicio</Label>
-                    <Input type="datetime-local" value={form.starts_at} onChange={(e) => setForm((p) => ({ ...p, starts_at: e.target.value }))} />
+                    <Input type="date" value={form.starts_at} onChange={(e) => setForm((p) => ({ ...p, starts_at: e.target.value }))} />
                   </div>
                   <div className="space-y-1">
                     <Label>Fim</Label>
-                    <Input type="datetime-local" value={form.ends_at} onChange={(e) => setForm((p) => ({ ...p, ends_at: e.target.value }))} />
+                    <Input type="date" value={form.ends_at} onChange={(e) => setForm((p) => ({ ...p, ends_at: e.target.value }))} />
                   </div>
                 </div>
 
@@ -200,7 +307,7 @@ export default function ConfiguracoesPage() {
 
                 <div className="flex gap-2">
                   <Button type="submit" disabled={saving}>{saving ? "Salvando..." : "Salvar"}</Button>
-                  <Button type="button" variant="outline" onClick={() => setForm(initialForm)}>Limpar</Button>
+                  <Button type="button" variant="outline" onClick={() => { setForm(initialForm); setMediaSource("url"); setPendingMediaFile(null); }}>Limpar</Button>
                 </div>
               </form>
             </CardContent>
@@ -211,7 +318,13 @@ export default function ConfiguracoesPage() {
               <CardTitle>Anuncios cadastrados</CardTitle>
             </CardHeader>
             <CardContent className="space-y-2">
-              {isLoading ? <p className="text-sm text-slate-500">Carregando...</p> : null}
+              {isLoading ? (
+                <div className="space-y-2">
+                  <Skeleton className="h-14 rounded-lg" />
+                  <Skeleton className="h-14 rounded-lg" />
+                  <Skeleton className="h-14 rounded-lg" />
+                </div>
+              ) : null}
               {ordered.map((item) => (
                 <div key={item.id} className="flex items-start justify-between gap-2 rounded-lg border p-3">
                   <div>

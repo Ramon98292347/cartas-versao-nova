@@ -46,8 +46,13 @@ export default function SelectChurch() {
     setLoading(true);
     try {
       const data = await selectChurchSession(pendingCpf, totvsId);
+      const fixedSession = {
+        ...data.session,
+        root_totvs_id: data.session.root_totvs_id || data.session.totvs_id,
+      };
       setToken(data.token);
-      setSession(data.session);
+      setSession(fixedSession);
+      if (fixedSession.totvs_id) localStorage.setItem("ipda_last_totvs", fixedSession.totvs_id);
       setUsuario({
         id: data.user.id,
         nome: data.user.full_name,
@@ -59,12 +64,12 @@ export default function SelectChurch() {
         ministerial: data.user.minister_role || null,
         birth_date: data.user.birth_date || null,
         address_json: data.user.address_json || null,
-        totvs: data.session.totvs_id || null,
-        default_totvs_id: data.session.totvs_id || null,
-        church_name: data.session.church_name || null,
-        church_class: data.session.church_class || null,
-        totvs_access: data.session.scope_totvs_ids || null,
-        igreja_nome: data.session.church_name || null,
+        totvs: fixedSession.totvs_id || null,
+        default_totvs_id: fixedSession.totvs_id || null,
+        church_name: fixedSession.church_name || null,
+        church_class: fixedSession.church_class || null,
+        totvs_access: fixedSession.scope_totvs_ids || null,
+        igreja_nome: fixedSession.church_name || null,
       });
       setPendingCpf(undefined);
       setAvailableChurches([]);

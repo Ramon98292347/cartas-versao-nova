@@ -1,4 +1,5 @@
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
+import { toast } from "sonner";
 
 export type Usuario = {
   id?: number | string;
@@ -93,6 +94,46 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
     }
   });
   const [telefone, setTelefone] = useState<string | undefined>(undefined);
+
+  useEffect(() => {
+    if (!token) return;
+
+    function parseExp(jwt: string) {
+      try {
+        const payload = jwt.split(".")[1];
+        if (!payload) return null;
+        const json = JSON.parse(atob(payload.replace(/-/g, "+").replace(/_/g, "/")));
+        return typeof json?.exp === "number" ? json.exp : null;
+      } catch {
+        return null;
+      }
+    }
+
+    const exp = parseExp(token);
+    if (!exp) return;
+    const nowSec = Math.floor(Date.now() / 1000);
+    const msToExpire = (exp - nowSec) * 1000;
+    if (msToExpire <= 0) {
+      toast.error("Sessao expirada. Faca login novamente.");
+      clearAuth();
+      return;
+    }
+
+    const warnAt = msToExpire - 2 * 60 * 1000;
+    let warnTimer: ReturnType<typeof setTimeout> | undefined;
+    if (warnAt > 0) {
+      warnTimer = setTimeout(() => toast.message("Sua sessao expira em menos de 2 minutos."), warnAt);
+    }
+    const logoutTimer = setTimeout(() => {
+      toast.error("Sessao expirada. Faca login novamente.");
+      clearAuth();
+    }, msToExpire);
+
+    return () => {
+      if (warnTimer) clearTimeout(warnTimer);
+      clearTimeout(logoutTimer);
+    };
+  }, [token]);
 
   useEffect(() => {
     if (usuario) localStorage.setItem(LS_USER, JSON.stringify(usuario));

@@ -3,13 +3,14 @@ import { useNavigate } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { CheckCircle2, FileText, Bell, LogOut, RefreshCw, CalendarDays, LineChart, Users, Settings } from "lucide-react";
+import { CheckCircle2, FileText, Bell, LogOut, CalendarDays, LineChart, Users, Megaphone } from "lucide-react";
 import { useUser } from "@/context/UserContext";
-import { approveRelease, denyRelease, getPastorMetrics, listAdminChurchSummary, listObreiros, listPastorLetters, listReleaseRequests, listWorkers } from "@/services/saasService";
+import { getPastorMetrics, listAdminChurchSummary, listChurchesInScopePaged, listNotifications, listPastorLetters, listWorkers, markAllNotificationsRead, markNotificationRead } from "@/services/saasService";
 import { CartasTab } from "@/components/admin/CartasTab";
 import { ObreirosTab } from "@/components/admin/ObreirosTab";
 import { AdminChurchesTab } from "@/components/admin/AdminChurchesTab";
 import { StatCards } from "@/components/shared/StatCards";
+import { Skeleton } from "@/components/ui/skeleton";
 
 type Tab = "cartas" | "igrejas" | "obreiros";
 
@@ -20,6 +21,8 @@ export default function AdminPastorDashboard() {
   const isAdmin = usuario?.role === "admin";
   const [tab, setTab] = useState<Tab>(isAdmin ? "igrejas" : "cartas");
   const [openReleases, setOpenReleases] = useState(false);
+  const [churchPage, setChurchPage] = useState(1);
+  const [churchPageSize, setChurchPageSize] = useState(20);
 
   const activeTotvsId = String(session?.totvs_id || usuario?.default_totvs_id || usuario?.totvs || "");
   const scopeTotvsIds = useMemo(() => {
@@ -68,11 +71,22 @@ export default function AdminPastorDashboard() {
     enabled: isAdmin && scopeTotvsIds.length > 0,
   });
 
-  const { data: releaseRequests = [] } = useQuery({
-    queryKey: ["release-requests", "PENDENTE"],
-    queryFn: () => listReleaseRequests("PENDENTE", 1, 50),
-    enabled: !isAdmin,
+  const { data: churchesPaged } = useQuery({
+    queryKey: ["churches-in-scope", churchPage, churchPageSize],
+    queryFn: () => listChurchesInScopePaged(churchPage, churchPageSize),
+    enabled: isAdmin,
   });
+  const churchesInScope = churchesPaged?.churches || [];
+  const churchesTotal = churchesPaged?.total || churchesInScope.length;
+  const churchesPages = Math.max(1, Math.ceil(churchesTotal / churchPageSize));
+
+  const { data: notificationsData } = useQuery({
+    queryKey: ["notifications", 1, 50],
+    queryFn: () => listNotifications(1, 50, false),
+    enabled: Boolean(session?.totvs_id),
+  });
+  const notifications = notificationsData?.notifications || [];
+  const unreadCount = notificationsData?.unread_count || 0;
 
   async function refreshAll() {
     await Promise.all([
@@ -80,7 +94,7 @@ export default function AdminPastorDashboard() {
       queryClient.invalidateQueries({ queryKey: ["pastor-letters"] }),
       queryClient.invalidateQueries({ queryKey: ["pastor-obreiros"] }),
       queryClient.invalidateQueries({ queryKey: ["admin-church-summary"] }),
-      queryClient.invalidateQueries({ queryKey: ["release-requests"] }),
+      queryClient.invalidateQueries({ queryKey: ["notifications"] }),
     ]);
   }
 
@@ -89,13 +103,13 @@ export default function AdminPastorDashboard() {
     nav("/");
   }
 
-  async function approve(requestId: string) {
-    await approveRelease(requestId);
+  async function readNotification(id: string) {
+    await markNotificationRead(id);
     await refreshAll();
   }
 
-  async function deny(requestId: string) {
-    await denyRelease(requestId);
+  async function readAllNotifications() {
+    await markAllNotificationsRead();
     await refreshAll();
   }
 
@@ -103,7 +117,7 @@ export default function AdminPastorDashboard() {
   const cartasHoje = isAdmin ? churchRows.length : (metrics?.cartasHoje || 0);
   const ultimos7 = isAdmin ? churchRows.reduce((acc, r) => acc + r.cartas_liberadas, 0) : (metrics?.ultimos7Dias || 0);
   const totalObreiros = isAdmin ? churchRows.reduce((acc, r) => acc + r.total_obreiros, 0) : (metrics?.totalObreiros || obreiros.length);
-  const pendentes = isAdmin ? churchRows.reduce((acc, r) => acc + r.pendentes_liberacao, 0) : (releaseRequests.length || metrics?.pendentesLiberacao || 0);
+  const pendentes = unreadCount || (isAdmin ? churchRows.reduce((acc, r) => acc + r.pendentes_liberacao, 0) : (metrics?.pendentesLiberacao || 0));
 
   return (
     <div className="min-h-screen bg-[#f3f5f9]">
@@ -121,10 +135,7 @@ export default function AdminPastorDashboard() {
 
           <div className="flex items-center gap-2">
             <Button variant="outline" className="h-11 px-4" onClick={() => nav("/config")}>
-              <Settings className="mr-2 h-4 w-4" /> Config
-            </Button>
-            <Button variant="outline" className="h-11 px-4" onClick={refreshAll} disabled={loadingMetrics}>
-              <RefreshCw className="mr-2 h-4 w-4" /> Atualizar
+              <Megaphone className="mr-2 h-4 w-4" /> Divulgação
             </Button>
             <Button variant="outline" className="relative h-11 w-11 p-0" onClick={() => setOpenReleases(true)}>
               <Bell className="h-5 w-5" />
@@ -142,7 +153,7 @@ export default function AdminPastorDashboard() {
               <br />
               Pastor: {usuario?.nome || "-"}
               <br />
-              Raiz TOTVS: {session?.root_totvs_id || "-"}
+              Raiz TOTVS: {session?.root_totvs_id || session?.totvs_id || "-"}
             </div>
             <CheckCircle2 className="h-6 w-6 text-emerald-500" />
           </div>
@@ -150,14 +161,23 @@ export default function AdminPastorDashboard() {
       </header>
 
       <main className="mx-auto w-full max-w-[1600px] space-y-5 px-4 py-5">
-        <StatCards
-          items={[
-            { label: "Total de Cartas", value: totalCartas, icon: FileText, gradient: "bg-gradient-to-r from-[#2f63d4] to-[#4b77d5]" },
-            { label: isAdmin ? "Igrejas no escopo" : "Cartas Hoje", value: cartasHoje, icon: CalendarDays, gradient: "bg-gradient-to-r from-[#2fa86f] to-[#49c280]" },
-            { label: isAdmin ? "Cartas Liberadas" : "Ultimos 7 dias", value: ultimos7, icon: LineChart, gradient: "bg-gradient-to-r from-[#f39b1c] to-[#f3b12c]" },
-            { label: "Total de Obreiros", value: totalObreiros, icon: Users, gradient: "bg-gradient-to-r from-[#8f3fd4] to-[#a957e4]" },
-          ]}
-        />
+        {loadingMetrics ? (
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+            <Skeleton className="h-24 rounded-2xl" />
+            <Skeleton className="h-24 rounded-2xl" />
+            <Skeleton className="h-24 rounded-2xl" />
+            <Skeleton className="h-24 rounded-2xl" />
+          </div>
+        ) : (
+          <StatCards
+            items={[
+              { label: "Total de Cartas", value: totalCartas, icon: FileText, gradient: "bg-gradient-to-r from-[#2f63d4] to-[#4b77d5]" },
+              { label: isAdmin ? "Total de Igrejas" : "Cartas Hoje", value: cartasHoje, icon: CalendarDays, gradient: "bg-gradient-to-r from-[#2fa86f] to-[#49c280]" },
+              { label: isAdmin ? "Cartas Liberadas" : "Ultimos 7 dias", value: ultimos7, icon: LineChart, gradient: "bg-gradient-to-r from-[#f39b1c] to-[#f3b12c]" },
+              { label: "Total de Obreiros", value: totalObreiros, icon: Users, gradient: "bg-gradient-to-r from-[#8f3fd4] to-[#a957e4]" },
+            ]}
+          />
+        )}
 
         <section className="rounded-2xl border border-slate-200 bg-white p-3">
           <div className="flex items-center gap-2">
@@ -165,7 +185,7 @@ export default function AdminPastorDashboard() {
               className={`rounded-xl px-4 py-2 text-lg font-semibold ${tab === (isAdmin ? "igrejas" : "cartas") ? "bg-slate-100 text-slate-900" : "text-slate-500"}`}
               onClick={() => setTab(isAdmin ? "igrejas" : "cartas")}
             >
-              {isAdmin ? `Igrejas (${churchRows.length})` : `Cartas (${letters.length})`}
+              {isAdmin ? `Igrejas (${churchesTotal})` : `Cartas (${letters.length})`}
             </button>
             <button
               className={`rounded-xl px-4 py-2 text-lg font-semibold ${tab === "obreiros" ? "bg-slate-100 text-slate-900" : "text-slate-500"}`}
@@ -179,7 +199,17 @@ export default function AdminPastorDashboard() {
         {tab === "cartas" ? (
           <CartasTab letters={letters} scopeTotvsIds={scopeTotvsIds} />
         ) : tab === "igrejas" ? (
-          <AdminChurchesTab rows={churchRows} />
+          <AdminChurchesTab
+            rows={churchesInScope}
+            page={churchPage}
+            pageSize={churchPageSize}
+            totalPages={churchesPages}
+            onPageChange={setChurchPage}
+            onPageSizeChange={(n) => {
+              setChurchPageSize(n);
+              setChurchPage(1);
+            }}
+          />
         ) : (
           <ObreirosTab activeTotvsId={activeTotvsId} />
         )}
@@ -188,19 +218,25 @@ export default function AdminPastorDashboard() {
       <Dialog open={openReleases} onOpenChange={setOpenReleases}>
         <DialogContent className="max-w-3xl">
           <DialogHeader>
-            <DialogTitle>Pedidos de Liberacao</DialogTitle>
+            <DialogTitle>Notificacoes</DialogTitle>
           </DialogHeader>
+          <div className="mb-2 flex justify-end">
+            <Button variant="outline" size="sm" onClick={readAllNotifications}>
+              Marcar todas como lidas
+            </Button>
+          </div>
           <div className="space-y-2">
-            {releaseRequests.length === 0 ? <p className="text-sm text-slate-500">Sem pedidos pendentes.</p> : null}
-            {releaseRequests.map((item) => (
+            {notifications.length === 0 ? <p className="text-sm text-slate-500">Sem notificacoes.</p> : null}
+            {notifications.map((item) => (
               <div key={item.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border p-3 text-sm">
                 <div>
-                  <p className="font-semibold">{item.requester_name || "Obreiro"}</p>
-                  <p className="text-slate-600">{item.preacher_name || "-"} | {item.message || "Sem mensagem"}</p>
+                  <p className="font-semibold">{item.title}</p>
+                  <p className="text-slate-600">{item.message || "Sem mensagem"}</p>
                 </div>
                 <div className="flex gap-2">
-                  <Button className="bg-emerald-600 hover:bg-emerald-700" onClick={() => approve(item.id)}>Aprovar</Button>
-                  <Button variant="destructive" onClick={() => deny(item.id)}>Negar</Button>
+                  <Button variant="outline" onClick={() => readNotification(item.id)} disabled={item.is_read}>
+                    {item.is_read ? "Lida" : "Marcar lida"}
+                  </Button>
                 </div>
               </div>
             ))}

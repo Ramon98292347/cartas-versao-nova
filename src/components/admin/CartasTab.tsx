@@ -16,6 +16,8 @@ import { ArrowUpRight, Ban, Eye, Filter, Search, Share2, Trash2 } from "lucide-r
 import { FiltersBar } from "@/components/shared/FiltersBar";
 import { Table } from "@/components/shared/Table";
 import { Modal } from "@/components/shared/Modal";
+import { getFriendlyError } from "@/lib/error-map";
+import { addAuditLog } from "@/lib/audit";
 
 type QuickPeriod = "today" | "7" | "30" | "custom";
 
@@ -171,9 +173,10 @@ export function CartasTab({ letters, scopeTotvsIds }: { letters: PastorLetter[];
   async function updateStatus(letter: PastorLetter, status: string, reason?: string | null) {
     try {
       await setLetterStatus(letter.id, status, reason);
+      addAuditLog("letter_status_changed", { letter_id: letter.id, status, reason: reason || null });
       await refresh();
-    } catch {
-      toast.error("Falha ao atualizar status.");
+    } catch (err: any) {
+      toast.error(getFriendlyError(err, "letters"));
     }
   }
 
@@ -188,9 +191,10 @@ export function CartasTab({ letters, scopeTotvsIds }: { letters: PastorLetter[];
     if (!window.confirm("Marcar carta como EXCLUIDA?")) return;
     try {
       await softDeleteLetter(letter.id);
+      addAuditLog("letter_status_changed", { letter_id: letter.id, status: "EXCLUIDA" });
       await refresh();
-    } catch {
-      toast.error("Falha ao excluir.");
+    } catch (err: any) {
+      toast.error(getFriendlyError(err, "letters"));
     }
   }
 

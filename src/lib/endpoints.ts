@@ -5,6 +5,9 @@ export const api = {
   selectChurch: (body: { cpf: string; totvs_id: string }) => post("select-church", body, { skipAuth: true }),
 
   dashboardStats: (body = {}) => post("dashboard-stats", body),
+  listChurchesInScope: (body: { page?: number; page_size?: number } = {}) => post("list-churches-in-scope", body),
+  createChurch: (body: { totvs_id: string; parent_totvs_id?: string | null; church_name: string; class: string }) => post("create-church", body),
+  deleteChurch: (body: { church_totvs_id: string }) => post("delete-church", body),
   listLetters: (body: any) => post("list-letters", body),
   setLetterStatus: (body: { letter_id: string; status: string }) => post("set-letter-status", body),
   getLetterPdfUrl: (body: { letter_id: string }) => post("get-letter-pdf-url", body),
@@ -15,6 +18,8 @@ export const api = {
   updateMyProfile: (body: { phone?: string; email?: string; address_city?: string }) => post("update-my-profile", body),
   listWorkers: (body: { search?: string; minister_role?: string; is_active?: boolean; page?: number; page_size?: number }) =>
     post("list-workers", body),
+  listPastors: (body: any) => post("list-pastors", body),
+  setChurchPastor: (body: { church_totvs_id: string; pastor_user_id: string }) => post("set-church-pastor", body),
   toggleWorkerActive: (body: { worker_id: string; is_active: boolean }) => post("toggle-worker-active", body),
 
   workerDashboard: (body: any) => post("worker-dashboard", body),
@@ -23,6 +28,10 @@ export const api = {
   listReleaseRequests: (body: any) => post("list-release-requests", body),
   approveRelease: (body: { request_id: string }) => post("approve-release", body),
   denyRelease: (body: { request_id: string }) => post("deny-release", body),
+  listNotifications: (body: { page?: number; page_size?: number; unread_only?: boolean; church_totvs_id?: string } = {}) =>
+    post("list-notifications", body),
+  markNotificationRead: (body: { id: string; church_totvs_id?: string }) => post("mark-notification-read", body),
+  markAllNotificationsRead: (body: { church_totvs_id?: string } = {}) => post("mark-all-notifications-read", body),
 
   listAnnouncements: (body: any = { limit: 10 }) => post("list-announcements", body),
   birthdaysToday: () => post("birthdays-today", {}),
