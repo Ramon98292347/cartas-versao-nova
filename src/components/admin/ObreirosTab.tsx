@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Search, PlusCircle, Upload } from "lucide-react";
 import { toast } from "sonner";
-import { listMembers, resetWorkerPassword, setWorkerActive, upsertWorkerByPastor, type UserListItem } from "@/services/saasService";
+import { listMembers, resetWorkerPassword, setWorkerActive, setWorkerDirectRelease, upsertWorkerByPastor, type UserListItem } from "@/services/saasService";
 import { getFriendlyError } from "@/lib/error-map";
 import { addAuditLog } from "@/lib/audit";
 import { supabase } from "@/lib/supabase";
@@ -260,6 +260,22 @@ export function ObreirosTab({ activeTotvsId }: { activeTotvsId: string }) {
     }
   }
 
+  async function toggleDirectRelease(worker: UserListItem) {
+    const next = !(worker.can_create_released_letter === true);
+    const msg = next
+      ? "Ativar liberação direta para este obreiro?"
+      : "Remover liberação direta deste obreiro?";
+    if (!window.confirm(msg)) return;
+    try {
+      await setWorkerDirectRelease(String(worker.id), next);
+      toast.success(next ? "Obreiro liberado para criar carta já liberada." : "Liberação direta removida.");
+      addAuditLog("worker_direct_release_toggled", { worker_id: String(worker.id), enabled: next });
+      await refresh();
+    } catch (err: unknown) {
+      toast.error(getFriendlyError(err, "workers"));
+    }
+  }
+
   async function confirmResetPassword() {
     if (!selectedWorker) return;
     if (newPassword.length < 8) {
@@ -338,15 +354,17 @@ export function ObreirosTab({ activeTotvsId }: { activeTotvsId: string }) {
             <Button className="shrink-0" variant="outline" onClick={resetFilters}>Limpar</Button>
           </div>
 
-          <div className="overflow-x-auto rounded-xl border border-slate-200">
-            <div className="min-w-[1240px]">
-              <div className="grid grid-cols-[210px_150px_150px_150px_120px_150px_120px_100px_130px] border-b bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-700">
+          <div className="hidden overflow-x-auto rounded-xl border border-slate-200 md:block">
+            <div className="min-w-[1290px]">
+              <div className="grid grid-cols-[92px_210px_150px_150px_150px_120px_150px_150px_120px_100px_130px] border-b bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-700">
+                <span>Avatar</span>
                 <span>Nome</span>
                 <span>CPF</span>
                 <span>Telefone</span>
                 <span>Cargo</span>
                 <span>Tipo</span>
                 <span>Ativo</span>
+                <span>Liberação direta</span>
                 <span>Visualizar</span>
                 <span>Editar</span>
                 <span>Resetar senha</span>
@@ -354,7 +372,16 @@ export function ObreirosTab({ activeTotvsId }: { activeTotvsId: string }) {
               {isLoading ? <div className="px-4 py-4 text-sm text-slate-500">Carregando...</div> : null}
               {!isLoading && workers.length === 0 ? <div className="px-4 py-4 text-sm text-slate-500">Nenhum membro encontrado.</div> : null}
               {workers.map((w) => (
-                <div key={w.id} className="grid grid-cols-[210px_150px_150px_150px_120px_150px_120px_100px_130px] items-center border-b px-4 py-3 text-sm">
+                <div key={w.id} className="grid grid-cols-[92px_210px_150px_150px_150px_120px_150px_150px_120px_100px_130px] items-center border-b px-4 py-3 text-sm">
+                  <span>
+                    {w.avatar_url ? (
+                      <img src={w.avatar_url} alt={`Avatar de ${w.full_name}`} className="h-10 w-10 rounded-full border border-slate-200 object-cover object-[center_top]" />
+                    ) : (
+                      <div className="flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 bg-slate-100 text-sm font-semibold text-slate-500">
+                        {(w.full_name || "M").charAt(0).toUpperCase()}
+                      </div>
+                    )}
+                  </span>
                   <span className="truncate">{w.full_name}</span>
                   <span>{maskCpf(w.cpf || "")}</span>
                   <span>{w.phone || "-"}</span>
@@ -371,12 +398,75 @@ export function ObreirosTab({ activeTotvsId }: { activeTotvsId: string }) {
                       </span>
                     )}
                   </span>
+                  <span>
+                    {w.role === "obreiro" ? (
+                      <Button
+                        size="sm"
+                        variant={w.can_create_released_letter ? "default" : "outline"}
+                        onClick={() => toggleDirectRelease(w)}
+                      >
+                        {w.can_create_released_letter ? "Direta ativa" : "Liberar direto"}
+                      </Button>
+                    ) : (
+                      <span className="text-xs text-slate-400">-</span>
+                    )}
+                  </span>
                   <div><Button size="sm" variant="outline" onClick={() => openView(w)}>Visualizar</Button></div>
                   <div>{w.role === "obreiro" ? <Button size="sm" variant="outline" onClick={() => openEdit(w)}>Editar</Button> : <span className="text-xs text-slate-400">-</span>}</div>
                   <div>{w.role === "obreiro" ? <Button size="sm" variant="secondary" onClick={() => openResetPassword(w)}>Resetar</Button> : <span className="text-xs text-slate-400">-</span>}</div>
                 </div>
               ))}
             </div>
+          </div>
+
+          <div className="space-y-3 md:hidden">
+            {isLoading ? <div className="rounded-xl border border-slate-200 bg-white p-4 text-sm text-slate-500">Carregando...</div> : null}
+            {!isLoading && workers.length === 0 ? <div className="rounded-xl border border-slate-200 bg-white p-4 text-sm text-slate-500">Nenhum membro encontrado.</div> : null}
+            {workers.map((w) => (
+              <Card key={`mobile-${w.id}`} className="border border-slate-200">
+                <CardContent className="space-y-3 p-4">
+                  <div className="flex items-start gap-3">
+                    {w.avatar_url ? (
+                      <img src={w.avatar_url} alt={`Avatar de ${w.full_name}`} className="h-16 w-16 rounded-full border border-slate-200 object-cover object-[center_top]" />
+                    ) : (
+                      <div className="flex h-16 w-16 items-center justify-center rounded-full border border-slate-200 bg-slate-100 text-lg font-semibold text-slate-500">
+                        {(w.full_name || "M").charAt(0).toUpperCase()}
+                      </div>
+                    )}
+                    <div className="min-w-0 space-y-1 text-sm">
+                      <p className="truncate font-semibold text-slate-900">{w.full_name}</p>
+                      <p className="text-slate-600">CPF: {maskCpf(w.cpf || "")}</p>
+                      <p className="text-slate-600">Telefone: {w.phone || "-"}</p>
+                      <p className="text-slate-600">Cargo: {w.minister_role || "-"}</p>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2">
+                    <Button size="sm" variant="outline" onClick={() => openView(w)}>Visualizar</Button>
+                    {w.role === "obreiro" ? <Button size="sm" variant="outline" onClick={() => openEdit(w)}>Editar</Button> : <Button size="sm" variant="outline" disabled>-</Button>}
+                    {w.role === "obreiro" ? (
+                      <Button size="sm" variant={w.is_active === false ? "default" : "destructive"} onClick={() => toggle(w)}>
+                        {w.is_active === false ? "Ativar" : "Desativar"}
+                      </Button>
+                    ) : (
+                      <Button size="sm" variant="outline" disabled>{w.is_active === false ? "Inativo" : "Ativo"}</Button>
+                    )}
+                    {w.role === "obreiro" ? (
+                      <Button
+                        size="sm"
+                        variant={w.can_create_released_letter ? "default" : "outline"}
+                        onClick={() => toggleDirectRelease(w)}
+                      >
+                        {w.can_create_released_letter ? "Direta ativa" : "Liberar direto"}
+                      </Button>
+                    ) : (
+                      <Button size="sm" variant="outline" disabled>-</Button>
+                    )}
+                    {w.role === "obreiro" ? <Button size="sm" variant="secondary" onClick={() => openResetPassword(w)}>Resetar senha</Button> : <Button size="sm" variant="outline" disabled>-</Button>}
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
           </div>
 
           <div className="flex items-center justify-between">

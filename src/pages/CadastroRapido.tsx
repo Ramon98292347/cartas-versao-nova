@@ -125,7 +125,7 @@ export default function CadastroRapido() {
           central_nome: asNullableString(centralNomeRaw),
         });
         setTelefone(asNullableString(rec.telefone) ?? "");
-        nav("/carta");
+        nav("/carta/formulario");
         return;
       }
       let totvsValue: string | null = igreja?.codigoTotvs ?? null;
@@ -168,7 +168,7 @@ export default function CadastroRapido() {
         central_nome: novo.central_nome ?? null,
       });
       setTelefone(novo.telefone);
-      nav("/carta");
+      nav("/carta/formulario");
     } catch {
       toast.error("Falha ao salvar usuário");
     }

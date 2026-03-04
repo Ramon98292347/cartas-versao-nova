@@ -23,8 +23,8 @@ function maskCpf(v: string) {
 }
 
 function routeByRole(role: "admin" | "pastor" | "obreiro") {
-  if (role === "admin") return "/admin";
-  if (role === "pastor") return "/pastor";
+  if (role === "admin") return "/admin/dashboard";
+  if (role === "pastor") return "/pastor/dashboard";
   return "/obreiro";
 }
 

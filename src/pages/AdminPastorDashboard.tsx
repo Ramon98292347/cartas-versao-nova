@@ -7,20 +7,20 @@ import { FileText, Bell, LogOut, CalendarDays, LineChart, Users, Megaphone, Down
 import { useUser } from "@/context/UserContext";
 import { getPastorMetrics, listAdminChurchSummary, listChurchesInScopePaged, listMembers, listNotifications, listPastorLetters, markAllNotificationsRead, markNotificationRead } from "@/services/saasService";
 import { CartasTab } from "@/components/admin/CartasTab";
-import { ObreirosTab } from "@/components/admin/ObreirosTab";
 import { AdminChurchesTab } from "@/components/admin/AdminChurchesTab";
 import { StatCards } from "@/components/shared/StatCards";
 import { Skeleton } from "@/components/ui/skeleton";
 import { usePwaInstall } from "@/hooks/usePwaInstall";
 
-type Tab = "cartas" | "igrejas" | "obreiros";
+type Tab = "cartas" | "igrejas";
 
 export default function AdminPastorDashboard() {
   const nav = useNavigate();
   const queryClient = useQueryClient();
   const { usuario, session, token, clearAuth } = useUser();
   const isAdmin = usuario?.role === "admin";
-  const [tab, setTab] = useState<Tab>(isAdmin ? "igrejas" : "cartas");
+  const canManageChurches = usuario?.role === "admin" || usuario?.role === "pastor";
+  const [tab, setTab] = useState<Tab>("cartas");
   const [openReleases, setOpenReleases] = useState(false);
   const [churchPage, setChurchPage] = useState(1);
   const [churchPageSize, setChurchPageSize] = useState(20);
@@ -87,13 +87,13 @@ export default function AdminPastorDashboard() {
   const { data: churchRows = [] } = useQuery({
     queryKey: ["admin-church-summary", scopeTotvsIds.join("|")],
     queryFn: () => listAdminChurchSummary(scopeTotvsIds),
-    enabled: isAdmin && scopeTotvsIds.length > 0,
+    enabled: canManageChurches && scopeTotvsIds.length > 0,
   });
 
   const { data: churchesPaged } = useQuery({
     queryKey: ["churches-in-scope", churchPage, churchPageSize],
     queryFn: () => listChurchesInScopePaged(churchPage, churchPageSize),
-    enabled: isAdmin,
+    enabled: canManageChurches,
   });
   const churchesInScope = churchesPaged?.churches || [];
   const churchesTotal = churchesPaged?.total || churchesInScope.length;
@@ -240,7 +240,7 @@ export default function AdminPastorDashboard() {
         <section className="mt-[10px] rounded-2xl border border-slate-200 bg-white p-3">
           <div className="flex flex-wrap gap-2">
             {!isAdmin ? (
-              <Button className="h-10 px-3 sm:h-11 sm:px-4" onClick={() => nav("/carta")}>
+              <Button className="h-10 px-3 sm:h-11 sm:px-4" onClick={() => nav("/carta/formulario")}>
                 Fazer Carta
               </Button>
             ) : null}
@@ -274,23 +274,25 @@ export default function AdminPastorDashboard() {
         <section className="rounded-2xl border border-slate-200 bg-white p-3">
           <div className="flex items-center gap-2">
             <button
-              className={`rounded-xl px-4 py-2 text-lg font-semibold ${tab === (isAdmin ? "igrejas" : "cartas") ? "bg-slate-100 text-slate-900" : "text-slate-500"}`}
-              onClick={() => setTab(isAdmin ? "igrejas" : "cartas")}
+              className={`rounded-xl px-4 py-2 text-lg font-semibold ${tab === "cartas" ? "bg-slate-100 text-slate-900" : "text-slate-500"}`}
+              onClick={() => setTab("cartas")}
             >
-              {isAdmin ? `Igrejas (${churchesTotal})` : `Cartas (${letters.length})`}
+              Cartas ({letters.length})
             </button>
-            <button
-              className={`rounded-xl px-4 py-2 text-lg font-semibold ${tab === "obreiros" ? "bg-slate-100 text-slate-900" : "text-slate-500"}`}
-              onClick={() => setTab("obreiros")}
-            >
-              Membros cadastrados ({obreiros.length})
-            </button>
+            {canManageChurches ? (
+              <button
+                className={`rounded-xl px-4 py-2 text-lg font-semibold ${tab === "igrejas" ? "bg-slate-100 text-slate-900" : "text-slate-500"}`}
+                onClick={() => setTab("igrejas")}
+              >
+                Igrejas ({churchesTotal})
+              </button>
+            ) : null}
           </div>
         </section>
 
         {tab === "cartas" ? (
           <CartasTab letters={letters} scopeTotvsIds={scopeTotvsIds} phonesByUserId={phonesByUserId} phonesByName={phonesByName} />
-        ) : tab === "igrejas" ? (
+        ) : (
           <AdminChurchesTab
             rows={churchesInScope}
             page={churchPage}
@@ -302,8 +304,6 @@ export default function AdminPastorDashboard() {
               setChurchPage(1);
             }}
           />
-        ) : (
-          <ObreirosTab activeTotvsId={activeTotvsId} />
         )}
       </main>
 

@@ -14,7 +14,7 @@ import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useQuery } from "@tanstack/react-query";
 import { fetchChurches } from "@/services/churchService";
-import { createLetterByPastor } from "@/services/saasService";
+import { createLetterByPastor, getPastorByTotvsPublic } from "@/services/saasService";
 import { format, parse } from "date-fns";
 import { useUser } from "@/context/UserContext";
 import { getIgrejaByTotvs } from "@/services/userService";
@@ -59,9 +59,11 @@ function toBrDate(iso?: string | null) {
 }
 
 const Index = () => {
-  const { usuario, telefone, setUsuario, setTelefone } = useUser();
+  const { usuario, telefone, session } = useUser();
   const nav = useNavigate();
   const loc = useLocation();
+  const role = String(usuario?.role || session?.role || "").toLowerCase();
+  const dashboardRoute = role === "admin" ? "/admin/dashboard" : role === "pastor" ? "/pastor/dashboard" : "/usuario";
 
   const now = new Date();
   const todayIso = format(now, "yyyy-MM-dd");
@@ -77,8 +79,7 @@ const Index = () => {
   const [isPregacaoCalOpen, setIsPregacaoCalOpen] = useState(false);
   const [savingLetter, setSavingLetter] = useState(false);
 
-  const pastorResponsavel = usuario?.nome || "";
-  const telefonePastorResponsavel = usuario?.telefone || "";
+  const activeTotvsForPastor = String(session?.totvs_id || (usuario as LegacyUsuarioExtra | null)?.totvs || (usuario as LegacyUsuarioExtra | null)?.default_totvs_id || "");
   const telefoneUsuarioLogado =
     String(
       usuario?.telefone ||
@@ -137,6 +138,14 @@ const Index = () => {
     queryFn: fetchChurches,
     staleTime: 60_000,
   });
+  const { data: pastorResponsavelData } = useQuery({
+    queryKey: ["pastor-responsavel-carta", activeTotvsForPastor],
+    queryFn: () => getPastorByTotvsPublic(activeTotvsForPastor),
+    enabled: Boolean(activeTotvsForPastor),
+  });
+
+  const pastorResponsavel = pastorResponsavelData?.full_name || "";
+  const telefonePastorResponsavel = pastorResponsavelData?.phone || "";
 
   const brToIso = (br: string) => {
     try {
@@ -305,7 +314,7 @@ const Index = () => {
         toast.success("Carta criada e enviada para geração do PDF.");
       }
 
-      nav("/usuario");
+      nav(dashboardRoute);
     } catch (err: unknown) {
       toast.error(getFriendlyErrorMessage(err));
     } finally {
@@ -314,39 +323,37 @@ const Index = () => {
   };
 
   const handleClear = () => {
-    setIgrejaOrigem(undefined);
+    // Comentario: limpa somente o formulario, sem encerrar sessao do usuario.
     setIgrejaDestino(undefined);
     reset({
-      pregadorNome: "",
-      telefone: "",
+      pregadorNome: usuario?.nome || "",
+      telefone: telefoneUsuarioLogado || "",
       dataPregacao: "",
       dataEmissao: todayIso,
-      origemId: undefined as unknown as number,
+      origemId: igrejaOrigem?.id || (undefined as unknown as number),
       destinoId: undefined as unknown as number,
       destinoOutros: "",
     });
-    setTelefone(undefined);
     setDestinoOutros("");
     setPreachPeriod("");
-    setUsuario(undefined);
   };
 
   return (
-    <div className="min-h-screen bg-background">
-      <header className="bg-gradient-to-r from-primary to-accent text-primary-foreground shadow-lg">
-        <div className="container mx-auto px-4 py-6">
-          <div className="flex items-center gap-4 justify-between">
+    <div className="min-h-screen bg-slate-100">
+      <header className="border-b border-slate-200 bg-white shadow-sm">
+        <div className="mx-auto w-full max-w-[1600px] px-4 py-5">
+          <div className="flex items-center justify-between gap-4">
             <div className="flex items-center gap-4">
               <img src="/Polish_20220810_001501268%20(2).png" alt="Logo" className="h-12 w-auto rounded-md" />
               <div>
-                <h1 className="text-xl md:text-2xl font-bold">Sistema de Cartas de Pregação</h1>
-                <p className="text-sm text-white/90">Emissão de Carta</p>
+                <h1 className="bg-gradient-to-r from-emerald-500 to-cyan-500 bg-clip-text text-xl font-extrabold text-transparent md:text-3xl">Sistema de Gestão Eclesiástica</h1>
+                <p className="text-sm text-slate-600">Emissão de Carta</p>
               </div>
             </div>
             <Button
               variant="outline"
-              className="bg-white/20 text-white hover:bg-white/30 h-8 px-3 text-xs md:h-10 md:px-4 md:text-sm"
-              onClick={() => nav("/usuario")}
+              className="h-8 border-slate-300 bg-white px-3 text-xs text-slate-700 hover:bg-slate-50 md:h-10 md:px-4 md:text-sm"
+              onClick={() => nav(dashboardRoute)}
             >
               Voltar ao Dashboard
             </Button>
@@ -354,22 +361,22 @@ const Index = () => {
         </div>
       </header>
 
-      <main className="container mx-auto px-4 py-8 max-w-6xl">
-        <div className="grid lg:grid-cols-2 gap-6">
-          <Card className="card-shadow hover:card-shadow-hover transition-shadow duration-300 border-border bg-card">
+      <main className="mx-auto w-full max-w-[1600px] px-4 py-6">
+        <div className="grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
+          <Card className="rounded-2xl border border-slate-200 bg-white shadow-sm transition-shadow duration-300 hover:shadow-md">
             <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-2xl text-foreground">
-                <FileText className="h-6 w-6 text-primary" />
+              <CardTitle className="flex items-center gap-2 text-2xl text-slate-900">
+                <FileText className="h-6 w-6 text-emerald-500" />
                 Registro de Carta de Pregação
               </CardTitle>
-              <CardDescription className="text-muted-foreground">
+              <CardDescription className="text-slate-600">
                 Preencha os dados para emissão da carta
               </CardDescription>
             </CardHeader>
             <CardContent>
               <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
                 <div className="space-y-2">
-                  <Label htmlFor="pregador" className="text-sm font-medium text-foreground">
+                  <Label htmlFor="pregador" className="text-sm font-medium text-slate-800">
                     Nome do pregador
                   </Label>
                   <Input
@@ -378,14 +385,14 @@ const Index = () => {
                     placeholder="Digite o nome completo"
                     {...register("pregadorNome")}
                     disabled
-                    className="bg-card border-input focus:border-primary focus:ring-primary transition-colors"
+                    className="h-11 rounded-xl border-slate-300 bg-slate-50 transition-colors focus:border-emerald-500 focus:ring-emerald-500"
                     required
                   />
                   {errors.pregadorNome && <p className="text-xs text-destructive">{errors.pregadorNome.message as string}</p>}
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="telefone" className="text-sm font-medium text-foreground">
+                  <Label htmlFor="telefone" className="text-sm font-medium text-slate-800">
                     Telefone
                   </Label>
                   <Input
@@ -394,7 +401,7 @@ const Index = () => {
                     placeholder="Digite o telefone"
                     {...register("telefone")}
                     disabled={Boolean(telefoneUsuarioLogado)}
-                    className="bg-card border-input focus:border-primary focus:ring-primary transition-colors"
+                    className="h-11 rounded-xl border-slate-300 bg-slate-50 transition-colors focus:border-emerald-500 focus:ring-emerald-500"
                     required
                   />
                   {errors.telefone && <p className="text-xs text-destructive">{errors.telefone.message as string}</p>}
@@ -432,7 +439,7 @@ const Index = () => {
                 />
 
                 <div className="space-y-2">
-                  <Label htmlFor="destinoOutros" className="text-sm font-medium text-foreground">Outros (se não encontrar)</Label>
+                  <Label htmlFor="destinoOutros" className="text-sm font-medium text-slate-800">Outros (se não encontrar)</Label>
                   <Input
                     id="destinoOutros"
                     type="text"
@@ -448,14 +455,14 @@ const Index = () => {
                     onFocus={(e) => { if (disableByPhone) { toast.info("Digite seu telefone"); e.currentTarget.blur(); } }}
                     placeholder="Digite a igreja manualmente"
                     disabled={disableByPhone || Boolean(igrejaDestino)}
-                    className="bg-card border-input focus:border-primary focus:ring-primary transition-colors"
+                    className="h-11 rounded-xl border-slate-300 bg-slate-50 transition-colors focus:border-emerald-500 focus:ring-emerald-500"
                   />
                   {errors.destinoId && <p className="text-xs text-destructive">Selecione a igreja de destino ou informe em Outros</p>}
                 </div>
 
                 <div className="grid md:grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label htmlFor="dataPregacao" className="text-sm font-medium text-foreground">
+                    <Label htmlFor="dataPregacao" className="text-sm font-medium text-slate-800">
                       Data da pregação
                     </Label>
                     <div className="flex gap-2">
@@ -473,7 +480,7 @@ const Index = () => {
                             max={lastDayOfMonthIso}
                             onChange={(e) => setValue("dataPregacao", e.target.value, { shouldValidate: true })}
                             onFocus={(e) => { if (disableByPhone) { toast.info("Digite seu telefone"); e.currentTarget.blur(); } }}
-                            className="bg-card border-input focus:border-primary focus:ring-primary transition-colors flex-1"
+                            className="h-11 flex-1 rounded-xl border-slate-300 bg-slate-50 transition-colors focus:border-emerald-500 focus:ring-emerald-500"
                             required
                           />
                         );
@@ -532,7 +539,7 @@ const Index = () => {
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="dataEmissao" className="text-sm font-medium text-foreground">
+                    <Label htmlFor="dataEmissao" className="text-sm font-medium text-slate-800">
                       Data de emissão da carta
                     </Label>
                     {(() => {
@@ -545,7 +552,7 @@ const Index = () => {
                           ref={ref}
                           value={watch("dataEmissao") || todayIso}
                           disabled
-                          className="bg-card border-input focus:border-primary focus:ring-primary transition-colors"
+                          className="h-11 rounded-xl border-slate-300 bg-slate-100 transition-colors"
                           required
                         />
                       );
@@ -555,9 +562,9 @@ const Index = () => {
                 </div>
 
                 <div className="space-y-2">
-                  <Label className="text-sm font-medium text-foreground">Horário da pregação</Label>
+                  <Label className="text-sm font-medium text-slate-800">Horário da pregação</Label>
                   <Select value={preachPeriod} onValueChange={(v) => setPreachPeriod(v as PreachPeriod)}>
-                    <SelectTrigger className="bg-card border-input focus:border-primary focus:ring-primary transition-colors h-10">
+                    <SelectTrigger className="h-11 rounded-xl border-slate-300 bg-slate-50 transition-colors focus:border-emerald-500 focus:ring-emerald-500">
                       <SelectValue placeholder="Selecione o horário" />
                     </SelectTrigger>
                     <SelectContent>
@@ -572,7 +579,7 @@ const Index = () => {
                   <Button
                     type="submit"
                     disabled={savingLetter}
-                    className="flex-1 bg-primary hover:bg-primary/90 text-primary-foreground font-semibold shadow-md hover:shadow-lg transition-all"
+                    className="flex-1 bg-gradient-to-r from-emerald-500 to-cyan-500 font-semibold text-white shadow-md transition-all hover:brightness-95 hover:shadow-lg"
                   >
                     {savingLetter ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Send className="h-4 w-4 mr-2" />}
                     {savingLetter ? "Preenchendo carta..." : "Registrar Carta de Pregação"}
@@ -582,7 +589,7 @@ const Index = () => {
                     variant="outline"
                     onClick={handleClear}
                     disabled={savingLetter}
-                    className="border-border hover:bg-secondary/50 text-foreground transition-colors"
+                    className="border-slate-300 text-slate-700 transition-colors hover:bg-slate-50"
                   >
                     <RotateCcw className="h-4 w-4 mr-2" />
                     Limpar formulário
@@ -592,7 +599,7 @@ const Index = () => {
             </CardContent>
           </Card>
 
-          <div className="lg:sticky lg:top-8 h-fit">
+          <div className="h-fit xl:sticky xl:top-6">
             <LetterPreview
               pregadorNome={watch("pregadorNome")}
               igrejaOrigem={igrejaOrigem}

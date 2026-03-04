@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
@@ -205,16 +204,19 @@ export function CartasTab({
     }
   }
 
-  async function toggleAlwaysRelease(letter: PastorLetter, checked: boolean) {
-    if (checked && !letter.storage_path) {
+  async function releaseLetter(letter: PastorLetter) {
+    if (!letter.storage_path) {
       toast.error("Aguarde o PDF ficar pronto para liberar.");
       return;
     }
-
+    if (letter.status === "LIBERADA") {
+      toast.message("Esta carta já está liberada.");
+      return;
+    }
     try {
       setUpdatingReleaseId(letter.id);
-      await setLetterStatus(letter.id, checked ? "LIBERADA" : "BLOQUEADO");
-      toast.success(checked ? "Carta liberada permanentemente." : "Carta bloqueada.");
+      await setLetterStatus(letter.id, "LIBERADA");
+      toast.success("Carta liberada com sucesso.");
       await refresh();
     } catch (err: unknown) {
       toast.error(getFriendlyError(err, "letters"));
@@ -295,8 +297,8 @@ export function CartasTab({
       </FiltersBar>
 
       <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-        <div className="hidden lg:grid lg:grid-cols-[110px_1fr_130px_1fr_1fr_130px_170px_120px_260px] lg:border-b lg:border-slate-200 lg:bg-slate-50 lg:px-4 lg:py-3 lg:text-xs lg:font-semibold lg:text-slate-600 xl:text-sm">
-          <span>Data</span><span>Nome</span><span>Dia da pregação</span><span>Igreja origem</span><span>Igreja destino</span><span>Status</span><span>Liberar sempre</span><span>PDF</span><span>Ações</span>
+        <div className="hidden lg:grid lg:grid-cols-[110px_1fr_130px_1fr_1fr_130px_120px_330px] lg:border-b lg:border-slate-200 lg:bg-slate-50 lg:px-4 lg:py-3 lg:text-xs lg:font-semibold lg:text-slate-600 xl:text-sm">
+          <span>Data</span><span>Nome</span><span>Dia da pregação</span><span>Igreja origem</span><span>Igreja destino</span><span>Status</span><span>PDF</span><span>Ações</span>
         </div>
         {filtered.length === 0 ? <p className="px-5 py-4 text-sm text-slate-500">Nenhuma carta encontrada.</p> : null}
 
@@ -306,7 +308,7 @@ export function CartasTab({
           const pulse = blocked && flashing.includes(carta.id) ? "animate-pulse" : "";
           return (
             <div key={carta.id} className={`${tone} border-b border-slate-200 p-4 last:border-b-0 xl:p-0 ${pulse}`}>
-              <div className="hidden items-center lg:grid lg:grid-cols-[110px_1fr_130px_1fr_1fr_130px_170px_120px_260px] lg:gap-2 lg:px-4 lg:py-3 xl:text-sm">
+              <div className="hidden items-center lg:grid lg:grid-cols-[110px_1fr_130px_1fr_1fr_130px_120px_330px] lg:gap-2 lg:px-4 lg:py-3 xl:text-sm">
                 <span>{formatDate(carta.created_at)}</span>
                 <span className="truncate font-semibold">{carta.preacher_name}</span>
                 <span>{formatDate(carta.preach_date)}</span>
@@ -315,16 +317,15 @@ export function CartasTab({
                 <div>
                   <Badge variant="outline" className={statusClass(carta.status)}>{carta.status}</Badge>
                 </div>
-                <div className="flex items-center gap-2">
-                  <Checkbox
-                    checked={carta.status === "LIBERADA"}
-                    onCheckedChange={(value) => toggleAlwaysRelease(carta, Boolean(value))}
-                    disabled={updatingReleaseId === carta.id}
-                  />
-                  <span className="text-sm text-slate-700">Liberar sempre</span>
-                </div>
                 <Button variant="outline" disabled={!carta.storage_path} onClick={() => openPdf(carta)}><ArrowUpRight className="mr-2 h-4 w-4" /> Abrir PDF</Button>
                 <div className="flex flex-wrap items-center gap-2">
+                  <Button
+                    className="bg-emerald-600 hover:bg-emerald-700"
+                    onClick={() => releaseLetter(carta)}
+                    disabled={!carta.storage_path || carta.status === "LIBERADA" || updatingReleaseId === carta.id}
+                  >
+                    Liberar carta
+                  </Button>
                   <Button className="bg-orange-500 hover:bg-orange-600" onClick={() => share(carta)}>
                     <Share2 className="mr-2 h-4 w-4" />Compartilhar
                   </Button>
@@ -351,18 +352,16 @@ export function CartasTab({
                 <div className="mt-3">
                   <Badge variant="outline" className={statusClass(carta.status)}>{carta.status}</Badge>
                 </div>
-                <div className="mt-3 flex flex-wrap items-center gap-2">
-                  <Checkbox
-                    checked={carta.status === "LIBERADA"}
-                    onCheckedChange={(value) => toggleAlwaysRelease(carta, Boolean(value))}
-                    disabled={updatingReleaseId === carta.id}
-                  />
-                  <span className="text-sm text-slate-700 break-words">Liberar sempre</span>
-                </div>
-
                 <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
                   <Button className="w-full bg-emerald-600 hover:bg-emerald-700" disabled={!carta.storage_path} onClick={() => openPdf(carta)}>
                     <ArrowUpRight className="mr-2 h-4 w-4" /> Abrir PDF
+                  </Button>
+                  <Button
+                    className="w-full bg-emerald-600 hover:bg-emerald-700"
+                    onClick={() => releaseLetter(carta)}
+                    disabled={!carta.storage_path || carta.status === "LIBERADA" || updatingReleaseId === carta.id}
+                  >
+                    Liberar carta
                   </Button>
                   <Button className="w-full bg-orange-500 hover:bg-orange-600" onClick={() => share(carta)}>
                     <Share2 className="mr-2 h-4 w-4" /> Compartilhar

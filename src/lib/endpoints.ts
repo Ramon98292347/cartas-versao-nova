@@ -31,6 +31,8 @@ export const api = {
   listPastors: (body: JsonBody) => post("list-pastors", body),
   setChurchPastor: (body: { church_totvs_id: string; pastor_user_id: string }) => post("set-church-pastor", body),
   toggleWorkerActive: (body: { worker_id: string; is_active: boolean }) => post("toggle-worker-active", body),
+  setWorkerDirectRelease: (body: { worker_id: string; can_create_released_letter: boolean }) =>
+    post("set-worker-direct-release", body),
 
   workerDashboard: (body: JsonBody) => post("worker-dashboard", body),
   requestRelease: (body: { letter_id: string; message?: string | null }) => post("request-release", body),
@@ -48,4 +50,18 @@ export const api = {
   deleteAnnouncement: (body: { id: string }) => post("delete-announcement", body),
   upsertStamps: (body: { signature_url?: string | null; stamp_pastor_url?: string | null; stamp_church_url?: string | null }) =>
     post("upsert-stamps", body),
+
+  // Comentario: modulo Igrejas > Remanejamento/Contrato.
+  getChurchRemanejamentoForm: (body: { church_totvs_id: string }) => post("get-church-remanejamento-form", body),
+  upsertChurchRemanejamento: (body: JsonBody) => post("upsert-church-remanejamento", body),
+  generateChurchRemanejamentoPdf: (body: { church_totvs_id: string; remanejamento_id?: string }) =>
+    post("generate-church-remanejamento-pdf", body),
+  getChurchContratoForm: (body: { church_totvs_id: string }) => post("get-church-contrato-form", body),
+  upsertChurchContrato: (body: JsonBody) => post("upsert-church-contrato", body),
+  upsertChurchLaudo: (body: JsonBody) => post("upsert-church-laudo", body),
+  generateChurchContratoPdf: (body: { church_totvs_id: string; contrato_id?: string }) =>
+    post("generate-church-contrato-pdf", body),
+
+  // Comentario: gera ficha/carteirinha de membro via webhook n8n.
+  generateMemberDocs: (body: JsonBody) => post("generate-member-docs", body),
 };

@@ -23,6 +23,7 @@ export type AuthSessionData = {
   church_class?: string | null;
   pastor_name?: string | null;
   address_json?: Record<string, unknown> | null;
+  can_create_released_letter?: boolean | null;
 };
 
 export type LoginResult =
@@ -79,12 +80,17 @@ export type UserListItem = {
   full_name: string;
   role?: AppRole | null;
   cpf?: string | null;
+  rg?: string | null;
   phone?: string | null;
   email?: string | null;
   minister_role?: string | null;
   birth_date?: string | null;
+  baptism_date?: string | null;
+  marital_status?: string | null;
+  matricula?: string | null;
   ordination_date?: string | null;
   avatar_url?: string | null;
+  signature_url?: string | null;
   cep?: string | null;
   address_street?: string | null;
   address_number?: string | null;
@@ -95,6 +101,7 @@ export type UserListItem = {
   default_totvs_id?: string | null;
   totvs_access?: string[] | null;
   is_active?: boolean | null;
+  can_create_released_letter?: boolean | null;
 };
 
 export type WorkerListParams = {
@@ -145,6 +152,121 @@ export type ChurchInScopeItem = {
     id?: string | null;
     full_name?: string | null;
   } | null;
+};
+
+export type ChurchHierarchySigner = {
+  requires_setorial_signature: boolean;
+  signer_role: "estadual" | "setorial";
+  signer_user_id?: string | null;
+  signer_name?: string | null;
+  signer_signature_url?: string | null;
+  message?: string | null;
+};
+
+export type ChurchRemanejamentoDraft = {
+  church_totvs_id: string;
+  estadual_pastor_nome?: string;
+  estadual_pastor_cpf?: string;
+  estadual_endereco?: string;
+  estadual_cidade?: string;
+  estadual_bairro?: string;
+  estadual_uf?: string;
+  estadual_ddd?: string;
+  estadual_telefone?: string;
+  estadual_email?: string;
+  estadual_assinatura_url?: string;
+  setorial_pastor_nome?: string;
+  setorial_pastor_cpf?: string;
+  setorial_endereco?: string;
+  setorial_cidade?: string;
+  setorial_bairro?: string;
+  setorial_uf?: string;
+  setorial_ddd?: string;
+  setorial_telefone?: string;
+  setorial_email?: string;
+  setorial_assinatura_url?: string;
+  igreja_endereco_atual?: string;
+  igreja_numero?: string;
+  igreja_bairro?: string;
+  igreja_cidade?: string;
+  igreja_uf?: string;
+  porte_igreja?: string;
+  sobre_imovel?: string;
+  contrato_vence_em?: string;
+  valor_aluguel?: string;
+  possui_escritura?: "sim" | "nao" | "";
+  comodato?: "sim" | "nao" | "";
+  entradas_atuais?: string;
+  saidas?: string;
+  saldo?: string;
+  numero_membros?: string;
+  motivo_troca?: string;
+  dirigente_saida_nome?: string;
+  dirigente_saida_rg?: string;
+  dirigente_saida_cpf?: string;
+  dirigente_saida_telefone?: string;
+  dirigente_saida_data_assumiu?: string;
+  novo_dirigente_nome?: string;
+  novo_dirigente_rg?: string;
+  novo_dirigente_cpf?: string;
+  novo_dirigente_telefone?: string;
+  novo_dirigente_data_batismo?: string;
+  novo_dirigente_distancia_km?: string;
+  novo_dirigente_recebe_prebenda?: "sim" | "nao" | "";
+  novo_dirigente_prebenda_desde?: string;
+  sede_possui_cadastro_termos?: "sim" | "nao" | "";
+  sede_tempo_batismo?: string;
+  sede_fichas_anexas?: "sim" | "nao" | "";
+  sede_matricula_totvs?: "sim" | "nao" | "";
+  sede_numero_matricula?: string;
+  resolucao_diretoria?: string;
+};
+
+export type ChurchContratoDraft = {
+  church_totvs_id: string;
+  dirigente_nome?: string;
+  dirigente_telefone?: string;
+  dirigente_igreja?: string;
+  igreja_endereco?: string;
+  igreja_numero?: string;
+  igreja_bairro?: string;
+  igreja_cidade?: string;
+  igreja_uf?: string;
+  igreja_central?: string;
+  locador_nome?: string;
+  locador_cpf?: string;
+  locador_rg?: string;
+  locador_estado_civil?: string;
+  locador_endereco?: string;
+  locador_numero?: string;
+  locador_complemento?: string;
+  locador_bairro?: string;
+  locador_cidade?: string;
+  locador_uf?: string;
+  locador_cep?: string;
+  locador_telefone?: string;
+  valor_aluguel?: string;
+  valor_extenso?: string;
+  dia_pagamento?: string;
+  contrato_dia?: string;
+  contrato_mes?: string;
+  contrato_ano?: string;
+};
+
+export type ChurchLaudoDraft = {
+  church_totvs_id: string;
+  locador_nome?: string;
+  fiador_nome?: string;
+  endereco_igreja?: string;
+  cidade_igreja?: string;
+  totvs?: string;
+  dia?: string;
+  mes?: string;
+  ano?: string;
+  foto_interna_1_url?: string;
+  foto_interna_2_url?: string;
+  foto_interna_3_url?: string;
+  foto_interna_4_url?: string;
 };
 
 export type ReleaseRequest = {
@@ -406,6 +528,7 @@ function mapUserLike(raw: Record<string, unknown> | null | undefined): AuthSessi
     church_class: raw?.church_class || null,
     pastor_name: raw?.pastor_name || null,
     address_json: raw?.address_json || null,
+    can_create_released_letter: Boolean(raw?.can_create_released_letter),
   };
 }
 
@@ -555,12 +678,17 @@ export async function listMembers(params: MemberListParams): Promise<WorkerListR
         full_name: String(w?.full_name || ""),
         role: (w?.role || null) as AppRole | null,
         cpf: w?.cpf || null,
+        rg: w?.rg || null,
         phone: w?.phone || null,
         email: w?.email || null,
         minister_role: w?.minister_role || null,
         birth_date: w?.birth_date || null,
+        baptism_date: w?.baptism_date || null,
+        marital_status: w?.marital_status || null,
+        matricula: w?.matricula || null,
         ordination_date: w?.ordination_date || null,
         avatar_url: w?.avatar_url || null,
+        signature_url: w?.signature_url || null,
         cep: w?.cep || null,
         address_street: w?.address_street || null,
         address_number: w?.address_number || null,
@@ -571,6 +699,7 @@ export async function listMembers(params: MemberListParams): Promise<WorkerListR
         default_totvs_id: w?.default_totvs_id || null,
         totvs_access: w?.totvs_access || null,
         is_active: typeof w?.is_active === "boolean" ? w.is_active : true,
+        can_create_released_letter: typeof w?.can_create_released_letter === "boolean" ? w.can_create_released_letter : false,
       })),
       total: Number(data?.total || rows.length),
       page: Number(data?.page || params.page || 1),
@@ -605,12 +734,17 @@ export async function listWorkers(params: WorkerListParams): Promise<WorkerListR
         full_name: String(w?.full_name || ""),
         role: (w?.role || null) as AppRole | null,
         cpf: w?.cpf || null,
+        rg: w?.rg || null,
         phone: w?.phone || null,
         email: w?.email || null,
         minister_role: w?.minister_role || null,
         birth_date: w?.birth_date || null,
+        baptism_date: w?.baptism_date || null,
+        marital_status: w?.marital_status || null,
+        matricula: w?.matricula || null,
         ordination_date: w?.ordination_date || null,
         avatar_url: w?.avatar_url || null,
+        signature_url: w?.signature_url || null,
         cep: w?.cep || null,
         address_street: w?.address_street || null,
         address_number: w?.address_number || null,
@@ -621,6 +755,7 @@ export async function listWorkers(params: WorkerListParams): Promise<WorkerListR
         default_totvs_id: w?.default_totvs_id || null,
         totvs_access: w?.totvs_access || null,
         is_active: typeof w?.is_active === "boolean" ? w.is_active : true,
+        can_create_released_letter: typeof w?.can_create_released_letter === "boolean" ? w.can_create_released_letter : false,
       })),
       total: Number(data?.total || rows.length),
       page: Number(data?.page || params.page || 1),
@@ -635,12 +770,21 @@ export async function listWorkers(params: WorkerListParams): Promise<WorkerListR
     full_name: u.full_name,
     role: u.role,
     cpf: u.cpf,
+    rg: (u as AuthSessionData & { rg?: string }).rg || null,
     phone: u.phone || null,
     email: u.email || null,
     minister_role: u.minister_role || null,
     default_totvs_id: u.default_totvs_id || null,
     totvs_access: u.totvs_access || null,
+    birth_date: u.birth_date || null,
+    baptism_date: (u as AuthSessionData & { baptism_date?: string | null }).baptism_date || null,
+    marital_status: (u as AuthSessionData & { marital_status?: string | null }).marital_status || null,
+    matricula: (u as AuthSessionData & { matricula?: string | null }).matricula || null,
+    avatar_url: u.avatar_url || null,
+    signature_url: (u as AuthSessionData & { signature_url?: string | null }).signature_url || null,
     is_active: (u as AuthSessionData & { is_active?: boolean }).is_active ?? true,
+    can_create_released_letter:
+      (u as AuthSessionData & { can_create_released_letter?: boolean }).can_create_released_letter ?? false,
   })) as UserListItem[];
 
   if (params.search) {
@@ -1269,6 +1413,20 @@ export async function setWorkerActive(workerId: string, isActive: boolean) {
   }
 }
 
+export async function setWorkerDirectRelease(workerId: string, enabled: boolean) {
+  if (!isMockMode()) {
+    await api.setWorkerDirectRelease({
+      worker_id: workerId,
+      can_create_released_letter: enabled,
+    });
+    return;
+  }
+  const user = MOCK_USERS.find((u) => u.id === workerId);
+  if (user) {
+    (user as AuthSessionData & { can_create_released_letter?: boolean }).can_create_released_letter = enabled;
+  }
+}
+
 export async function setChurchPastor(church_totvs_id: string, pastor_user_id: string) {
   if (!church_totvs_id) throw new Error("church_totvs_required");
   if (!pastor_user_id) throw new Error("pastor_user_required");
@@ -1342,6 +1500,200 @@ export async function upsertStamps(payload: {
     await api.upsertStamps(payload);
     return;
   }
+}
+
+function remanejamentoDraftKey(churchTotvsId: string) {
+  return `ipda_remanejamento_draft_${churchTotvsId}`;
+}
+
+function contratoDraftKey(churchTotvsId: string) {
+  return `ipda_contrato_draft_${churchTotvsId}`;
+}
+
+function laudoDraftKey(churchTotvsId: string) {
+  return `ipda_laudo_draft_${churchTotvsId}`;
+}
+
+function readLocalDraft<T>(key: string): Partial<T> {
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) return {};
+    return JSON.parse(raw) as Partial<T>;
+  } catch {
+    return {};
+  }
+}
+
+function writeLocalDraft<T>(key: string, payload: Partial<T>) {
+  localStorage.setItem(key, JSON.stringify(payload || {}));
+}
+
+// Comentario: backend dos documentos de igreja pode ser ligado por variavel de ambiente.
+const CHURCH_DOCS_BACKEND_ENABLED = String(import.meta.env.VITE_ENABLE_CHURCH_DOCS_BACKEND || "false").toLowerCase() === "true";
+
+export async function getChurchRemanejamentoForm(church: ChurchInScopeItem): Promise<{
+  hierarchy: ChurchHierarchySigner;
+  draft: ChurchRemanejamentoDraft;
+}> {
+  const localDraft = readLocalDraft<ChurchRemanejamentoDraft>(remanejamentoDraftKey(church.totvs_id));
+  if (!isMockMode() && CHURCH_DOCS_BACKEND_ENABLED) {
+    try {
+      const data = await api.getChurchRemanejamentoForm({ church_totvs_id: church.totvs_id });
+      return {
+        hierarchy: (data?.hierarchy || {
+          requires_setorial_signature: false,
+          signer_role: "estadual",
+          signer_name: church.pastor?.full_name || "",
+          message: "Esta igreja esta ligada diretamente a Estadual.",
+        }) as ChurchHierarchySigner,
+        draft: {
+          church_totvs_id: church.totvs_id,
+          ...(data?.draft as Record<string, string>),
+          ...localDraft,
+        },
+      };
+    } catch {
+      // Comentario: sem endpoint publicado, usa rascunho local sem quebrar a tela.
+    }
+  }
+  return {
+    hierarchy: {
+      requires_setorial_signature: false,
+      signer_role: "estadual",
+      signer_name: church.pastor?.full_name || "",
+      message: "Esta igreja esta ligada diretamente a Estadual. Assinatura setorial nao e necessaria.",
+    },
+    draft: {
+      church_totvs_id: church.totvs_id,
+      igreja_cidade: church.church_name || "",
+      igreja_uf: "",
+      estadual_pastor_nome: church.pastor?.full_name || "",
+      ...localDraft,
+    },
+  };
+}
+
+export async function saveChurchRemanejamentoDraft(payload: ChurchRemanejamentoDraft) {
+  writeLocalDraft<ChurchRemanejamentoDraft>(remanejamentoDraftKey(payload.church_totvs_id), payload);
+}
+
+export async function upsertChurchRemanejamento(payload: ChurchRemanejamentoDraft) {
+  writeLocalDraft<ChurchRemanejamentoDraft>(remanejamentoDraftKey(payload.church_totvs_id), payload);
+  if (!isMockMode() && CHURCH_DOCS_BACKEND_ENABLED) {
+    try {
+      await api.upsertChurchRemanejamento(payload as unknown as Record<string, unknown>);
+      return;
+    } catch {
+      // Comentario: mantem rascunho local quando endpoint ainda nao estiver implantado.
+    }
+  }
+}
+
+export async function generateChurchRemanejamentoPdf(churchTotvsId: string) {
+  if (!isMockMode() && CHURCH_DOCS_BACKEND_ENABLED) {
+    try {
+      return await api.generateChurchRemanejamentoPdf({ church_totvs_id: churchTotvsId });
+    } catch {
+      return { ok: false, error: "remanejamento_pdf_pending_backend" };
+    }
+  }
+  return { ok: true };
+}
+
+export async function getChurchContratoForm(church: ChurchInScopeItem): Promise<{
+  draft: ChurchContratoDraft;
+  laudo: ChurchLaudoDraft;
+}> {
+  const localContrato = readLocalDraft<ChurchContratoDraft>(contratoDraftKey(church.totvs_id));
+  const localLaudo = readLocalDraft<ChurchLaudoDraft>(laudoDraftKey(church.totvs_id));
+  if (!isMockMode() && CHURCH_DOCS_BACKEND_ENABLED) {
+    try {
+      const data = await api.getChurchContratoForm({ church_totvs_id: church.totvs_id });
+      return {
+        draft: {
+          church_totvs_id: church.totvs_id,
+          ...(data?.draft as Record<string, string>),
+          ...localContrato,
+        },
+        laudo: {
+          church_totvs_id: church.totvs_id,
+          ...(data?.laudo as Record<string, string>),
+          ...localLaudo,
+        },
+      };
+    } catch {
+      // Comentario: fallback local.
+    }
+  }
+  return {
+    draft: {
+      church_totvs_id: church.totvs_id,
+      dirigente_igreja: church.church_name || "",
+      igreja_central: church.parent_totvs_id || "",
+      ...localContrato,
+    },
+    laudo: {
+      church_totvs_id: church.totvs_id,
+      cidade_igreja: church.church_name || "",
+      totvs: church.totvs_id,
+      ...localLaudo,
+    },
+  };
+}
+
+export async function saveChurchContratoDraft(payload: ChurchContratoDraft) {
+  writeLocalDraft<ChurchContratoDraft>(contratoDraftKey(payload.church_totvs_id), payload);
+}
+
+export async function upsertChurchContrato(payload: ChurchContratoDraft) {
+  writeLocalDraft<ChurchContratoDraft>(contratoDraftKey(payload.church_totvs_id), payload);
+  if (!isMockMode() && CHURCH_DOCS_BACKEND_ENABLED) {
+    try {
+      await api.upsertChurchContrato(payload as unknown as Record<string, unknown>);
+      return;
+    } catch {
+      // Comentario: mantem local quando backend ainda nao estiver publicado.
+    }
+  }
+}
+
+export async function saveChurchLaudoDraft(payload: ChurchLaudoDraft) {
+  writeLocalDraft<ChurchLaudoDraft>(laudoDraftKey(payload.church_totvs_id), payload);
+}
+
+export async function upsertChurchLaudo(payload: ChurchLaudoDraft) {
+  writeLocalDraft<ChurchLaudoDraft>(laudoDraftKey(payload.church_totvs_id), payload);
+  if (!isMockMode() && CHURCH_DOCS_BACKEND_ENABLED) {
+    try {
+      await api.upsertChurchLaudo(payload as unknown as Record<string, unknown>);
+      return;
+    } catch {
+      // Comentario: mantem local quando backend ainda nao estiver publicado.
+    }
+  }
+}
+
+export async function generateChurchContratoPdf(churchTotvsId: string) {
+  if (!isMockMode() && CHURCH_DOCS_BACKEND_ENABLED) {
+    try {
+      return await api.generateChurchContratoPdf({ church_totvs_id: churchTotvsId });
+    } catch {
+      return { ok: false, error: "contrato_pdf_pending_backend" };
+    }
+  }
+  return { ok: true };
+}
+
+export async function generateMemberDocs(payload: {
+  document_type: "ficha_membro" | "carteirinha" | "ficha_obreiro";
+  member_id: string;
+  church_totvs_id?: string;
+  dados: Record<string, unknown>;
+}) {
+  if (!isMockMode()) {
+    return await api.generateMemberDocs(payload);
+  }
+  return { ok: true };
 }
 
 export async function createLetterByPastor(payload: LetterCreatePayload) {

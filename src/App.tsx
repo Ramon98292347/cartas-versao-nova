@@ -59,9 +59,7 @@ const App = () => (
               path="/admin"
               element={
                 <RequireRole role="admin">
-                  <Suspense fallback={<div />}>
-                    <AdminPastorDashboardPage />
-                  </Suspense>
+                  <Navigate to="/admin/dashboard" replace />
                 </RequireRole>
               }
             />
@@ -69,8 +67,56 @@ const App = () => (
               path="/pastor"
               element={
                 <RequireRole role="pastor">
+                  <Navigate to="/pastor/dashboard" replace />
+                </RequireRole>
+              }
+            />
+            <Route
+              path="/pastor/dashboard"
+              element={
+                <RequireRole role="pastor">
                   <Suspense fallback={<div />}>
-                    <AdminPastorDashboardPage />
+                    <PastorDashboardPage />
+                  </Suspense>
+                </RequireRole>
+              }
+            />
+            <Route
+              path="/pastor/igrejas"
+              element={
+                <RequireRole role="pastor">
+                  <Suspense fallback={<div />}>
+                    <PastorIgrejasPage />
+                  </Suspense>
+                </RequireRole>
+              }
+            />
+            <Route
+              path="/pastor/membros"
+              element={
+                <RequireRole role="pastor">
+                  <Suspense fallback={<div />}>
+                    <PastorMembrosPage />
+                  </Suspense>
+                </RequireRole>
+              }
+            />
+            <Route
+              path="/admin/dashboard"
+              element={
+                <RequireRole role="admin">
+                  <Suspense fallback={<div />}>
+                    <AdminDashboardPage />
+                  </Suspense>
+                </RequireRole>
+              }
+            />
+            <Route
+              path="/admin/igrejas"
+              element={
+                <RequireRole role="admin">
+                  <Suspense fallback={<div />}>
+                    <AdminIgrejasPage />
                   </Suspense>
                 </RequireRole>
               }
@@ -99,7 +145,17 @@ const App = () => (
               path="/carta"
               element={
                 <RequireAuth>
-                  <Suspense fallback={<div />}> 
+                  <Suspense fallback={<div />}>
+                    <CartasDashboardPage />
+                  </Suspense>
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="/carta/formulario"
+              element={
+                <RequireAuth>
+                  <Suspense fallback={<div />}>
                     <CartaPage />
                   </Suspense>
                 </RequireAuth>
@@ -124,8 +180,8 @@ function RequireRole({ children, role }: { children: JSX.Element; role: "admin" 
   const { usuario, token } = useUser();
   if (!usuario || !token) return <Navigate to="/" replace />;
   if (usuario.role !== role) {
-    if (usuario.role === "admin") return <Navigate to="/admin" replace />;
-    if (usuario.role === "pastor") return <Navigate to="/pastor" replace />;
+    if (usuario.role === "admin") return <Navigate to="/admin/dashboard" replace />;
+    if (usuario.role === "pastor") return <Navigate to="/pastor/dashboard" replace />;
     if (usuario.role === "obreiro") return <Navigate to="/obreiro" replace />;
     return <Navigate to="/" replace />;
   }
@@ -135,8 +191,8 @@ function RequireAnyRole({ children, roles }: { children: JSX.Element; roles: Arr
   const { usuario, token } = useUser();
   if (!usuario || !token) return <Navigate to="/" replace />;
   if (!roles.includes(usuario.role as "admin" | "pastor" | "obreiro")) {
-    if (usuario.role === "admin") return <Navigate to="/admin" replace />;
-    if (usuario.role === "pastor") return <Navigate to="/pastor" replace />;
+    if (usuario.role === "admin") return <Navigate to="/admin/dashboard" replace />;
+    if (usuario.role === "pastor") return <Navigate to="/pastor/dashboard" replace />;
     if (usuario.role === "obreiro") return <Navigate to="/obreiro" replace />;
     return <Navigate to="/" replace />;
   }
@@ -159,9 +215,15 @@ function OnReloadRedirect() {
   }, [nav, loc.pathname, usuario, token, pendingCpf, availableChurches.length]);
   return null;
 }
+
 const CartaPage = lazy(() => import("./pages/Index"));
+const CartasDashboardPage = lazy(() => import("./pages/CartasDashboardPage"));
 const UsuarioDashboardPage = lazy(() => import("./pages/UsuarioDashboard"));
-const AdminPastorDashboardPage = lazy(() => import("./pages/AdminPastorDashboard"));
+const PastorDashboardPage = lazy(() => import("./pages/PastorDashboardPage"));
+const PastorIgrejasPage = lazy(() => import("./pages/PastorIgrejasPage"));
+const PastorMembrosPage = lazy(() => import("./pages/PastorMembrosPage"));
+const AdminDashboardPage = lazy(() => import("./pages/AdminDashboardPage"));
+const AdminIgrejasPage = lazy(() => import("./pages/AdminIgrejasPage"));
 const SelectChurchPage = lazy(() => import("./pages/SelectChurch"));
 const ConfiguracoesPage = lazy(() => import("./pages/Configuracoes"));
 const DivulgacaoPage = lazy(() => import("./pages/Divulgacao"));
