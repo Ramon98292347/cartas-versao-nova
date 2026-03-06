@@ -1,11 +1,12 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Search, PlusCircle, Upload, MoreHorizontal } from "lucide-react";
 import { toast } from "sonner";
@@ -33,6 +34,28 @@ function maskCpf(v: string) {
   if (d.length <= 6) return `${d.slice(0, 3)}.${d.slice(3)}`;
   if (d.length <= 9) return `${d.slice(0, 3)}.${d.slice(3, 6)}.${d.slice(6)}`;
   return `${d.slice(0, 3)}.${d.slice(3, 6)}.${d.slice(6, 9)}-${d.slice(9)}`;
+}
+
+function viewValue(v: unknown) {
+  const s = String(v || "").trim();
+  return s || "—";
+}
+
+function formatPhoneBr(v: unknown) {
+  const digits = String(v || "").replace(/\D/g, "");
+  if (!digits) return "—";
+  if (digits.length === 11) return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7)}`;
+  if (digits.length === 10) return `(${digits.slice(0, 2)}) ${digits.slice(2, 6)}-${digits.slice(6)}`;
+  return String(v || "?");
+}
+
+function formatDateBr(v: unknown) {
+  const s = String(v || "").trim();
+  if (!s) return "—";
+  const dateInput = /^\d{4}-\d{2}-\d{2}$/.test(s) ? `${s}T00:00:00` : s;
+  const dt = new Date(dateInput);
+  if (Number.isNaN(dt.getTime())) return s;
+  return dt.toLocaleDateString("pt-BR");
 }
 
 type WorkerForm = {
@@ -678,39 +701,160 @@ export function ObreirosTab({ activeTotvsId }: { activeTotvsId: string }) {
           if (!next) setSelectedWorker(null);
         }}
       >
-        <DialogContent className="max-w-3xl">
+        <DialogContent className="max-h-[88vh] max-w-5xl overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Dados do Membro</DialogTitle>
-          </DialogHeader>
-          {selectedWorker ? (
-            <div className="grid gap-4 md:grid-cols-[1fr_170px]">
-              <div className="space-y-2 text-sm">
-                <p><span className="font-semibold">Nome:</span> {selectedWorker.full_name || "-"}</p>
-                <p><span className="font-semibold">CPF:</span> {selectedWorker.cpf ? maskCpf(selectedWorker.cpf) : "-"}</p>
-                <p><span className="font-semibold">Tipo:</span> {selectedWorker.role || "-"}</p>
-                <p><span className="font-semibold">Cargo:</span> {selectedWorker.minister_role || "-"}</p>
-                <p><span className="font-semibold">Telefone:</span> {selectedWorker.phone || "-"}</p>
-                <p><span className="font-semibold">Email:</span> {selectedWorker.email || "-"}</p>
-                <p><span className="font-semibold">Nascimento:</span> {selectedWorker.birth_date || "-"}</p>
-                <p><span className="font-semibold">Ordenação:</span> {selectedWorker.ordination_date || "-"}</p>
-                <p><span className="font-semibold">CEP:</span> {selectedWorker.cep || "-"}</p>
-                <p><span className="font-semibold">Rua:</span> {selectedWorker.address_street || "-"}</p>
-                <p><span className="font-semibold">Numero:</span> {selectedWorker.address_number || "-"}</p>
-                <p><span className="font-semibold">Complemento:</span> {selectedWorker.address_complement || "-"}</p>
-                <p><span className="font-semibold">Bairro:</span> {selectedWorker.address_neighborhood || "-"}</p>
-                <p><span className="font-semibold">Cidade:</span> {selectedWorker.address_city || "-"}</p>
-                <p><span className="font-semibold">UF:</span> {selectedWorker.address_state || "-"}</p>
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <DialogTitle>Dados do Membro</DialogTitle>
+                <DialogDescription>Visualização completa do cadastro do membro selecionado.</DialogDescription>
               </div>
-              <div className="flex items-start justify-end">
-                {selectedWorker.avatar_url ? (
-                  <img src={selectedWorker.avatar_url} alt="Foto 3x4" className="h-52 w-40 rounded-lg border object-cover object-[center_top]" />
-                ) : (
-                  <div className="flex h-52 w-40 items-center justify-center rounded-lg border bg-slate-100 text-6xl font-bold text-slate-400">
-                    {(selectedWorker.full_name || "M").charAt(0).toUpperCase()}
-                  </div>
-                )}
-              </div>
+              {selectedWorker ? (
+                <div className="flex items-center gap-2">
+                  <Button size="sm" variant="outline" onClick={() => openEdit(selectedWorker)}>Editar</Button>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button size="sm" variant="outline">Ações</Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem onClick={() => openResetPassword(selectedWorker)} disabled={selectedWorker.can_manage === false}>
+                        Resetar senha
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => toggle(selectedWorker)} disabled={selectedWorker.can_manage === false}>
+                        {selectedWorker.is_active === false ? "Ativar" : "Desativar"}
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => toggleDirectRelease(selectedWorker)} disabled={selectedWorker.can_manage === false}>
+                        {selectedWorker.can_create_released_letter ? "Desativar liberação direta" : "Ativar liberação direta"}
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
+              ) : null}
             </div>
+          </DialogHeader>
+
+          {selectedWorker ? (
+            <Card className="border border-slate-200 shadow-sm">
+              <CardContent className="space-y-6 p-5">
+                <div className="flex flex-col gap-4 md:flex-row md:items-center">
+                  <div className="h-36 w-36 shrink-0 overflow-hidden rounded-2xl border border-slate-200 bg-slate-100">
+                    {selectedWorker.avatar_url ? (
+                      <img
+                        src={selectedWorker.avatar_url}
+                        alt="Avatar do membro"
+                        className="h-full w-full object-cover object-top"
+                      />
+                    ) : (
+                      <div className="flex h-full w-full items-center justify-center text-5xl font-bold text-slate-400">
+                        {(selectedWorker.full_name || "M").charAt(0).toUpperCase()}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="space-y-3">
+                    <h3 className="text-2xl font-bold text-slate-900">{viewValue(selectedWorker.full_name)}</h3>
+                    <div className="flex flex-wrap gap-2">
+                      <Badge variant="outline" className="border-blue-200 bg-blue-50 text-blue-700">
+                        Cargo: {viewValue(selectedWorker.minister_role)}
+                      </Badge>
+                      <Badge
+                        variant="outline"
+                        className={selectedWorker.is_active === false ? "border-rose-200 bg-rose-50 text-rose-700" : "border-emerald-200 bg-emerald-50 text-emerald-700"}
+                      >
+                        Status: {selectedWorker.is_active === false ? "Inativo" : "Ativo"}
+                      </Badge>
+                    </div>
+                  </div>
+                </div>
+
+                <section className="space-y-3">
+                  <h4 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Identificação</h4>
+                  <div className="grid gap-3 md:grid-cols-2">
+                    <div>
+                      <p className="text-xs text-slate-500">CPF</p>
+                      <p className="text-base font-semibold text-slate-900">{selectedWorker.cpf ? maskCpf(selectedWorker.cpf) : "—"}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-slate-500">RG</p>
+                      <p className="text-base font-semibold text-slate-900">{viewValue(selectedWorker.rg)}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-slate-500">Data de nascimento</p>
+                      <p className="text-base font-semibold text-slate-900">{formatDateBr(selectedWorker.birth_date)}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-slate-500">Matrícula</p>
+                      <p className="text-base font-semibold text-slate-900">{viewValue(selectedWorker.matricula)}</p>
+                    </div>
+                  </div>
+                </section>
+
+                <section className="space-y-3">
+                  <h4 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Contato</h4>
+                  <div className="grid gap-3 md:grid-cols-2">
+                    <div>
+                      <p className="text-xs text-slate-500">Telefone</p>
+                      <p className="text-base font-semibold text-slate-900">{formatPhoneBr(selectedWorker.phone)}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-slate-500">E-mail</p>
+                      <p className="text-base font-semibold text-slate-900 break-all">{viewValue(selectedWorker.email)}</p>
+                    </div>
+                  </div>
+                </section>
+
+                <section className="space-y-3">
+                  <h4 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Endereço</h4>
+                  <div className="grid gap-3 md:grid-cols-2">
+                    <div>
+                      <p className="text-xs text-slate-500">CEP</p>
+                      <p className="text-base font-semibold text-slate-900">{viewValue(selectedWorker.cep)}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-slate-500">Rua</p>
+                      <p className="text-base font-semibold text-slate-900">{viewValue(selectedWorker.address_street)}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-slate-500">Número</p>
+                      <p className="text-base font-semibold text-slate-900">{viewValue(selectedWorker.address_number)}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-slate-500">Complemento</p>
+                      <p className="text-base font-semibold text-slate-900">{viewValue(selectedWorker.address_complement)}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-slate-500">Bairro</p>
+                      <p className="text-base font-semibold text-slate-900">{viewValue(selectedWorker.address_neighborhood)}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-slate-500">Cidade / UF</p>
+                      <p className="text-base font-semibold text-slate-900">{`${viewValue(selectedWorker.address_city)} / ${viewValue(selectedWorker.address_state)}`}</p>
+                    </div>
+                  </div>
+                </section>
+
+                <section className="space-y-3">
+                  <h4 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Ministério</h4>
+                  <div className="grid gap-3 md:grid-cols-2">
+                    <div>
+                      <p className="text-xs text-slate-500">Cargo ministerial</p>
+                      <p className="text-base font-semibold text-slate-900">{viewValue(selectedWorker.minister_role)}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-slate-500">Data de ordenação</p>
+                      <p className="text-base font-semibold text-slate-900">{formatDateBr(selectedWorker.ordination_date)}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-slate-500">Data de batismo</p>
+                      <p className="text-base font-semibold text-slate-900">{formatDateBr(selectedWorker.baptism_date)}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-slate-500">Status do cadastro</p>
+                      <p className="text-base font-semibold text-slate-900">{viewValue(selectedWorker.registration_status)}</p>
+                    </div>
+                  </div>
+                </section>
+              </CardContent>
+            </Card>
           ) : null}
         </DialogContent>
       </Dialog>

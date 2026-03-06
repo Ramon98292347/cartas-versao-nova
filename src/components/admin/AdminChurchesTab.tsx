@@ -4,7 +4,7 @@ import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -77,6 +77,19 @@ function normalizeChurchClass(value: string | null | undefined): ChurchClass | n
   return null;
 }
 
+function viewValue(value: unknown) {
+  const safe = String(value || "").trim();
+  return safe || "\u2014";
+}
+
+function formatPhoneBr(value: unknown) {
+  const digits = String(value || "").replace(/\D/g, "");
+  if (!digits) return "\u2014";
+  if (digits.length === 11) return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7)}`;
+  if (digits.length === 10) return `(${digits.slice(0, 2)}) ${digits.slice(2, 6)}-${digits.slice(6)}`;
+  return String(value || "\u2014");
+}
+
 function getChurchImage(church: ChurchInScopeItem): string | null {
   const maybe = church as ChurchInScopeItem & {
     image_url?: string | null;
@@ -139,6 +152,7 @@ export function AdminChurchesTab({
   const [editingChurch, setEditingChurch] = useState<ChurchInScopeItem | null>(null);
   const [editForm, setEditForm] = useState<NewChurchForm>(initialForm);
   const [savingEdit, setSavingEdit] = useState(false);
+  const [viewChurch, setViewChurch] = useState<ChurchInScopeItem | null>(null);
   const [newCepLoading, setNewCepLoading] = useState(false);
   const [editCepLoading, setEditCepLoading] = useState(false);
   const [lastNewCep, setLastNewCep] = useState("");
@@ -337,6 +351,10 @@ export function AdminChurchesTab({
     });
   }
 
+  function openViewModal(church: ChurchInScopeItem) {
+    setViewChurch(church);
+  }
+
   async function onSaveEdit(e: FormEvent) {
     e.preventDefault();
     if (!editingChurch) return;
@@ -487,7 +505,7 @@ export function AdminChurchesTab({
                         </Badge>
                       </span>
                       <div className="flex flex-wrap gap-2">
-                        <Button size="sm" variant="outline" onClick={() => openEditModal(church)}>
+                        <Button size="sm" variant="outline" onClick={() => openViewModal(church)}>
                           Ver
                         </Button>
                         {renderActionMenu(church)}
@@ -512,7 +530,7 @@ export function AdminChurchesTab({
                         {church.is_active === false ? "Inativa" : "Ativa"}
                       </Badge>
                       <div className="grid grid-cols-2 gap-2">
-                        <Button size="sm" variant="outline" onClick={() => openEditModal(church)}>
+                        <Button size="sm" variant="outline" onClick={() => openViewModal(church)}>
                           Ver
                         </Button>
                         {renderActionMenu(church)}
@@ -541,7 +559,7 @@ export function AdminChurchesTab({
                       </Badge>
                     </div>
                     <div className="flex flex-wrap gap-2">
-                      <Button size="sm" variant="outline" onClick={() => openEditModal(church)}>
+                      <Button size="sm" variant="outline" onClick={() => openViewModal(church)}>
                         Ver
                       </Button>
                       {renderActionMenu(church)}
@@ -833,6 +851,171 @@ export function AdminChurchesTab({
               <Button type="submit" disabled={savingEdit}>{savingEdit ? "Salvando..." : "Salvar"}</Button>
             </div>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={Boolean(viewChurch)} onOpenChange={(open) => !open && setViewChurch(null)}>
+        <DialogContent className="max-h-[88vh] max-w-5xl overflow-y-auto">
+          <DialogHeader>
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <DialogTitle>Dados da igreja</DialogTitle>
+                <DialogDescription>Resumo completo da igreja selecionada.</DialogDescription>
+              </div>
+              {viewChurch ? (
+                <div className="flex items-center gap-2">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      openEditModal(viewChurch);
+                      setViewChurch(null);
+                    }}
+                  >
+                    Editar
+                  </Button>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button size="sm" variant="outline">Acoes</Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem onClick={() => {
+                        openPastorModal(viewChurch);
+                        setViewChurch(null);
+                      }}>
+                        {pastorActionLabel(viewChurch)}
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => openChurchDocs(viewChurch, "remanejamento")}>Remanejamento</DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => openChurchDocs(viewChurch, "contrato")}>Contrato</DropdownMenuItem>
+                      <DropdownMenuItem className="text-rose-600 focus:text-rose-700" onClick={() => {
+                        onDeleteChurch(viewChurch);
+                        setViewChurch(null);
+                      }}>
+                        Desativar
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
+              ) : null}
+            </div>
+          </DialogHeader>
+
+          {viewChurch ? (
+            <Card className="border border-slate-200 shadow-sm">
+              <CardContent className="space-y-6 p-5">
+                <div className="flex flex-col gap-4 md:flex-row md:items-center">
+                  <div className="h-36 w-36 shrink-0 overflow-hidden rounded-2xl border border-slate-200 bg-slate-100">
+                    {getChurchImage(viewChurch) ? (
+                      <img
+                        src={getChurchImage(viewChurch) || ""}
+                        alt={`Foto da igreja ${viewChurch.church_name}`}
+                        className="h-full w-full object-cover"
+                      />
+                    ) : (
+                      <div className="flex h-full w-full items-center justify-center">
+                        <Church className="h-16 w-16 text-slate-400" />
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="space-y-3">
+                    <h3 className="text-2xl font-bold text-slate-900">{viewValue(viewChurch.church_name)}</h3>
+                    <div className="flex flex-wrap gap-2">
+                      <Badge variant="outline" className="border-blue-200 bg-blue-50 text-blue-700 capitalize">
+                        Classe: {viewValue(viewChurch.church_class)}
+                      </Badge>
+                      <Badge
+                        variant="outline"
+                        className={viewChurch.is_active === false ? "border-rose-200 bg-rose-50 text-rose-700" : "border-emerald-200 bg-emerald-50 text-emerald-700"}
+                      >
+                        Status: {viewChurch.is_active === false ? "Inativa" : "Ativa"}
+                      </Badge>
+                    </div>
+                  </div>
+                </div>
+
+                <section className="space-y-3">
+                  <h4 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Identificacao</h4>
+                  <div className="grid gap-3 md:grid-cols-2">
+                    <div>
+                      <p className="text-xs text-slate-500">TOTVS</p>
+                      <p className="text-base font-semibold text-slate-900">{viewValue(viewChurch.totvs_id)}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-slate-500">Igreja mae</p>
+                      <p className="text-base font-semibold text-slate-900">{viewValue(viewChurch.parent_totvs_id)}</p>
+                    </div>
+                  </div>
+                </section>
+
+                <section className="space-y-3">
+                  <h4 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Contato</h4>
+                  <div className="grid gap-3 md:grid-cols-2">
+                    <div>
+                      <p className="text-xs text-slate-500">Pastor responsavel</p>
+                      <p className="text-base font-semibold text-slate-900">{viewValue(viewChurch.pastor?.full_name)}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-slate-500">Obreiros cadastrados</p>
+                      <p className="text-base font-semibold text-slate-900">{viewValue(viewChurch.workers_count)}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-slate-500">E-mail</p>
+                      <p className="text-base font-semibold text-slate-900 break-all">{viewValue(viewChurch.contact_email)}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-slate-500">Telefone</p>
+                      <p className="text-base font-semibold text-slate-900">{formatPhoneBr(viewChurch.contact_phone)}</p>
+                    </div>
+                  </div>
+                </section>
+
+                <section className="space-y-3">
+                  <h4 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Endereco</h4>
+                  <div className="grid gap-3 md:grid-cols-2">
+                    <div>
+                      <p className="text-xs text-slate-500">CEP</p>
+                      <p className="text-base font-semibold text-slate-900">{viewValue(viewChurch.cep)}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-slate-500">Rua</p>
+                      <p className="text-base font-semibold text-slate-900">{viewValue(viewChurch.address_street)}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-slate-500">Numero</p>
+                      <p className="text-base font-semibold text-slate-900">{viewValue(viewChurch.address_number)}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-slate-500">Complemento</p>
+                      <p className="text-base font-semibold text-slate-900">{viewValue(viewChurch.address_complement)}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-slate-500">Bairro</p>
+                      <p className="text-base font-semibold text-slate-900">{viewValue(viewChurch.address_neighborhood)}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-slate-500">Cidade / UF</p>
+                      <p className="text-base font-semibold text-slate-900">{`${viewValue(viewChurch.address_city)} / ${viewValue(viewChurch.address_state)}`}</p>
+                    </div>
+                  </div>
+                </section>
+
+                <section className="space-y-3">
+                  <h4 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Ministerio</h4>
+                  <div className="grid gap-3 md:grid-cols-2">
+                    <div>
+                      <p className="text-xs text-slate-500">Tipo de igreja</p>
+                      <p className="text-base font-semibold text-slate-900 capitalize">{viewValue(viewChurch.church_class)}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-slate-500">Pais</p>
+                      <p className="text-base font-semibold text-slate-900">{viewValue(viewChurch.address_country)}</p>
+                    </div>
+                  </div>
+                </section>
+              </CardContent>
+            </Card>
+          ) : null}
         </DialogContent>
       </Dialog>
 
