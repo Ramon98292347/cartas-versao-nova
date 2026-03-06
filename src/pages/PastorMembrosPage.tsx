@@ -14,6 +14,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { listChurchesInScope, listMembers, type UserListItem, generateMemberDocs } from "@/services/saasService";
 import { useUser } from "@/context/UserContext";
 import { fetchAddressByCep, maskCep, onlyDigits } from "@/lib/cep";
+import { PageLoading } from "@/components/shared/PageLoading";
 
 type MemberTab = "lista" | "ficha_membro" | "carteirinha" | "ficha_obreiro";
 type MemberView = "lista" | "grid";
@@ -564,17 +565,23 @@ export default function PastorMembrosPage() {
   const carteirinhaHtml = useMemo(() => buildCarteirinhaHtml(form), [form]);
   const fichaMembroHtml = useMemo(() => buildFichaMembroHtml(form), [form]);
 
-  const { data } = useQuery({
+  const { data, isLoading: loadingMembers, isFetching: fetchingMembers } = useQuery({
     queryKey: ["pastor-members-page"],
     queryFn: () => listMembers({ page: 1, page_size: 400, roles: ["pastor", "obreiro"] }),
   });
 
   const workers = data?.workers || [];
-  const { data: churchesInScope = [] } = useQuery({
+  const { data: churchesInScope = [], isLoading: loadingChurches, isFetching: fetchingChurches } = useQuery({
     queryKey: ["pastor-members-churches-footer", activeTotvsId],
     queryFn: () => listChurchesInScope(1, 400),
     enabled: Boolean(activeTotvsId),
   });
+
+  const showPageLoading =
+    loadingMembers ||
+    (fetchingMembers && workers.length === 0) ||
+    (activeTotvsId && loadingChurches) ||
+    (fetchingChurches && churchesInScope.length === 0 && Boolean(activeTotvsId));
   const activeChurch = useMemo(
     () => churchesInScope.find((church) => String(church.totvs_id || "") === activeTotvsId) || null,
     [churchesInScope, activeTotvsId],
@@ -724,6 +731,10 @@ export default function PastorMembrosPage() {
 
   return (
     <ManagementShell roleMode="pastor">
+      {showPageLoading ? (
+        <PageLoading title="Carregando membros" description="Buscando lista, indicadores e documentos..." />
+      ) : (
+        <>
       <div className="mb-4">
         <h2 className="text-4xl font-extrabold tracking-tight text-slate-900">Membros</h2>
         <p className="mt-1 text-base text-slate-600">Gestao de membros com visualizacao, filtros e documentos.</p>
@@ -1148,6 +1159,8 @@ export default function PastorMembrosPage() {
           </CardContent>
         </Card>
       ) : null}
+        </>
+      )}
     </ManagementShell>
   );
 }

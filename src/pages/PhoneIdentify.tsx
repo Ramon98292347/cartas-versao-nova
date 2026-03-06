@@ -2,7 +2,7 @@
 import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Eye, EyeOff, KeyRound, UserPlus } from "lucide-react";
+import { Eye, EyeOff, KeyRound, Loader2, UserPlus } from "lucide-react";
 
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -15,6 +15,7 @@ import {
   getMyRegistrationStatus,
   listAnnouncementsPublicByScope,
   listAnnouncementsPublicByTotvs,
+  listBirthdaysToday,
   listBirthdaysTodayPublicByScope,
   listBirthdaysTodayPublicByTotvs,
   loginWithCpfPassword,
@@ -44,6 +45,7 @@ export default function PhoneIdentify() {
   const [senha, setSenha] = useState("");
   const [showSenha, setShowSenha] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [openingCadastro, setOpeningCadastro] = useState(false);
 
   const [forgotOpen, setForgotOpen] = useState(false);
   const [forgotLoading, setForgotLoading] = useState(false);
@@ -162,6 +164,20 @@ export default function PhoneIdentify() {
         toast.message("Cadastro pendente. Cartas e documentos ficam bloqueados ate liberacao.");
       }
 
+      try {
+        const birthdaysToday = await listBirthdaysToday(30);
+        const currentUserBirthday = birthdaysToday.find((b) => String(b.id || "") === String(result.user.id));
+
+        if (currentUserBirthday) {
+          toast.success(`Parabens, ${currentUserBirthday.full_name}! Deus abencoe seu dia.`);
+        } else if (birthdaysToday.length > 0) {
+          const names = birthdaysToday.slice(0, 3).map((b) => b.full_name).join(", ");
+          toast.message(`Aniversariantes de hoje: ${names}${birthdaysToday.length > 3 ? "..." : ""}`);
+        }
+      } catch {
+        // Comentario: erro de aniversariantes nao bloqueia o login.
+      }
+
       nav(routeByRole(result.user.role));
     } catch (err) {
       toast.error(getFriendlyError(err, "auth"));
@@ -193,6 +209,11 @@ export default function PhoneIdentify() {
     } finally {
       setForgotLoading(false);
     }
+  }
+
+  function openCadastroRapido() {
+    setOpeningCadastro(true);
+    nav("/cadastro");
   }
 
   return (
@@ -243,7 +264,14 @@ export default function PhoneIdentify() {
           </div>
 
           <Button type="submit" className="w-full" disabled={loading}>
-            {loading ? "Entrando..." : "Entrar"}
+            {loading ? (
+              <span className="inline-flex items-center gap-2">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Entrando...
+              </span>
+            ) : (
+              "Entrar"
+            )}
           </Button>
 
           <div className="grid gap-2 sm:grid-cols-2">
@@ -268,14 +296,22 @@ export default function PhoneIdentify() {
                     <Input value={forgotEmail} onChange={(e) => setForgotEmail(e.target.value)} placeholder="email@exemplo.com" />
                   </div>
                   <Button type="button" className="w-full" onClick={handleForgotPassword} disabled={forgotLoading}>
-                    {forgotLoading ? "Enviando..." : "Enviar solicitacao"}
+                    {forgotLoading ? (
+                      <span className="inline-flex items-center gap-2">
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        Enviando...
+                      </span>
+                    ) : (
+                      "Enviar solicitacao"
+                    )}
                   </Button>
                 </div>
               </DialogContent>
             </Dialog>
 
-            <Button type="button" variant="outline" onClick={() => nav("/cadastro")}>
-              <UserPlus className="mr-2 h-4 w-4" /> Cadastro rapido
+            <Button type="button" variant="outline" onClick={openCadastroRapido} disabled={openingCadastro}>
+              {openingCadastro ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <UserPlus className="mr-2 h-4 w-4" />}
+              {openingCadastro ? "Abrindo..." : "Cadastro rapido"}
             </Button>
           </div>
         </form>

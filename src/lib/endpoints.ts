@@ -9,6 +9,9 @@ export const api = {
   publicRegisterMember: (body: {
     cpf: string;
     full_name: string;
+    minister_role: string;
+    baptism_date?: string | null;
+    ordination_date?: string | null;
     phone?: string | null;
     email?: string | null;
     avatar_url?: string | null;

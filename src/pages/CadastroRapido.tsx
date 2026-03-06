@@ -34,6 +34,22 @@ function normalizeSearch(value: string) {
     .trim();
 }
 
+function normalizeChurchClass(value: unknown) {
+  return normalizeSearch(String(value || ""));
+}
+
+function isEstadualOrSetorial(church: { classificacao?: string | null }) {
+  const cls = normalizeChurchClass(church.classificacao);
+  return cls === "estadual" || cls === "setorial";
+}
+
+function churchClassLabel(church: { classificacao?: string | null }) {
+  const cls = normalizeChurchClass(church.classificacao);
+  if (cls === "estadual") return "Estadual";
+  if (cls === "setorial") return "Setorial";
+  return "—";
+}
+
 export default function CadastroRapido() {
   const nav = useNavigate();
   const [loading, setLoading] = useState(false);
@@ -42,6 +58,9 @@ export default function CadastroRapido() {
   const [telefone, setTelefone] = useState("");
   const [email, setEmail] = useState("");
   const [totvs, setTotvs] = useState("");
+  const [ministerRole, setMinisterRole] = useState("Membro");
+  const [baptismDate, setBaptismDate] = useState("");
+  const [ordinationDate, setOrdinationDate] = useState("");
   const [senha, setSenha] = useState("");
   const [confirmarSenha, setConfirmarSenha] = useState("");
   const [showSenha, setShowSenha] = useState(false);
@@ -103,15 +122,16 @@ export default function CadastroRapido() {
     }
 
     const textoNumerico = texto.replace(/\D/g, "");
-    const exataPorTotvs = churches.find((c) => String(c.codigoTotvs) === textoNumerico);
+    const churchesPermitidas = churches.filter((c) => isEstadualOrSetorial(c));
+    const exataPorTotvs = churchesPermitidas.find((c) => String(c.codigoTotvs) === textoNumerico);
     if (exataPorTotvs) {
       setTotvs(exataPorTotvs.codigoTotvs);
-      setIgrejaEncontradaNome(exataPorTotvs.nome);
+      setIgrejaEncontradaNome(`${exataPorTotvs.nome} (${churchClassLabel(exataPorTotvs)})`);
       toast.success("Igreja encontrada.");
       return;
     }
 
-    const porNomeOuPrefixo = churches.find((c) => {
+    const porNomeOuPrefixo = churchesPermitidas.find((c) => {
       const nomeNormalizado = normalizeSearch(c.nome);
       const totvsTexto = String(c.codigoTotvs || "");
       return nomeNormalizado.includes(texto) || totvsTexto.startsWith(textoNumerico);
@@ -119,14 +139,14 @@ export default function CadastroRapido() {
 
     if (porNomeOuPrefixo) {
       setTotvs(porNomeOuPrefixo.codigoTotvs);
-      setIgrejaEncontradaNome(porNomeOuPrefixo.nome);
+      setIgrejaEncontradaNome(`${porNomeOuPrefixo.nome} (${churchClassLabel(porNomeOuPrefixo)})`);
       toast.success("Igreja encontrada.");
       return;
     }
 
     setTotvs("");
     setIgrejaEncontradaNome("");
-    toast.error("Igreja nao encontrada. Verifique o nome ou TOTVS.");
+    toast.error("Igreja nao encontrada. Use apenas igrejas Estadual ou Setorial.");
   }
 
   async function buscarCepAutomatico(force = false) {
@@ -171,6 +191,10 @@ export default function CadastroRapido() {
       toast.error("Informe o TOTVS da igreja.");
       return;
     }
+    if (!ministerRole.trim()) {
+      toast.error("Selecione o cargo ministerial.");
+      return;
+    }
     if (senha.length < 6) {
       toast.error("A senha precisa ter pelo menos 6 caracteres.");
       return;
@@ -190,6 +214,9 @@ export default function CadastroRapido() {
       await publicRegisterMember({
         cpf: cpfRaw,
         full_name: nome,
+        minister_role: ministerRole,
+        baptism_date: baptismDate || null,
+        ordination_date: ordinationDate || null,
         phone: telefone || null,
         email: email || null,
         avatar_url: avatarUrl,
@@ -281,6 +308,32 @@ export default function CadastroRapido() {
               </div>
 
               <div className="space-y-2">
+                <Label>Cargo ministerial</Label>
+                <select
+                  value={ministerRole}
+                  onChange={(e) => setMinisterRole(e.target.value)}
+                  className="h-10 w-full rounded-md border border-slate-300 bg-white px-3 text-sm"
+                >
+                  <option value="Membro">Membro</option>
+                  <option value="Obreiro">Obreiro/Cooperador</option>
+                  <option value="Diacono">Diacono</option>
+                  <option value="Presbitero">Presbitero</option>
+                  <option value="Pastor">Pastor</option>
+                </select>
+                <p className="text-xs text-slate-500">Cadastro rapido cria usuario com role obreiro; este campo define apenas o cargo ministerial.</p>
+              </div>
+
+              <div className="space-y-2">
+                <Label>Data de batismo</Label>
+                <Input type="date" value={baptismDate} onChange={(e) => setBaptismDate(e.target.value)} />
+              </div>
+
+              <div className="space-y-2">
+                <Label>Data de ordenacao</Label>
+                <Input type="date" value={ordinationDate} onChange={(e) => setOrdinationDate(e.target.value)} />
+              </div>
+
+              <div className="space-y-2">
                 <Label>CEP</Label>
                 <Input
                   value={maskCep(cep)}
@@ -322,7 +375,7 @@ export default function CadastroRapido() {
               </div>
 
               <div className="space-y-2 md:col-span-2">
-                <Label>Buscar igreja por nome ou TOTVS</Label>
+                <Label>Buscar igreja Estadual ou Setorial, por nome ou TOTVS</Label>
                 <div className="flex gap-2">
                   <Input
                     value={filtroIgreja}
@@ -353,6 +406,7 @@ export default function CadastroRapido() {
                   placeholder="Digite ou selecione abaixo"
                 />
                 <p className="text-xs text-slate-500">Campo preenchido automaticamente pela busca.</p>
+                <p className="text-xs text-slate-500">Somente igrejas Estadual ou Setorial podem ser selecionadas aqui.</p>
               </div>
 
               <div className="space-y-2">

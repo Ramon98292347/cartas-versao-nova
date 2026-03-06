@@ -29,6 +29,20 @@ function normalizePhone(value: string | null | undefined) {
   return phone || null;
 }
 
+function normalizeMinisterRole(value: string | null | undefined) {
+  const raw = String(value || "").trim().toLowerCase();
+  const map: Record<string, string> = {
+    membro: "Membro",
+    obreiro: "Obreiro",
+    diacono: "Diacono",
+    presbitero: "Presbitero",
+    pastor: "Pastor",
+    cooperador: "Cooperador",
+    voluntario: "Voluntario",
+  };
+  return map[raw] || null;
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders() });
   if (req.method !== "POST") return json({ ok: false, error: "method_not_allowed" }, 405);
@@ -37,6 +51,9 @@ Deno.serve(async (req) => {
     const body = await req.json().catch(() => ({})) as {
       cpf?: string;
       full_name?: string;
+      minister_role?: string | null;
+      baptism_date?: string | null;
+      ordination_date?: string | null;
       phone?: string | null;
       email?: string | null;
       avatar_url?: string | null;
@@ -53,6 +70,9 @@ Deno.serve(async (req) => {
 
     const cpf = onlyDigits(body.cpf || "");
     const fullName = String(body.full_name || "").trim();
+    const ministerRole = normalizeMinisterRole(body.minister_role);
+    const baptismDate = String(body.baptism_date || "").trim() || null;
+    const ordinationDate = String(body.ordination_date || "").trim() || null;
     const password = String(body.password || "");
     const totvsId = String(body.totvs_id || "").trim();
     const phone = normalizePhone(body.phone);
@@ -68,6 +88,7 @@ Deno.serve(async (req) => {
 
     if (cpf.length !== 11) return json({ ok: false, error: "invalid_cpf" }, 400);
     if (!fullName) return json({ ok: false, error: "missing_full_name" }, 400);
+    if (!ministerRole) return json({ ok: false, error: "missing_minister_role" }, 400);
     if (!totvsId) return json({ ok: false, error: "missing_totvs_id" }, 400);
     if (password.length < 6) return json({ ok: false, error: "password_too_short", detail: "A senha deve ter ao menos 6 caracteres." }, 400);
 
@@ -123,7 +144,9 @@ Deno.serve(async (req) => {
         cpf,
         full_name: fullName,
         role: "obreiro",
-        minister_role: "Membro",
+        minister_role: ministerRole,
+        baptism_date: baptismDate,
+        ordination_date: ordinationDate,
         phone,
         email,
         avatar_url: avatarUrl,

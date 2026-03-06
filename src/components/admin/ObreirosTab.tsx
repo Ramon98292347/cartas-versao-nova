@@ -709,7 +709,7 @@ export function ObreirosTab({ activeTotvsId }: { activeTotvsId: string }) {
                 <DialogDescription>Visualização completa do cadastro do membro selecionado.</DialogDescription>
               </div>
               {selectedWorker ? (
-                <div className="flex items-center gap-2">
+                <div className="mr-10 flex items-center gap-2 md:mr-12">
                   <Button size="sm" variant="outline" onClick={() => openEdit(selectedWorker)}>Editar</Button>
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>

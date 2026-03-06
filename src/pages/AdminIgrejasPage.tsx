@@ -6,6 +6,7 @@ import { AdminChurchesTab } from "@/components/admin/AdminChurchesTab";
 import { listChurchesInScope } from "@/services/saasService";
 import { Card, CardContent } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { PageLoading } from "@/components/shared/PageLoading";
 
 function IgrejaStat({
   title,
@@ -42,10 +43,12 @@ export default function AdminIgrejasPage() {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
 
-  const { data: allRows = [] } = useQuery({
+  const { data: allRows = [], isLoading, isFetching } = useQuery({
     queryKey: ["admin-igrejas-page-all"],
     queryFn: () => listChurchesInScope(1, 1000),
   });
+
+  const showPageLoading = isLoading || (isFetching && allRows.length === 0);
 
   const filteredRows = useMemo(() => {
     if (filterTotvs === "all") return allRows;
@@ -99,7 +102,10 @@ export default function AdminIgrejasPage() {
 
   return (
     <ManagementShell roleMode="admin">
-      <div className="space-y-5 bg-[#F6F8FC] p-1">
+      {showPageLoading ? (
+        <PageLoading title="Carregando igrejas" description="Buscando dados das igrejas do seu escopo..." />
+      ) : (
+        <div className="space-y-5 bg-[#F6F8FC] p-1">
         <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
           <h2 className="text-4xl font-extrabold tracking-tight text-slate-900">Igrejas</h2>
           <p className="mt-1 text-base text-slate-600">Administre as igrejas do sistema</p>
@@ -146,7 +152,8 @@ export default function AdminIgrejasPage() {
             setPage(1);
           }}
         />
-      </div>
+        </div>
+      )}
     </ManagementShell>
   );
 }

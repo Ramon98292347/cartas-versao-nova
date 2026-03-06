@@ -331,7 +331,11 @@ export type AnnouncementItem = {
 };
 
 export type BirthdayItem = {
+  id?: string;
   full_name: string;
+  phone?: string | null;
+  email?: string | null;
+  birth_date?: string | null;
   avatar_url?: string | null;
 };
 
@@ -1125,7 +1129,11 @@ export async function listBirthdaysToday(limit = 10): Promise<BirthdayItem[]> {
     return rows
       .slice(0, limit)
       .map((item: Record<string, unknown>) => ({
+        id: String(item?.id || ""),
         full_name: String(item?.full_name || ""),
+        phone: item?.phone ? String(item.phone) : null,
+        email: item?.email ? String(item.email) : null,
+        birth_date: item?.birth_date ? String(item.birth_date) : null,
         avatar_url: item?.avatar_url || null,
       }))
       .filter((item: BirthdayItem) => item.full_name);
@@ -1142,7 +1150,11 @@ export async function listBirthdaysToday(limit = 10): Promise<BirthdayItem[]> {
   })
     .slice(0, limit)
     .map((u) => ({
+      id: String(u.id || ""),
       full_name: u.full_name,
+      phone: u.phone || null,
+      email: u.email || null,
+      birth_date: u.birth_date || null,
       avatar_url: u.avatar_url || null,
     }));
 }
@@ -1219,14 +1231,63 @@ export async function listAnnouncementsPublicByScope(totvsIds: string[], limit =
     }));
 }
 
+function getTodayMonthDaySaoPaulo() {
+  const parts = new Intl.DateTimeFormat("pt-BR", {
+    timeZone: "America/Sao_Paulo",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(new Date());
+  const mm = parts.find((p) => p.type === "month")?.value || "01";
+  const dd = parts.find((p) => p.type === "day")?.value || "01";
+  return `${mm}-${dd}`;
+}
+
+function birthDateToMonthDay(value: string) {
+  const match = String(value || "").match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return "";
+  return `${match[2]}-${match[3]}`;
+}
+
+async function notifyBirthdayWebhookOnce(payload: {
+  church_totvs_id: string;
+  scope_totvs_ids?: string[];
+  birthdays: BirthdayItem[];
+}) {
+  if (payload.birthdays.length === 0) return;
+
+  const dateKey = new Intl.DateTimeFormat("sv-SE", { timeZone: "America/Sao_Paulo" }).format(new Date());
+  const scopeKey = payload.scope_totvs_ids?.length ? payload.scope_totvs_ids.join(",") : payload.church_totvs_id;
+  const dedupKey = `ipda_birthdays_webhook_${dateKey}_${scopeKey}`;
+
+  if (typeof window !== "undefined" && localStorage.getItem(dedupKey) === "1") return;
+
+  try {
+    await fetch("https://n8n-n8n.ynlng8.easypanel.host/webhook/senha", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action: "birthdays_today",
+        date: dateKey,
+        church_totvs_id: payload.church_totvs_id,
+        scope_totvs_ids: payload.scope_totvs_ids || [payload.church_totvs_id],
+        birthdays: payload.birthdays,
+      }),
+    });
+
+    if (typeof window !== "undefined") localStorage.setItem(dedupKey, "1");
+  } catch {
+    // Comentario: falha no webhook nao pode bloquear o login.
+  }
+}
+
 export async function listBirthdaysTodayPublicByTotvs(churchTotvsId: string, limit = 10): Promise<BirthdayItem[]> {
   const totvs = String(churchTotvsId || "").trim();
   if (!totvs || !supabase) return [];
 
   const { data, error } = await supabase
     .from("users")
-    .select("full_name,avatar_url,birth_date")
-    .eq("role", "obreiro")
+    .select("id,full_name,phone,email,avatar_url,birth_date")
     .eq("default_totvs_id", totvs)
     .eq("is_active", true)
     .not("birth_date", "is", null)
@@ -1234,22 +1295,26 @@ export async function listBirthdaysTodayPublicByTotvs(churchTotvsId: string, lim
 
   if (error) return [];
 
-  const today = new Date();
-  const m = today.getMonth() + 1;
-  const d = today.getDate();
+  const todayMD = getTodayMonthDaySaoPaulo();
 
-  return (data || [])
+  const birthdays = (data || [])
     .filter((u: Record<string, unknown>) => {
       if (!u?.birth_date) return false;
-      const dt = new Date(String(u.birth_date));
-      return dt.getMonth() + 1 === m && dt.getDate() === d;
+      return birthDateToMonthDay(String(u.birth_date)) === todayMD;
     })
     .slice(0, Math.max(1, Math.min(10, limit)))
     .map((u: Record<string, unknown>) => ({
+      id: String(u?.id || ""),
       full_name: String(u?.full_name || ""),
+      phone: u?.phone ? String(u.phone) : null,
+      email: u?.email ? String(u.email) : null,
+      birth_date: u?.birth_date ? String(u.birth_date) : null,
       avatar_url: u?.avatar_url || null,
     }))
     .filter((x: BirthdayItem) => x.full_name);
+
+  await notifyBirthdayWebhookOnce({ church_totvs_id: totvs, birthdays });
+  return birthdays;
 }
 
 export async function listBirthdaysTodayPublicByScope(totvsIds: string[], limit = 10): Promise<BirthdayItem[]> {
@@ -1258,8 +1323,7 @@ export async function listBirthdaysTodayPublicByScope(totvsIds: string[], limit 
 
   const { data, error } = await supabase
     .from("users")
-    .select("full_name,avatar_url,birth_date")
-    .eq("role", "obreiro")
+    .select("id,full_name,phone,email,avatar_url,birth_date")
     .in("default_totvs_id", scope)
     .eq("is_active", true)
     .not("birth_date", "is", null)
@@ -1267,22 +1331,26 @@ export async function listBirthdaysTodayPublicByScope(totvsIds: string[], limit 
 
   if (error) return [];
 
-  const today = new Date();
-  const m = today.getMonth() + 1;
-  const d = today.getDate();
+  const todayMD = getTodayMonthDaySaoPaulo();
 
-  return (data || [])
+  const birthdays = (data || [])
     .filter((u: Record<string, unknown>) => {
       if (!u?.birth_date) return false;
-      const dt = new Date(String(u.birth_date));
-      return dt.getMonth() + 1 === m && dt.getDate() === d;
+      return birthDateToMonthDay(String(u.birth_date)) === todayMD;
     })
     .slice(0, Math.max(1, Math.min(30, limit)))
     .map((u: Record<string, unknown>) => ({
+      id: String(u?.id || ""),
       full_name: String(u?.full_name || ""),
+      phone: u?.phone ? String(u.phone) : null,
+      email: u?.email ? String(u.email) : null,
+      birth_date: u?.birth_date ? String(u.birth_date) : null,
       avatar_url: u?.avatar_url || null,
     }))
     .filter((x: BirthdayItem) => x.full_name);
+
+  await notifyBirthdayWebhookOnce({ church_totvs_id: scope[0], scope_totvs_ids: scope, birthdays });
+  return birthdays;
 }
 
 export async function getPastorByTotvsPublic(churchTotvsId: string): Promise<PastorContact | null> {
@@ -1317,6 +1385,9 @@ export async function forgotPasswordRequest(payload: { cpf?: string; email?: str
 export async function publicRegisterMember(payload: {
   cpf: string;
   full_name: string;
+  minister_role: string;
+  baptism_date?: string | null;
+  ordination_date?: string | null;
   phone?: string | null;
   email?: string | null;
   avatar_url?: string | null;
@@ -1333,12 +1404,16 @@ export async function publicRegisterMember(payload: {
   const cpf = normalizeCpf(payload.cpf);
   if (cpf.length !== 11) throw new Error("cpf-invalid");
   if (!payload.full_name.trim()) throw new Error("name-required");
+  if (!payload.minister_role.trim()) throw new Error("minister-role-required");
   if (!payload.totvs_id.trim()) throw new Error("totvs-required");
   if (String(payload.password || "").length < 6) throw new Error("password-too-short");
 
   return await api.publicRegisterMember({
     cpf,
     full_name: payload.full_name.trim(),
+    minister_role: payload.minister_role.trim(),
+    baptism_date: payload.baptism_date || null,
+    ordination_date: payload.ordination_date || null,
     phone: payload.phone || null,
     email: payload.email || null,
     avatar_url: payload.avatar_url || null,

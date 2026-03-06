@@ -1,6 +1,6 @@
 import { useEffect, useState, type ComponentType, type ReactNode } from "react";
-import { NavLink, useNavigate } from "react-router-dom";
-import { Building2, Bell, Church, Download, FileText, LogOut, Megaphone, Menu, Settings, Users } from "lucide-react";
+import { NavLink, useLocation, useNavigate } from "react-router-dom";
+import { Building2, Bell, Church, Download, FileText, Loader2, LogOut, Megaphone, Menu, Settings, Users } from "lucide-react";
 import { useUser } from "@/context/UserContext";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -40,7 +40,7 @@ const obreiroMenu: MenuItem[] = [
 ];
 
 // Comentario: item de menu com estilo SaaS corporativo (pill azul suave + underline no ativo).
-function MenuNavLink({ item, onClick }: { item: MenuItem; onClick?: () => void }) {
+function MenuNavLink({ item, onClick, loading }: { item: MenuItem; onClick?: () => void; loading?: boolean }) {
   const Icon = item.icon;
   return (
     <NavLink
@@ -56,8 +56,12 @@ function MenuNavLink({ item, onClick }: { item: MenuItem; onClick?: () => void }
     >
       {({ isActive }) => (
         <>
-          <Icon className={`h-4 w-4 ${isActive ? "text-blue-700" : "text-slate-500 group-hover:text-blue-600"}`} />
-          <span>{item.label}</span>
+          {loading ? (
+            <Loader2 className="h-4 w-4 animate-spin text-blue-700" />
+          ) : (
+            <Icon className={`h-4 w-4 ${isActive ? "text-blue-700" : "text-slate-500 group-hover:text-blue-600"}`} />
+          )}
+          <span>{loading ? `${item.label}...` : item.label}</span>
           <span className={`absolute inset-x-3 -bottom-1 h-0.5 rounded-full ${isActive ? "bg-blue-600" : "bg-transparent"}`} />
         </>
       )}
@@ -74,11 +78,13 @@ export function ManagementShell({
   children: ReactNode;
 }) {
   const nav = useNavigate();
+  const location = useLocation();
   const { usuario, clearAuth } = useUser();
   const menu = roleMode === "admin" ? adminMenu : roleMode === "pastor" ? pastorMenu : obreiroMenu;
   const [mobileOpen, setMobileOpen] = useState(false);
   const [openNotifications, setOpenNotifications] = useState(false);
   const [openInstallPrompt, setOpenInstallPrompt] = useState(false);
+  const [pendingRoute, setPendingRoute] = useState<string | null>(null);
   const { canInstall, install, isInstalled } = usePwaInstall();
   const queryClient = useQueryClient();
 
@@ -99,6 +105,17 @@ export function ManagementShell({
       localStorage.setItem(key, "1");
     }
   }, [canInstall, isInstalled, usuario?.id]);
+
+  useEffect(() => {
+    if (!pendingRoute) return;
+    const timer = setTimeout(() => setPendingRoute(null), 350);
+    return () => clearTimeout(timer);
+  }, [location.pathname, pendingRoute]);
+
+  function navigateWithLoading(to: string) {
+    setPendingRoute(to);
+    nav(to);
+  }
 
   function onLogout() {
     clearAuth();
@@ -132,7 +149,12 @@ export function ManagementShell({
           <div className="hidden flex-1 px-4 lg:block">
             <nav className="flex items-center justify-center gap-3 overflow-x-auto pb-1">
               {menu.map((item) => (
-                <MenuNavLink key={item.to} item={item} />
+                <MenuNavLink
+                  key={item.to}
+                  item={item}
+                  loading={pendingRoute === item.to}
+                  onClick={() => setPendingRoute(item.to)}
+                />
               ))}
             </nav>
           </div>
@@ -179,12 +201,16 @@ export function ManagementShell({
                       key={item.to}
                       onClick={() => {
                         setMobileOpen(false);
-                        nav(item.to);
+                        navigateWithLoading(item.to);
                       }}
                       className="flex min-h-10 items-center gap-2"
                     >
-                      <Icon className="h-4 w-4 text-slate-500" />
-                      <span>{item.label}</span>
+                      {pendingRoute === item.to ? (
+                        <Loader2 className="h-4 w-4 animate-spin text-blue-600" />
+                      ) : (
+                        <Icon className="h-4 w-4 text-slate-500" />
+                      )}
+                      <span>{pendingRoute === item.to ? `${item.label}...` : item.label}</span>
                     </DropdownMenuItem>
                   );
                 })}
@@ -231,7 +257,15 @@ export function ManagementShell({
         </div>
       </header>
 
-      <main className="mx-auto w-full max-w-[1600px] px-4 py-5">{children}</main>
+      {pendingRoute ? (
+        <div className="mx-auto w-full max-w-[1600px] px-4 pt-2">
+          <div className="h-1 overflow-hidden rounded bg-blue-100">
+            <div className="h-full w-1/3 animate-pulse rounded bg-blue-600" />
+          </div>
+        </div>
+      ) : null}
+
+      <main className={`mx-auto w-full max-w-[1600px] px-4 py-5 transition-opacity ${pendingRoute ? "opacity-80" : "opacity-100"}`}>{children}</main>
 
       <Dialog open={openNotifications} onOpenChange={setOpenNotifications}>
         <DialogContent className="max-w-2xl">

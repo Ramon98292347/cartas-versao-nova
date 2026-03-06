@@ -863,7 +863,7 @@ export function AdminChurchesTab({
                 <DialogDescription>Resumo completo da igreja selecionada.</DialogDescription>
               </div>
               {viewChurch ? (
-                <div className="flex items-center gap-2">
+                <div className="mr-10 flex items-center gap-2 md:mr-12">
                   <Button
                     size="sm"
                     variant="outline"

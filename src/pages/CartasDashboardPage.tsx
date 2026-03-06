@@ -8,6 +8,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useUser } from "@/context/UserContext";
 import { getPastorMetrics, listMembers, listPastorLetters } from "@/services/saasService";
+import { PageLoading } from "@/components/shared/PageLoading";
 
 function KpiCard({
   label,
@@ -52,13 +53,13 @@ export default function CartasDashboardPage() {
     return [];
   }, [session?.scope_totvs_ids, usuario?.totvs_access, activeTotvsId]);
 
-  const { data: metrics } = useQuery({
+  const { data: metrics, isLoading: loadingMetrics, isFetching: fetchingMetrics } = useQuery({
     queryKey: ["cartas-dashboard-metrics"],
     queryFn: () => getPastorMetrics(),
     enabled: scopeTotvsIds.length > 0,
   });
 
-  const { data: letters = [] } = useQuery({
+  const { data: letters = [], isLoading: loadingLetters, isFetching: fetchingLetters } = useQuery({
     queryKey: ["cartas-dashboard-letters", scopeTotvsIds.join("|")],
     queryFn: async () => {
       const data = await Promise.all(
@@ -75,11 +76,20 @@ export default function CartasDashboardPage() {
     enabled: scopeTotvsIds.length > 0,
   });
 
-  const { data: membrosRes } = useQuery({
+  const { data: membrosRes, isLoading: loadingMembers, isFetching: fetchingMembers } = useQuery({
     queryKey: ["cartas-dashboard-members", scopeTotvsIds.join("|")],
     queryFn: () => listMembers({ page: 1, page_size: 300, roles: ["pastor", "obreiro"] }),
     enabled: scopeTotvsIds.length > 0,
   });
+
+  const loadingPage =
+    !scopeTotvsIds.length ||
+    loadingMetrics ||
+    loadingLetters ||
+    loadingMembers ||
+    (fetchingMetrics && !metrics) ||
+    (fetchingLetters && !letters.length) ||
+    (fetchingMembers && !membrosRes);
 
   const obreiros = membrosRes?.workers || [];
   const phonesByUserId = useMemo(() => {
@@ -109,6 +119,45 @@ export default function CartasDashboardPage() {
     membros: { bg: "#F9FAFB", border: "#E5E7EB", accent: "#6B7280" },
   };
 
+  const lettersStats = useMemo(() => {
+    const now = new Date();
+    const todayKey = now.toISOString().slice(0, 10);
+    const sevenDaysAgo = new Date(now);
+    sevenDaysAgo.setDate(now.getDate() - 7);
+
+    let total = 0;
+    let today = 0;
+    let last7 = 0;
+
+    for (const letter of letters) {
+      const status = String(letter?.status || "").toUpperCase();
+      if (status === "EXCLUIDA") continue;
+
+      total += 1;
+
+      const createdAt = String(letter?.created_at || "");
+      const createdDate = createdAt ? new Date(createdAt) : null;
+      const createdKey = createdAt ? createdAt.slice(0, 10) : "";
+
+      if (createdKey === todayKey) today += 1;
+      if (createdDate && !Number.isNaN(createdDate.getTime()) && createdDate >= sevenDaysAgo) last7 += 1;
+    }
+
+    return { total, today, last7 };
+  }, [letters]);
+
+  const totalCartas = Number(metrics?.totalCartas || 0) > 0 ? Number(metrics?.totalCartas || 0) : lettersStats.total;
+  const cartasHoje = Number(metrics?.cartasHoje || 0) > 0 ? Number(metrics?.cartasHoje || 0) : lettersStats.today;
+  const ultimos7Dias = Number(metrics?.ultimos7Dias || 0) > 0 ? Number(metrics?.ultimos7Dias || 0) : lettersStats.last7;
+
+  if (loadingPage) {
+    return (
+      <ManagementShell roleMode={roleMode as "admin" | "pastor"}>
+        <PageLoading title="Carregando cartas" description="Buscando indicadores e historico..." />
+      </ManagementShell>
+    );
+  }
+
   return (
     <ManagementShell roleMode={roleMode as "admin" | "pastor"}>
       <section className="mb-4 rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
@@ -127,9 +176,9 @@ export default function CartasDashboardPage() {
       </section>
 
       <section className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <KpiCard label="Total de cartas" value={Number(metrics?.totalCartas || 0)} icon={FileText} tone={tone.total} />
-        <KpiCard label="Cartas hoje" value={Number(metrics?.cartasHoje || 0)} icon={CalendarDays} tone={tone.hoje} />
-        <KpiCard label="Ultimos 7 dias" value={Number(metrics?.ultimos7Dias || 0)} icon={LineChart} tone={tone.seteDias} />
+        <KpiCard label="Total de cartas" value={totalCartas} icon={FileText} tone={tone.total} />
+        <KpiCard label="Cartas hoje" value={cartasHoje} icon={CalendarDays} tone={tone.hoje} />
+        <KpiCard label="Ultimos 7 dias" value={ultimos7Dias} icon={LineChart} tone={tone.seteDias} />
         <KpiCard label="Total de membros" value={Number(metrics?.totalObreiros || 0)} icon={Users} tone={tone.membros} />
       </section>
 

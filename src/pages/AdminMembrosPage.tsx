@@ -6,6 +6,7 @@ import { ObreirosTab } from "@/components/admin/ObreirosTab";
 import { Card, CardContent } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { listChurchesInScope, listMembers } from "@/services/saasService";
+import { PageLoading } from "@/components/shared/PageLoading";
 
 function MiniCard({
   title,
@@ -36,7 +37,7 @@ function MiniCard({
 export default function AdminMembrosPage() {
   const [selectedChurchTotvs, setSelectedChurchTotvs] = useState("");
 
-  const { data: churches = [] } = useQuery({
+  const { data: churches = [], isLoading: loadingChurches, isFetching: fetchingChurches } = useQuery({
     queryKey: ["admin-membros-churches"],
     queryFn: () => listChurchesInScope(1, 400),
   });
@@ -52,7 +53,7 @@ export default function AdminMembrosPage() {
     [churches, selectedChurchTotvs],
   );
 
-  const { data: membersRes } = useQuery({
+  const { data: membersRes, isLoading: loadingMembers, isFetching: fetchingMembers } = useQuery({
     queryKey: ["admin-membros-kpi", selectedChurchTotvs],
     queryFn: () =>
       listMembers({
@@ -63,6 +64,12 @@ export default function AdminMembrosPage() {
       }),
     enabled: Boolean(selectedChurchTotvs),
   });
+
+  const showPageLoading =
+    loadingChurches ||
+    (fetchingChurches && churches.length === 0) ||
+    (selectedChurchTotvs && loadingMembers && !membersRes) ||
+    (fetchingMembers && !membersRes && Boolean(selectedChurchTotvs));
 
   const workers = membersRes?.workers || [];
   const counters = useMemo(() => {
@@ -87,7 +94,10 @@ export default function AdminMembrosPage() {
 
   return (
     <ManagementShell roleMode="admin">
-      <div className="space-y-5 bg-[#F6F8FC] p-1">
+      {showPageLoading ? (
+        <PageLoading title="Carregando membros" description="Buscando membros e indicadores da igreja..." />
+      ) : (
+        <div className="space-y-5 bg-[#F6F8FC] p-1">
         <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
           <h2 className="text-4xl font-extrabold tracking-tight text-slate-900">Membros</h2>
           <p className="mt-1 text-base text-slate-600">Visualize os membros por igreja e cadastre pastores/obreiros.</p>
@@ -120,8 +130,8 @@ export default function AdminMembrosPage() {
         </section>
 
         <ObreirosTab activeTotvsId={selectedChurchTotvs} />
-      </div>
+        </div>
+      )}
     </ManagementShell>
   );
 }
-

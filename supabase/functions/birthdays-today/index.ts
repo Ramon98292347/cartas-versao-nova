@@ -2,7 +2,8 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { jwtVerify } from "https://esm.sh/jose@5.2.4";
 
-const N8N_BIRTHDAYS_WEBHOOK = "https://n8n-n8n.ynlng8.easypanel.host/webhook/aniversari-secretaria";
+const N8N_BIRTHDAYS_WEBHOOK = Deno.env.get("N8N_BIRTHDAYS_WEBHOOK_URL")
+  || "https://n8n-n8n.ynlng8.easypanel.host/webhook/senha";
 
 function corsHeaders() {
   return {
@@ -20,6 +21,15 @@ function json(obj: unknown, status = 200) {
 type Role = "admin" | "pastor" | "obreiro";
 type SessionClaims = { user_id: string; role: Role; active_totvs_id: string };
 type Body = { limit?: number };
+type BirthdayRow = {
+  id: string;
+  full_name: string;
+  role: string;
+  phone?: string | null;
+  email?: string | null;
+  avatar_url?: string | null;
+  birth_date?: string | null;
+};
 
 async function verifySessionJWT(req: Request): Promise<SessionClaims | null> {
   const auth = req.headers.get("authorization") || "";
@@ -66,6 +76,51 @@ function todayMonthDaySaoPaulo(): string {
   return `${mm}-${dd}`;
 }
 
+function todayDateSaoPaulo(): string {
+  return new Intl.DateTimeFormat("sv-SE", { timeZone: "America/Sao_Paulo" }).format(new Date());
+}
+
+async function persistBirthdayNotifications(
+  sb: ReturnType<typeof createClient>,
+  churchTotvsId: string,
+  birthdays: BirthdayRow[],
+) {
+  if (!birthdays.length) return;
+
+  const today = todayDateSaoPaulo();
+
+  for (const b of birthdays) {
+    const relatedId = `birthday:${churchTotvsId}:${b.id}:${today}`;
+
+    const { data: existing } = await sb
+      .from("notifications")
+      .select("id")
+      .eq("related_id", relatedId)
+      .limit(1)
+      .maybeSingle();
+
+    if (existing?.id) continue;
+
+    await sb.from("notifications").insert({
+      church_totvs_id: churchTotvsId,
+      user_id: null,
+      type: "birthday",
+      title: "Aniversariante do dia",
+      message: `Parabens, ${b.full_name}!`,
+      is_read: false,
+      related_id: relatedId,
+      data: {
+        birthday_user_id: b.id,
+        full_name: b.full_name,
+        phone: b.phone || null,
+        email: b.email || null,
+        birth_date: b.birth_date || null,
+        date: today,
+      },
+    });
+  }
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders() });
   if (req.method !== "POST") return json({ ok: false, error: "method_not_allowed" }, 405);
@@ -84,7 +139,7 @@ Deno.serve(async (req) => {
 
     const { data: users, error } = await sb
       .from("users")
-      .select("id, full_name, role, avatar_url, birth_date")
+      .select("id, full_name, role, phone, email, avatar_url, birth_date")
       .eq("is_active", true)
       .eq("default_totvs_id", session.active_totvs_id)
       .not("birth_date", "is", null);
@@ -99,9 +154,13 @@ Deno.serve(async (req) => {
         id: u.id,
         full_name: u.full_name,
         role: u.role,
+        phone: u.phone,
+        email: u.email,
         avatar_url: u.avatar_url,
         birth_date: u.birth_date,
       }));
+
+    await persistBirthdayNotifications(sb, session.active_totvs_id, birthdays as BirthdayRow[]);
 
     let message = "";
     let n8n: { ok: boolean; status: number; response: unknown } | null = null;
