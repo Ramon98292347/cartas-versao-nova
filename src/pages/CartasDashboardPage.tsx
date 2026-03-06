@@ -4,10 +4,34 @@ import { useQuery } from "@tanstack/react-query";
 import { CalendarDays, FileText, LineChart, Users } from "lucide-react";
 import { ManagementShell } from "@/components/layout/ManagementShell";
 import { CartasTab } from "@/components/admin/CartasTab";
-import { StatCards } from "@/components/shared/StatCards";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useUser } from "@/context/UserContext";
 import { getPastorMetrics, listMembers, listPastorLetters } from "@/services/saasService";
+
+function KpiCard({
+  label,
+  value,
+  icon: Icon,
+  tone,
+}: {
+  label: string;
+  value: number;
+  icon: typeof FileText;
+  tone: { bg: string; border: string; accent: string };
+}) {
+  return (
+    <Card className="rounded-xl shadow-sm" style={{ backgroundColor: tone.bg, borderColor: tone.border }}>
+      <CardContent className="border-l-4 p-5" style={{ borderLeftColor: tone.accent }}>
+        <p className="flex items-center gap-2 text-sm font-semibold text-slate-800">
+          <Icon className="h-4 w-4" style={{ color: tone.accent }} />
+          {label}
+        </p>
+        <p className="mt-3 text-4xl font-extrabold text-slate-900">{value}</p>
+      </CardContent>
+    </Card>
+  );
+}
 
 // Comentario: dashboard exclusivo de cartas para pastor/admin.
 export default function CartasDashboardPage() {
@@ -78,24 +102,31 @@ export default function CartasDashboardPage() {
     return map;
   }, [obreiros]);
 
+  const tone = {
+    total: { bg: "#F5F3FF", border: "#DDD6FE", accent: "#7C3AED" },
+    hoje: { bg: "#EFF6FF", border: "#BFDBFE", accent: "#2563EB" },
+    seteDias: { bg: "#FFFBEB", border: "#FDE68A", accent: "#CA8A04" },
+    membros: { bg: "#F9FAFB", border: "#E5E7EB", accent: "#6B7280" },
+  };
+
   return (
     <ManagementShell roleMode={roleMode as "admin" | "pastor"}>
-      <section className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h2 className="bg-gradient-to-r from-emerald-500 to-cyan-500 bg-clip-text text-5xl font-extrabold tracking-tight text-transparent">Gestão de Cartas</h2>
-          <p className="mt-1 text-2xl font-medium text-slate-600">Painel de cartas e histórico</p>
+      <section className="mb-4 rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h2 className="text-4xl font-extrabold tracking-tight text-slate-900">Cartas</h2>
+            <p className="mt-1 text-base text-slate-600">Painel de cartas e historico por periodo.</p>
+          </div>
+          <Button className="h-11 px-5" onClick={() => nav("/carta/formulario")}>Fazer carta</Button>
         </div>
-        <Button className="h-11 px-5" onClick={() => nav("/carta/formulario")}>Fazer carta</Button>
       </section>
 
-      <StatCards
-        items={[
-          { label: "Total de Cartas", value: Number(metrics?.totalCartas || 0), icon: FileText, gradient: "bg-gradient-to-r from-[#2f63d4] to-[#4b77d5]" },
-          { label: "Cartas Hoje", value: Number(metrics?.cartasHoje || 0), icon: CalendarDays, gradient: "bg-gradient-to-r from-[#2fa86f] to-[#49c280]" },
-          { label: "Últimos 7 dias", value: Number(metrics?.ultimos7Dias || 0), icon: LineChart, gradient: "bg-gradient-to-r from-[#f39b1c] to-[#f3b12c]" },
-          { label: "Total de Membros", value: Number(metrics?.totalObreiros || 0), icon: Users, gradient: "bg-gradient-to-r from-[#8f3fd4] to-[#a957e4]" },
-        ]}
-      />
+      <section className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <KpiCard label="Total de cartas" value={Number(metrics?.totalCartas || 0)} icon={FileText} tone={tone.total} />
+        <KpiCard label="Cartas hoje" value={Number(metrics?.cartasHoje || 0)} icon={CalendarDays} tone={tone.hoje} />
+        <KpiCard label="Ultimos 7 dias" value={Number(metrics?.ultimos7Dias || 0)} icon={LineChart} tone={tone.seteDias} />
+        <KpiCard label="Total de membros" value={Number(metrics?.totalObreiros || 0)} icon={Users} tone={tone.membros} />
+      </section>
 
       <div className="mt-5">
         <CartasTab letters={letters} scopeTotvsIds={scopeTotvsIds} phonesByUserId={phonesByUserId} phonesByName={phonesByName} />

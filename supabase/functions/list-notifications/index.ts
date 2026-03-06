@@ -81,8 +81,9 @@ Deno.serve(async (req) => {
       .order("created_at", { ascending: false });
 
     if (unreadOnly) {
-      qChurch = qChurch.is("read_at", null);
-      qMine = qMine.is("read_at", null);
+      // Comentario: considera nao lida por qualquer um dos dois campos.
+      qChurch = qChurch.or("is_read.eq.false,read_at.is.null");
+      qMine = qMine.or("is_read.eq.false,read_at.is.null");
     }
 
     const [{ data: churchRows, error: churchErr }, { data: myRows, error: myErr }] = await Promise.all([
@@ -107,7 +108,11 @@ Deno.serve(async (req) => {
     const from = (page - 1) * page_size;
     const to = from + page_size;
     const notifications = sorted.slice(from, to);
-    const unread_count = sorted.filter((n) => !n.read_at).length;
+    const unread_count = sorted.filter((n) => {
+      const isRead = Boolean(n.is_read);
+      const readAt = String(n.read_at || "");
+      return !isRead || !readAt;
+    }).length;
 
     return json({ ok: true, notifications, total, unread_count, page, page_size }, 200);
   } catch (err) {

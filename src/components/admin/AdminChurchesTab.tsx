@@ -1,25 +1,40 @@
-﻿import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Church, LayoutGrid, List } from "lucide-react";
+import { Church, LayoutGrid, List, MoreHorizontal } from "lucide-react";
 import { ModalTrocarPastor } from "@/components/admin/ModalTrocarPastor";
 import { ChurchDocsDialog } from "@/components/admin/ChurchDocsDialog";
+import { useUser } from "@/context/UserContext";
 import { createChurch, deactivateChurch, type ChurchInScopeItem } from "@/services/saasService";
 import { getFriendlyError } from "@/lib/error-map";
 import { addAuditLog } from "@/lib/audit";
 
+type ChurchClass = "estadual" | "setorial" | "central" | "regional" | "local";
+
 type NewChurchForm = {
   totvs_id: string;
   church_name: string;
-  class: "estadual" | "setorial" | "central" | "regional" | "local";
+  class: ChurchClass;
   parent_totvs_id: string;
+  contact_email: string;
+  contact_phone: string;
+  cep: string;
+  address_street: string;
+  address_number: string;
+  address_complement: string;
+  address_neighborhood: string;
+  address_city: string;
+  address_state: string;
+  address_country: string;
+  is_active: boolean;
 };
 
 type ChurchTab = "lista" | "remanejamento" | "contrato";
@@ -30,7 +45,36 @@ const initialForm: NewChurchForm = {
   church_name: "",
   class: "local",
   parent_totvs_id: "",
+  contact_email: "",
+  contact_phone: "",
+  cep: "",
+  address_street: "",
+  address_number: "",
+  address_complement: "",
+  address_neighborhood: "",
+  address_city: "",
+  address_state: "",
+  address_country: "BR",
+  is_active: true,
 };
+
+const classOptions: ChurchClass[] = ["estadual", "setorial", "central", "regional", "local"];
+
+const childClassMap: Record<ChurchClass, ChurchClass[]> = {
+  estadual: ["setorial", "central", "regional", "local"],
+  setorial: ["central", "regional", "local"],
+  central: ["regional", "local"],
+  regional: ["local"],
+  local: [],
+};
+
+function normalizeChurchClass(value: string | null | undefined): ChurchClass | null {
+  const safe = String(value || "").trim().toLowerCase();
+  if (safe === "estadual" || safe === "setorial" || safe === "central" || safe === "regional" || safe === "local") {
+    return safe;
+  }
+  return null;
+}
 
 function getChurchImage(church: ChurchInScopeItem): string | null {
   const maybe = church as ChurchInScopeItem & {
@@ -77,6 +121,7 @@ export function AdminChurchesTab({
   onPageChange: (page: number) => void;
   onPageSizeChange: (pageSize: number) => void;
 }) {
+  const { session } = useUser();
   const queryClient = useQueryClient();
   const [modalOpen, setModalOpen] = useState(false);
   const [selectedChurch, setSelectedChurch] = useState<ChurchInScopeItem | null>(null);
@@ -96,6 +141,15 @@ export function AdminChurchesTab({
 
   const [tab, setTab] = useState<ChurchTab>("lista");
   const [view, setView] = useState<ChurchView>("lista");
+  const userChurchClass = normalizeChurchClass(session?.church_class);
+  const parentTotvsFromSession = String(session?.totvs_id || "").trim();
+
+  const allowedCreateClasses = useMemo<ChurchClass[]>(() => {
+    if (!session?.role || session.role === "admin") return classOptions;
+    if (!userChurchClass) return classOptions;
+    return childClassMap[userChurchClass];
+  }, [session?.role, userChurchClass]);
+  const canCreateChurch = allowedCreateClasses.length > 0;
 
   const sortedRows = useMemo(() => {
     return [...rows].sort((a, b) => {
@@ -105,9 +159,19 @@ export function AdminChurchesTab({
     });
   }, [rows]);
 
+  useEffect(() => {
+    if (tab !== "lista") {
+      setTab("lista");
+    }
+  }, [tab]);
+
   function openPastorModal(church: ChurchInScopeItem) {
     setSelectedChurch(church);
     setModalOpen(true);
+  }
+
+  function pastorActionLabel(church: ChurchInScopeItem) {
+    return church.pastor?.id || church.pastor_user_id ? "Trocar pastor" : "Cadastrar pastor";
   }
 
   async function refetchChurches() {
@@ -127,6 +191,16 @@ export function AdminChurchesTab({
       return;
     }
 
+    if (!newForm.parent_totvs_id.trim()) {
+      toast.error("Igreja mae obrigatoria para cadastro.");
+      return;
+    }
+
+    if (!allowedCreateClasses.includes(newForm.class)) {
+      toast.error("Classe da nova igreja invalida para seu nivel de acesso.");
+      return;
+    }
+
     setSavingNew(true);
     try {
       await createChurch({
@@ -134,6 +208,17 @@ export function AdminChurchesTab({
         church_name: newForm.church_name.trim(),
         class: newForm.class,
         parent_totvs_id: newForm.parent_totvs_id.trim() || undefined,
+        contact_email: newForm.contact_email,
+        contact_phone: newForm.contact_phone,
+        cep: newForm.cep,
+        address_street: newForm.address_street,
+        address_number: newForm.address_number,
+        address_complement: newForm.address_complement,
+        address_neighborhood: newForm.address_neighborhood,
+        address_city: newForm.address_city,
+        address_state: newForm.address_state,
+        address_country: newForm.address_country,
+        is_active: newForm.is_active,
       });
       toast.success("Igreja criada com sucesso.");
       addAuditLog("church_created", { church_totvs_id: newForm.totvs_id.trim() });
@@ -169,6 +254,17 @@ export function AdminChurchesTab({
       church_name: church.church_name,
       class: (church.church_class || "local") as NewChurchForm["class"],
       parent_totvs_id: String(church.parent_totvs_id || ""),
+      contact_email: String(church.contact_email || ""),
+      contact_phone: String(church.contact_phone || ""),
+      cep: String(church.cep || ""),
+      address_street: String(church.address_street || ""),
+      address_number: String(church.address_number || ""),
+      address_complement: String(church.address_complement || ""),
+      address_neighborhood: String(church.address_neighborhood || ""),
+      address_city: String(church.address_city || ""),
+      address_state: String(church.address_state || ""),
+      address_country: String(church.address_country || "BR"),
+      is_active: church.is_active !== false,
     });
   }
 
@@ -184,6 +280,17 @@ export function AdminChurchesTab({
         church_name: editForm.church_name.trim(),
         class: editForm.class,
         parent_totvs_id: editForm.parent_totvs_id.trim() || undefined,
+        contact_email: editForm.contact_email,
+        contact_phone: editForm.contact_phone,
+        cep: editForm.cep,
+        address_street: editForm.address_street,
+        address_number: editForm.address_number,
+        address_complement: editForm.address_complement,
+        address_neighborhood: editForm.address_neighborhood,
+        address_city: editForm.address_city,
+        address_state: editForm.address_state,
+        address_country: editForm.address_country,
+        is_active: editForm.is_active,
       });
       toast.success("Igreja atualizada com sucesso.");
       setEditingChurch(null);
@@ -201,6 +308,22 @@ export function AdminChurchesTab({
     setDocsOpen(true);
   }
 
+  function openNewChurchModal() {
+    if (!canCreateChurch) {
+      toast.error("Seu nivel atual nao permite cadastrar igrejas filhas.");
+      return;
+    }
+    const nextClass = allowedCreateClasses[0] || "local";
+    setNewForm({
+      ...initialForm,
+      class: nextClass,
+      parent_totvs_id: parentTotvsFromSession,
+      address_country: "BR",
+      is_active: true,
+    });
+    setNewOpen(true);
+  }
+
   function renderCommonInfo(church: ChurchInScopeItem) {
     return (
       <>
@@ -210,6 +333,31 @@ export function AdminChurchesTab({
         <p className="text-sm text-slate-600">Pastor: {church.pastor?.full_name || "Nao definido"}</p>
         <p className="text-sm text-slate-600">Obreiros: {church.workers_count ?? 0}</p>
       </>
+    );
+  }
+
+  function renderActionMenu(church: ChurchInScopeItem) {
+    return (
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button size="sm" variant="outline">
+            <MoreHorizontal className="mr-2 h-4 w-4" />
+            Acoes
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end">
+          <DropdownMenuItem onClick={() => openPastorModal(church)}>
+            {pastorActionLabel(church)}
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => openEditModal(church)}>Editar</DropdownMenuItem>
+          <DropdownMenuItem
+            className="text-rose-600 focus:text-rose-700"
+            onClick={() => onDeleteChurch(church)}
+          >
+            Desativar
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
     );
   }
 
@@ -226,14 +374,14 @@ export function AdminChurchesTab({
               <Button variant={view === "grid" ? "default" : "outline"} size="sm" onClick={() => setView("grid")}>
                 <LayoutGrid className="mr-2 h-4 w-4" /> Grid
               </Button>
-              <Button onClick={() => setNewOpen(true)}>Nova Igreja</Button>
+              <Button onClick={openNewChurchModal}>Nova Igreja</Button>
             </div>
           </div>
 
           <div className="grid gap-2 sm:grid-cols-3">
             <Button variant={tab === "lista" ? "default" : "outline"} onClick={() => setTab("lista")}>Lista</Button>
-            <Button variant={tab === "remanejamento" ? "default" : "outline"} onClick={() => setTab("remanejamento")}>Remanejamento</Button>
-            <Button variant={tab === "contrato" ? "default" : "outline"} onClick={() => setTab("contrato")}>Contratos</Button>
+            <Button variant="outline" disabled>Remanejamento (implantacao em breve)</Button>
+            <Button variant="outline" disabled>Contratos (implantacao em breve)</Button>
           </div>
         </CardHeader>
 
@@ -270,15 +418,10 @@ export function AdminChurchesTab({
                         </Badge>
                       </span>
                       <div className="flex flex-wrap gap-2">
-                        <Button size="sm" variant="outline" onClick={() => openPastorModal(church)}>
-                          Troca rapida
+                        <Button size="sm" variant="outline" onClick={() => openEditModal(church)}>
+                          Ver
                         </Button>
-                        <Button size="sm" variant="secondary" onClick={() => openEditModal(church)}>
-                          Editar
-                        </Button>
-                        <Button size="sm" variant="destructive" onClick={() => onDeleteChurch(church)} disabled={busyChurchId === church.totvs_id}>
-                          {busyChurchId === church.totvs_id ? "Excluindo..." : "Excluir"}
-                        </Button>
+                        {renderActionMenu(church)}
                       </div>
                     </div>
                   ))}
@@ -299,16 +442,11 @@ export function AdminChurchesTab({
                       >
                         {church.is_active === false ? "Inativa" : "Ativa"}
                       </Badge>
-                      <div className="grid grid-cols-3 gap-2">
-                        <Button size="sm" variant="outline" onClick={() => openPastorModal(church)}>
-                          Troca
+                      <div className="grid grid-cols-2 gap-2">
+                        <Button size="sm" variant="outline" onClick={() => openEditModal(church)}>
+                          Ver
                         </Button>
-                        <Button size="sm" variant="secondary" onClick={() => openEditModal(church)}>
-                          Editar
-                        </Button>
-                        <Button size="sm" variant="destructive" onClick={() => onDeleteChurch(church)} disabled={busyChurchId === church.totvs_id}>
-                          {busyChurchId === church.totvs_id ? "..." : "Excluir"}
-                        </Button>
+                        {renderActionMenu(church)}
                       </div>
                     </CardContent>
                   </Card>
@@ -334,15 +472,10 @@ export function AdminChurchesTab({
                       </Badge>
                     </div>
                     <div className="flex flex-wrap gap-2">
-                      <Button size="sm" variant="outline" onClick={() => openPastorModal(church)}>
-                        Troca rapida
+                      <Button size="sm" variant="outline" onClick={() => openEditModal(church)}>
+                        Ver
                       </Button>
-                      <Button size="sm" variant="secondary" onClick={() => openEditModal(church)}>
-                        Editar
-                      </Button>
-                      <Button size="sm" variant="destructive" onClick={() => onDeleteChurch(church)} disabled={busyChurchId === church.totvs_id}>
-                        {busyChurchId === church.totvs_id ? "Excluindo..." : "Excluir"}
-                      </Button>
+                      {renderActionMenu(church)}
                     </div>
                   </CardContent>
                 </Card>
@@ -394,7 +527,7 @@ export function AdminChurchesTab({
       </div>
 
       <Dialog open={newOpen} onOpenChange={setNewOpen}>
-        <DialogContent>
+        <DialogContent className="max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Nova Igreja</DialogTitle>
           </DialogHeader>
@@ -416,30 +549,104 @@ export function AdminChurchesTab({
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="estadual">estadual</SelectItem>
-                  <SelectItem value="setorial">setorial</SelectItem>
-                  <SelectItem value="central">central</SelectItem>
-                  <SelectItem value="regional">regional</SelectItem>
-                  <SelectItem value="local">local</SelectItem>
+                  {allowedCreateClasses.map((item) => (
+                    <SelectItem key={item} value={item}>
+                      {item}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
+              {!canCreateChurch ? <p className="text-xs text-amber-700">Seu nivel atual nao permite criar novas igrejas.</p> : null}
             </div>
 
             <div className="space-y-1">
-              <Label>Parent TOTVS (opcional)</Label>
-              <Input value={newForm.parent_totvs_id} onChange={(e) => setNewForm((p) => ({ ...p, parent_totvs_id: e.target.value }))} />
+              <Label>Igreja mae (TOTVS)</Label>
+              <Input
+                value={newForm.parent_totvs_id}
+                onChange={(e) => setNewForm((p) => ({ ...p, parent_totvs_id: e.target.value }))}
+                readOnly={Boolean(parentTotvsFromSession)}
+                placeholder="TOTVS da igreja mae"
+              />
+              {parentTotvsFromSession ? (
+                <p className="text-xs text-slate-500">Igreja mae definida automaticamente pelo login atual.</p>
+              ) : null}
+            </div>
+
+            <div className="grid gap-3 md:grid-cols-2">
+              <div className="space-y-1">
+                <Label>Email de contato</Label>
+                <Input value={newForm.contact_email} onChange={(e) => setNewForm((p) => ({ ...p, contact_email: e.target.value }))} />
+              </div>
+              <div className="space-y-1">
+                <Label>Telefone de contato</Label>
+                <Input value={newForm.contact_phone} onChange={(e) => setNewForm((p) => ({ ...p, contact_phone: e.target.value }))} />
+              </div>
+            </div>
+
+            <div className="grid gap-3 md:grid-cols-2">
+              <div className="space-y-1">
+                <Label>CEP</Label>
+                <Input value={newForm.cep} onChange={(e) => setNewForm((p) => ({ ...p, cep: e.target.value }))} />
+              </div>
+              <div className="space-y-1">
+                <Label>Pais</Label>
+                <Input value={newForm.address_country} onChange={(e) => setNewForm((p) => ({ ...p, address_country: e.target.value }))} />
+              </div>
+            </div>
+
+            <div className="grid gap-3 md:grid-cols-2">
+              <div className="space-y-1">
+                <Label>Rua</Label>
+                <Input value={newForm.address_street} onChange={(e) => setNewForm((p) => ({ ...p, address_street: e.target.value }))} />
+              </div>
+              <div className="space-y-1">
+                <Label>Numero</Label>
+                <Input value={newForm.address_number} onChange={(e) => setNewForm((p) => ({ ...p, address_number: e.target.value }))} />
+              </div>
+            </div>
+
+            <div className="grid gap-3 md:grid-cols-2">
+              <div className="space-y-1">
+                <Label>Complemento</Label>
+                <Input value={newForm.address_complement} onChange={(e) => setNewForm((p) => ({ ...p, address_complement: e.target.value }))} />
+              </div>
+              <div className="space-y-1">
+                <Label>Bairro</Label>
+                <Input value={newForm.address_neighborhood} onChange={(e) => setNewForm((p) => ({ ...p, address_neighborhood: e.target.value }))} />
+              </div>
+            </div>
+
+            <div className="grid gap-3 md:grid-cols-2">
+              <div className="space-y-1">
+                <Label>Cidade</Label>
+                <Input value={newForm.address_city} onChange={(e) => setNewForm((p) => ({ ...p, address_city: e.target.value }))} />
+              </div>
+              <div className="space-y-1">
+                <Label>UF</Label>
+                <Input value={newForm.address_state} onChange={(e) => setNewForm((p) => ({ ...p, address_state: e.target.value }))} />
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <input
+                id="church-is-active"
+                type="checkbox"
+                checked={newForm.is_active}
+                onChange={(e) => setNewForm((p) => ({ ...p, is_active: e.target.checked }))}
+              />
+              <Label htmlFor="church-is-active">Igreja ativa</Label>
             </div>
 
             <div className="flex justify-end gap-2">
               <Button type="button" variant="outline" onClick={() => setNewOpen(false)} disabled={savingNew}>Cancelar</Button>
-              <Button type="submit" disabled={savingNew}>{savingNew ? "Salvando..." : "Salvar"}</Button>
+              <Button type="submit" disabled={savingNew || !canCreateChurch}>{savingNew ? "Salvando..." : "Salvar"}</Button>
             </div>
           </form>
         </DialogContent>
       </Dialog>
 
       <Dialog open={Boolean(editingChurch)} onOpenChange={(open) => !open && setEditingChurch(null)}>
-        <DialogContent>
+        <DialogContent className="max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Editar igreja</DialogTitle>
           </DialogHeader>
@@ -475,6 +682,71 @@ export function AdminChurchesTab({
               <Input value={editForm.parent_totvs_id} onChange={(e) => setEditForm((p) => ({ ...p, parent_totvs_id: e.target.value }))} />
             </div>
 
+            <div className="grid gap-3 md:grid-cols-2">
+              <div className="space-y-1">
+                <Label>Email de contato</Label>
+                <Input value={editForm.contact_email} onChange={(e) => setEditForm((p) => ({ ...p, contact_email: e.target.value }))} />
+              </div>
+              <div className="space-y-1">
+                <Label>Telefone de contato</Label>
+                <Input value={editForm.contact_phone} onChange={(e) => setEditForm((p) => ({ ...p, contact_phone: e.target.value }))} />
+              </div>
+            </div>
+
+            <div className="grid gap-3 md:grid-cols-2">
+              <div className="space-y-1">
+                <Label>CEP</Label>
+                <Input value={editForm.cep} onChange={(e) => setEditForm((p) => ({ ...p, cep: e.target.value }))} />
+              </div>
+              <div className="space-y-1">
+                <Label>Pais</Label>
+                <Input value={editForm.address_country} onChange={(e) => setEditForm((p) => ({ ...p, address_country: e.target.value }))} />
+              </div>
+            </div>
+
+            <div className="grid gap-3 md:grid-cols-2">
+              <div className="space-y-1">
+                <Label>Rua</Label>
+                <Input value={editForm.address_street} onChange={(e) => setEditForm((p) => ({ ...p, address_street: e.target.value }))} />
+              </div>
+              <div className="space-y-1">
+                <Label>Numero</Label>
+                <Input value={editForm.address_number} onChange={(e) => setEditForm((p) => ({ ...p, address_number: e.target.value }))} />
+              </div>
+            </div>
+
+            <div className="grid gap-3 md:grid-cols-2">
+              <div className="space-y-1">
+                <Label>Complemento</Label>
+                <Input value={editForm.address_complement} onChange={(e) => setEditForm((p) => ({ ...p, address_complement: e.target.value }))} />
+              </div>
+              <div className="space-y-1">
+                <Label>Bairro</Label>
+                <Input value={editForm.address_neighborhood} onChange={(e) => setEditForm((p) => ({ ...p, address_neighborhood: e.target.value }))} />
+              </div>
+            </div>
+
+            <div className="grid gap-3 md:grid-cols-2">
+              <div className="space-y-1">
+                <Label>Cidade</Label>
+                <Input value={editForm.address_city} onChange={(e) => setEditForm((p) => ({ ...p, address_city: e.target.value }))} />
+              </div>
+              <div className="space-y-1">
+                <Label>UF</Label>
+                <Input value={editForm.address_state} onChange={(e) => setEditForm((p) => ({ ...p, address_state: e.target.value }))} />
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <input
+                id="church-edit-is-active"
+                type="checkbox"
+                checked={editForm.is_active}
+                onChange={(e) => setEditForm((p) => ({ ...p, is_active: e.target.checked }))}
+              />
+              <Label htmlFor="church-edit-is-active">Igreja ativa</Label>
+            </div>
+
             <div className="flex justify-end gap-2">
               <Button type="button" variant="outline" onClick={() => setEditingChurch(null)} disabled={savingEdit}>Cancelar</Button>
               <Button type="submit" disabled={savingEdit}>{savingEdit ? "Salvando..." : "Salvar"}</Button>
@@ -499,3 +771,6 @@ export function AdminChurchesTab({
     </>
   );
 }
+
+
+

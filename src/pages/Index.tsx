@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useState } from "react";
+﻿﻿﻿﻿import { useEffect, useMemo, useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -339,16 +339,13 @@ const Index = () => {
   };
 
   return (
-    <div className="min-h-screen bg-slate-100">
+    <div className="min-h-screen bg-[#f6f8fc]">
       <header className="border-b border-slate-200 bg-white shadow-sm">
         <div className="mx-auto w-full max-w-[1600px] px-4 py-5">
           <div className="flex items-center justify-between gap-4">
-            <div className="flex items-center gap-4">
-              <img src="/Polish_20220810_001501268%20(2).png" alt="Logo" className="h-12 w-auto rounded-md" />
-              <div>
-                <h1 className="bg-gradient-to-r from-emerald-500 to-cyan-500 bg-clip-text text-xl font-extrabold text-transparent md:text-3xl">Sistema de Gestão Eclesiástica</h1>
-                <p className="text-sm text-slate-600">Emissão de Carta</p>
-              </div>
+            <div>
+              <h1 className="text-xl font-extrabold text-slate-900 md:text-3xl">Sistema de Gestão Eclesiástica</h1>
+              <p className="text-sm text-slate-600">Emissão de carta de pregação</p>
             </div>
             <Button
               variant="outline"
@@ -366,7 +363,7 @@ const Index = () => {
           <Card className="rounded-2xl border border-slate-200 bg-white shadow-sm transition-shadow duration-300 hover:shadow-md">
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-2xl text-slate-900">
-                <FileText className="h-6 w-6 text-emerald-500" />
+                <FileText className="h-6 w-6 text-blue-600" />
                 Registro de Carta de Pregação
               </CardTitle>
               <CardDescription className="text-slate-600">
@@ -385,7 +382,7 @@ const Index = () => {
                     placeholder="Digite o nome completo"
                     {...register("pregadorNome")}
                     disabled
-                    className="h-11 rounded-xl border-slate-300 bg-slate-50 transition-colors focus:border-emerald-500 focus:ring-emerald-500"
+                    className="h-11 rounded-xl border-slate-300 bg-slate-50 transition-colors focus:border-blue-500 focus:ring-blue-500"
                     required
                   />
                   {errors.pregadorNome && <p className="text-xs text-destructive">{errors.pregadorNome.message as string}</p>}
@@ -401,7 +398,7 @@ const Index = () => {
                     placeholder="Digite o telefone"
                     {...register("telefone")}
                     disabled={Boolean(telefoneUsuarioLogado)}
-                    className="h-11 rounded-xl border-slate-300 bg-slate-50 transition-colors focus:border-emerald-500 focus:ring-emerald-500"
+                    className="h-11 rounded-xl border-slate-300 bg-slate-50 transition-colors focus:border-blue-500 focus:ring-blue-500"
                     required
                   />
                   {errors.telefone && <p className="text-xs text-destructive">{errors.telefone.message as string}</p>}
@@ -455,7 +452,7 @@ const Index = () => {
                     onFocus={(e) => { if (disableByPhone) { toast.info("Digite seu telefone"); e.currentTarget.blur(); } }}
                     placeholder="Digite a igreja manualmente"
                     disabled={disableByPhone || Boolean(igrejaDestino)}
-                    className="h-11 rounded-xl border-slate-300 bg-slate-50 transition-colors focus:border-emerald-500 focus:ring-emerald-500"
+                    className="h-11 rounded-xl border-slate-300 bg-slate-50 transition-colors focus:border-blue-500 focus:ring-blue-500"
                   />
                   {errors.destinoId && <p className="text-xs text-destructive">Selecione a igreja de destino ou informe em Outros</p>}
                 </div>
@@ -480,7 +477,7 @@ const Index = () => {
                             max={lastDayOfMonthIso}
                             onChange={(e) => setValue("dataPregacao", e.target.value, { shouldValidate: true })}
                             onFocus={(e) => { if (disableByPhone) { toast.info("Digite seu telefone"); e.currentTarget.blur(); } }}
-                            className="h-11 flex-1 rounded-xl border-slate-300 bg-slate-50 transition-colors focus:border-emerald-500 focus:ring-emerald-500"
+                            className="h-11 flex-1 rounded-xl border-slate-300 bg-slate-50 transition-colors focus:border-blue-500 focus:ring-blue-500"
                             required
                           />
                         );
@@ -563,8 +560,8 @@ const Index = () => {
 
                 <div className="space-y-2">
                   <Label className="text-sm font-medium text-slate-800">Horário da pregação</Label>
-                  <Select value={preachPeriod} onValueChange={(v) => setPreachPeriod(v as PreachPeriod)}>
-                    <SelectTrigger className="h-11 rounded-xl border-slate-300 bg-slate-50 transition-colors focus:border-emerald-500 focus:ring-emerald-500">
+                    <Select value={preachPeriod} onValueChange={(v) => setPreachPeriod(v as PreachPeriod)}>
+                    <SelectTrigger className="h-11 rounded-xl border-slate-300 bg-slate-50 transition-colors focus:border-blue-500 focus:ring-blue-500">
                       <SelectValue placeholder="Selecione o horário" />
                     </SelectTrigger>
                     <SelectContent>
@@ -579,7 +576,7 @@ const Index = () => {
                   <Button
                     type="submit"
                     disabled={savingLetter}
-                    className="flex-1 bg-gradient-to-r from-emerald-500 to-cyan-500 font-semibold text-white shadow-md transition-all hover:brightness-95 hover:shadow-lg"
+                    className="flex-1 bg-blue-600 font-semibold text-white shadow-md transition-all hover:bg-blue-700 hover:shadow-lg"
                   >
                     {savingLetter ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Send className="h-4 w-4 mr-2" />}
                     {savingLetter ? "Preenchendo carta..." : "Registrar Carta de Pregação"}

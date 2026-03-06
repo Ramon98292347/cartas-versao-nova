@@ -11,11 +11,13 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { listMembers, type UserListItem, generateMemberDocs } from "@/services/saasService";
+import { listChurchesInScope, listMembers, type UserListItem, generateMemberDocs } from "@/services/saasService";
 import { useUser } from "@/context/UserContext";
 
 type MemberTab = "lista" | "ficha_membro" | "carteirinha" | "ficha_obreiro";
 type MemberView = "lista" | "grid";
+type CarteirinhaTemplate = "padrao";
+type FichaTemplate = "padrao";
 
 type MemberDocForm = {
   nome_completo: string;
@@ -32,9 +34,14 @@ type MemberDocForm = {
   cpf: string;
   rg: string;
   telefone: string;
+  email: string;
   foto_3x4_url: string;
   assinatura_pastor_url: string;
+  qr_code_url: string;
   igreja_nome: string;
+  ficha_titulo: string;
+  ficha_subtitulo: string;
+  ficha_rodape: string;
   compromisso_funcao: string;
   congregacao_endereco: string;
   congregacao_numero: string;
@@ -145,9 +152,14 @@ const emptyForm: MemberDocForm = {
   cpf: "",
   rg: "",
   telefone: "",
+  email: "",
   foto_3x4_url: "",
   assinatura_pastor_url: "",
+  qr_code_url: "",
   igreja_nome: "",
+  ficha_titulo: "Ficha de cadastro de Membros",
+  ficha_subtitulo: "Setorial de Vitória",
+  ficha_rodape: "Av Santo Antonio N° 366, Caratoira, Vitória ES",
   compromisso_funcao: "",
   congregacao_endereco: "",
   congregacao_numero: "",
@@ -247,21 +259,28 @@ function MiniCard({
   title,
   value,
   subtitle,
-  gradient,
+  tone,
 }: {
   title: string;
   value: number;
   subtitle: string;
-  gradient?: string;
+  tone?: { bg: string; border: string; accent: string };
 }) {
+  const bg = tone?.bg || "#FFFFFF";
+  const border = tone?.border || "#E5E7EB";
+  const accent = tone?.accent || "#2563EB";
+
   return (
-    <Card className={`rounded-2xl border-0 shadow-sm ${gradient || "bg-white"}`}>
-      <CardHeader className="pb-2">
-        <CardTitle className={`text-xl font-semibold ${gradient ? "text-white" : "text-slate-900"}`}>{title}</CardTitle>
+    <Card className="rounded-xl border shadow-sm" style={{ backgroundColor: bg, borderColor: border }}>
+      <CardHeader className="border-l-4 pb-2" style={{ borderLeftColor: accent }}>
+        <div className="flex items-center justify-between">
+          <CardTitle className="text-base font-semibold text-slate-900">{title}</CardTitle>
+          <Users className="h-4 w-4" style={{ color: accent }} />
+        </div>
       </CardHeader>
       <CardContent>
-        <p className={`text-5xl font-extrabold ${gradient ? "text-white" : "text-slate-900"}`}>{value}</p>
-        <p className={`text-lg ${gradient ? "text-white/90" : "text-slate-500"}`}>{subtitle}</p>
+        <p className="text-4xl font-extrabold text-slate-900">{value}</p>
+        <p className="text-sm text-slate-500">{subtitle}</p>
       </CardContent>
     </Card>
   );
@@ -278,7 +297,7 @@ function toInputDate(value: string | null | undefined) {
   return String(value).slice(0, 10);
 }
 
-function memberToForm(member: UserListItem, churchName: string, pastorSignature: string) {
+function memberToForm(member: UserListItem, churchName: string, pastorSignature: string, churchFooter: string) {
   return {
     nome_completo: member.full_name || "",
     matricula: member.matricula || "",
@@ -294,9 +313,14 @@ function memberToForm(member: UserListItem, churchName: string, pastorSignature:
     cpf: member.cpf || "",
     rg: member.rg || "",
     telefone: member.phone || "",
+    email: member.email || "",
     foto_3x4_url: member.avatar_url || "",
     assinatura_pastor_url: pastorSignature || "",
+    qr_code_url: "",
     igreja_nome: churchName,
+    ficha_titulo: "Ficha de cadastro de Membros",
+    ficha_subtitulo: churchName || "Setorial de Vitória",
+    ficha_rodape: churchFooter,
     compromisso_funcao: member.minister_role || "",
     congregacao_endereco: member.address_street || "",
     congregacao_numero: member.address_number || "",
@@ -356,7 +380,7 @@ function memberToForm(member: UserListItem, churchName: string, pastorSignature:
     bairro_congregacao: "",
     cidade_congregacao: "",
     uf_congregacao: "",
-    cep_congregacao: "",
+    cep_congregacao: member.cep || "",
     dirigente_congregacao: "",
     tel_congregacao: "",
     sede_setorial: "",
@@ -399,6 +423,128 @@ function tabLabel(tab: MemberTab) {
   return "Ficha de obreiro";
 }
 
+
+function svgPlaceholder(label: string, width = 300, height = 200) {
+  const safe = encodeURIComponent(label);
+  return `data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='${width}' height='${height}'><rect width='100%' height='100%' fill='%23F1F5F9'/><text x='50%' y='50%' dominant-baseline='middle' text-anchor='middle' fill='%2364758B' font-size='20' font-family='Arial'>${safe}</text></svg>`;
+}
+
+function escapeHtml(value: string) {
+  return String(value || "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
+}
+
+function buildCarteirinhaHtml(form: MemberDocForm) {
+  const foto = escapeHtml(form.foto_3x4_url || svgPlaceholder("Foto 3x4", 300, 400));
+  const assinatura = escapeHtml(form.assinatura_pastor_url || svgPlaceholder("Assinatura Pastor", 600, 160));
+  const qr = escapeHtml(form.qr_code_url || svgPlaceholder("QR", 300, 300));
+  const nome = escapeHtml(form.nome_completo || "");
+  const funcao = escapeHtml(form.funcao_ministerial || "");
+  const matricula = escapeHtml(form.matricula || "");
+  const cpf = escapeHtml(form.cpf || "");
+  const telefone = escapeHtml(form.telefone || "");
+  const batismo = escapeHtml(form.data_batismo || "");
+
+  return `<!doctype html>
+<html lang="pt-br"><head><meta charset="utf-8" />
+<style>
+body{margin:0;font-family:Montserrat,Arial,sans-serif;background:#fff}
+.page{width:100%;padding:8px;box-sizing:border-box}
+.wrap{width:176mm;height:55mm;display:flex}
+.side{width:88mm;height:55mm;position:relative;overflow:hidden;box-sizing:border-box;background:#fff}
+.front{border:.3mm solid rgba(0,0,0,.45);border-right:none;background-image:url("https://idipilrcaqittmnapmbq.supabase.co/storage/v1/object/public/banner/carteirinha/banner%20carteirinha.jpg");background-repeat:no-repeat;background-size:auto 100%;background-position:left center}
+.back{border:.3mm solid rgba(0,0,0,.45);border-left:none}
+.photo{position:absolute;right:7mm;top:6mm;width:20mm;height:26.5mm;border-radius:4mm;overflow:hidden}
+.photo img{width:100%;height:100%;object-fit:cover}
+.text-center{position:absolute;left:6mm;right:10mm;bottom:3mm;text-align:center}
+.name{font-size:10.2pt;font-weight:800;color:#4c63ff;text-transform:uppercase;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin:0 0 1.2mm 0}
+.role{font-size:10pt;font-weight:800;color:#ff6b6b;text-transform:uppercase;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin:0 0 1.6mm 0}
+.info{font-size:6.3pt;font-weight:700;color:#ff6b6b;text-transform:uppercase;letter-spacing:.25px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin:0}
+.title{position:absolute;top:5mm;left:0;width:100%;text-align:center;font-size:12pt;font-weight:800;font-style:italic;color:#000}
+.field-box{position:absolute;border:.4mm solid rgba(0,0,0,.55);border-radius:1mm;background:rgba(255,255,255,.3)}
+.field-label{position:absolute;font-size:6pt;font-weight:700;color:#000;text-transform:uppercase;text-align:center;line-height:1}
+.field-value{position:absolute;font-size:7.5pt;font-weight:700;color:#000;text-align:center;line-height:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.id-box{width:29mm;height:4.2mm;top:14mm;left:50%;transform:translateX(-50%)} .id-label{width:29mm;top:19mm;left:50%;transform:translateX(-50%)} .id-value{width:29mm;top:15.2mm;left:50%;transform:translateX(-50%)}
+.cpf-box{width:24.5mm;height:4.4mm;top:23mm;left:6mm} .cpf-label{width:24.5mm;top:28.2mm;left:6mm} .cpf-value{width:24.5mm;top:24.4mm;left:6mm}
+.tel-box{width:24.5mm;height:4.4mm;top:23mm;left:50%;transform:translateX(-50%)} .tel-label{width:24.5mm;top:28.2mm;left:50%;transform:translateX(-50%)} .tel-value{width:24.5mm;top:24.4mm;left:50%;transform:translateX(-50%)}
+.bat-box{width:24.5mm;height:4.4mm;top:23mm;right:6mm} .bat-label{width:24.5mm;top:28.2mm;right:6mm} .bat-value{width:24.5mm;top:24.4mm;right:6mm}
+.line{position:absolute;left:6mm;right:30mm;top:45mm;height:.7mm;background:rgba(0,0,0,.85)}
+.pastor-sign{position:absolute;left:6mm;right:30mm;top:38.4mm;height:5.8mm;text-align:center}
+.pastor-sign img{max-height:100%;max-width:100%;object-fit:contain}
+.pastor-label{top:46.6mm;left:6mm;right:30mm}
+.qr{position:absolute;left:65mm;bottom:2mm;width:17.3mm;height:18.7mm;border-radius:4mm;overflow:hidden;border:.3mm solid rgba(0,0,0,.25)}
+.qr img{width:100%;height:100%;object-fit:cover}
+</style></head>
+<body><div class="page"><div class="wrap">
+<div class="side front">
+<div class="photo"><img src="${foto}" alt="Foto"></div>
+<div class="text-center"><p class="name">${nome}</p><p class="role">${funcao}</p><p class="info">ESTE DOCUMENTO É PESSOAL E INTRANSFERÍVEL</p></div>
+</div>
+<div class="side back">
+<div class="title">CARTEIRINHA DE MEMBRO</div>
+<div class="field-box id-box"></div><div class="field-label id-label">ID/REGISTRADO</div><div class="field-value id-value">${matricula}</div>
+<div class="field-box cpf-box"></div><div class="field-label cpf-label">CPF</div><div class="field-value cpf-value">${cpf}</div>
+<div class="field-box tel-box"></div><div class="field-label tel-label">TELEFONE</div><div class="field-value tel-value">${telefone}</div>
+<div class="field-box bat-box"></div><div class="field-label bat-label">DATA BATISMO</div><div class="field-value bat-value">${batismo}</div>
+<div class="pastor-sign"><img src="${assinatura}" alt="Assinatura"></div><div class="line"></div><div class="field-label pastor-label">ASSINATURA PASTOR</div>
+<div class="qr"><img src="${qr}" alt="QR"></div>
+</div></div></div></body></html>`;
+}
+
+function buildFichaMembroHtml(form: MemberDocForm) {
+  const foto = escapeHtml(form.foto_3x4_url || svgPlaceholder("Foto 3x4", 300, 400));
+  const logo = "https://idipilrcaqittmnapmbq.supabase.co/storage/v1/object/public/banner/logo/logo%20d.png";
+  const titulo = escapeHtml(form.ficha_titulo || "Ficha de cadastro de Membros");
+  const subtitulo = escapeHtml(form.ficha_subtitulo || "Setorial de Vitória");
+  const rodape = escapeHtml(form.ficha_rodape || "");
+
+  const nasc = escapeHtml(form.data_nascimento || "");
+  const bat = escapeHtml(form.data_batismo || "");
+  const ord = escapeHtml(form.ordenacao_presbitero || form.ordenacao_diacono || form.ordenacao_cooperador || "");
+
+  return `<!doctype html>
+<html lang="pt-br"><head><meta charset="utf-8" />
+<style>
+@page{size:A4;margin:15mm} body{margin:0;font-family:Montserrat,Arial,sans-serif;color:#111}
+.page{width:210mm;height:297mm;box-sizing:border-box}
+.header{display:flex;align-items:center;justify-content:center;gap:12mm;margin-top:2mm}
+.header-photo{width:25mm;height:32mm;border:.35mm solid rgba(0,0,0,.25);border-radius:2mm;overflow:hidden;background:rgba(0,0,0,.04)}
+.header-photo img{width:100%;height:100%;object-fit:cover}
+.logo{height:45mm;width:auto;display:block}
+.title{text-align:center;margin:10mm 0 8mm 0;line-height:1.15}
+.title h1{margin:0;font-size:16pt;font-weight:800}.title h2{margin:2mm 0 0 0;font-size:14pt;font-weight:800}
+.content{margin-top:4mm;font-size:10.5pt}
+.row{display:flex;gap:10mm;margin:2.2mm 0;flex-wrap:wrap}
+.field{display:flex;gap:2mm;align-items:baseline;min-width:0}
+.label{font-weight:600;white-space:nowrap}
+.value{font-weight:500;border-bottom:.25mm solid rgba(0,0,0,.25);padding:0 1mm .6mm 1mm;min-width:40mm;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.w-70{min-width:70mm}.w-60{min-width:60mm}.w-50{min-width:50mm}.w-45{min-width:45mm}.w-40{min-width:40mm}.w-35{min-width:35mm}.w-30{min-width:30mm}.w-25{min-width:25mm}
+.section-title{text-align:center;margin:22mm 0 8mm 0;font-size:14pt;font-weight:900}
+.footer{position:absolute;bottom:10mm;left:0;right:0;text-align:center;font-weight:800;font-size:11pt}
+</style></head><body><div class="page">
+<div class="header"><div class="header-photo"><img src="${foto}" alt="Foto" /></div><img class="logo" src="${logo}" alt="Logo" /></div>
+<div class="title"><h1>${titulo}</h1><h2>${subtitulo}</h2></div>
+<div class="content">
+<div class="row"><div class="field"><div class="label">Nome:</div><div class="value w-70">${escapeHtml(form.nome_completo)}</div></div></div>
+<div class="row"><div class="field"><div class="label">Endereço:</div><div class="value w-70">${escapeHtml(form.endereco)}</div></div><div class="field"><div class="label">Número da casa:</div><div class="value w-30">${escapeHtml(form.numero)}</div></div></div>
+<div class="row"><div class="field"><div class="label">Bairro:</div><div class="value w-45">${escapeHtml(form.bairro)}</div></div><div class="field"><div class="label">Cidade:</div><div class="value w-45">${escapeHtml(form.cidade)}</div></div><div class="field"><div class="label">Estado:</div><div class="value w-25">${escapeHtml(form.estado)}</div></div><div class="field"><div class="label">Cep:</div><div class="value w-25">${escapeHtml(form.cep_congregacao || "")}</div></div></div>
+<div class="row"><div class="field"><div class="label">RG:</div><div class="value w-35">${escapeHtml(form.rg)}</div></div><div class="field"><div class="label">CPF:</div><div class="value w-35">${escapeHtml(form.cpf)}</div></div><div class="field"><div class="label">Data de Nascimento:</div><div class="value w-45">${nasc}</div></div></div>
+<div class="row"><div class="field"><div class="label">Cidade de Nascimento:</div><div class="value w-60">${escapeHtml(form.cidade_nascimento)}</div></div><div class="field"><div class="label">Estado:</div><div class="value w-35">${escapeHtml(form.uf_nascimento)}</div></div></div>
+<div class="row"><div class="field"><div class="label">Estado Civil:</div><div class="value w-40">${escapeHtml(form.estado_civil)}</div></div><div class="field"><div class="label">Telefone:</div><div class="value w-45">${escapeHtml(form.telefone)}</div></div></div>
+<div class="row"><div class="field"><div class="label">Endereço de email:</div><div class="value w-70">${escapeHtml(form.email)}</div></div></div>
+<div class="row"><div class="field"><div class="label">Profissão:</div><div class="value w-60">${escapeHtml(form.profissao)}</div></div><div class="field"><div class="label">Idade:</div><div class="value w-25">${""}</div></div></div>
+<div class="section-title">Dados Ministeriais do Membro e do Obreiro (a)</div>
+<div class="row"><div class="field"><div class="label">Data de Batismo:</div><div class="value w-45">${bat}</div></div><div class="field"><div class="label">Função Ministerial:</div><div class="value w-50">${escapeHtml(form.funcao_ministerial)}</div></div></div>
+<div class="row"><div class="field"><div class="label">Data da Ordenação:</div><div class="value w-45">${ord}</div></div></div>
+</div>
+<div class="footer">${rodape}</div>
+</div></body></html>`;
+}
+
 export default function PastorMembrosPage() {
   const { session, usuario } = useUser();
   const activeTotvsId = String(session?.totvs_id || usuario?.default_totvs_id || usuario?.totvs || "");
@@ -406,8 +552,14 @@ export default function PastorMembrosPage() {
   const [view, setView] = useState<MemberView>("lista");
   const [selectedMemberId, setSelectedMemberId] = useState("");
   const [form, setForm] = useState<MemberDocForm>(emptyForm);
+  const [manualCarteirinha, setManualCarteirinha] = useState(false);
+  const [manualFichaMembro, setManualFichaMembro] = useState(false);
+  const [carteirinhaTemplate, setCarteirinhaTemplate] = useState<CarteirinhaTemplate>("padrao");
+  const [fichaTemplate, setFichaTemplate] = useState<FichaTemplate>("padrao");
   const [savingDraft, setSavingDraft] = useState(false);
   const [sending, setSending] = useState(false);
+  const carteirinhaHtml = useMemo(() => buildCarteirinhaHtml(form), [form]);
+  const fichaMembroHtml = useMemo(() => buildFichaMembroHtml(form), [form]);
 
   const { data } = useQuery({
     queryKey: ["pastor-members-page"],
@@ -415,6 +567,29 @@ export default function PastorMembrosPage() {
   });
 
   const workers = data?.workers || [];
+  const { data: churchesInScope = [] } = useQuery({
+    queryKey: ["pastor-members-churches-footer", activeTotvsId],
+    queryFn: () => listChurchesInScope(1, 400),
+    enabled: Boolean(activeTotvsId),
+  });
+  const activeChurch = useMemo(
+    () => churchesInScope.find((church) => String(church.totvs_id || "") === activeTotvsId) || null,
+    [churchesInScope, activeTotvsId],
+  );
+  const churchFooter = useMemo(() => {
+    const parts = [
+      activeChurch?.address_street || "",
+      activeChurch?.address_number ? `Nº ${activeChurch.address_number}` : "",
+      activeChurch?.address_neighborhood || "",
+      activeChurch?.address_city || "",
+      activeChurch?.address_state || "",
+      activeChurch?.cep || "",
+    ]
+      .map((item) => String(item || "").trim())
+      .filter(Boolean);
+    return parts.join(", ");
+  }, [activeChurch]);
+  const rodapeAuto = useMemo(() => churchFooter || form.ficha_rodape || "", [churchFooter, form.ficha_rodape]);
   const selectedMember = useMemo(
     () => workers.find((member) => String(member.id) === selectedMemberId) || null,
     [workers, selectedMemberId],
@@ -426,14 +601,20 @@ export default function PastorMembrosPage() {
   const churchName = String(session?.church_name || usuario?.church_name || "");
 
   useEffect(() => {
+    if (tab === "ficha_obreiro") {
+      setTab("lista");
+    }
+  }, [tab]);
+
+  useEffect(() => {
     if (!selectedMemberId && workers.length > 0) {
       setSelectedMemberId(String(workers[0].id));
       return;
     }
     if (!selectedMember) return;
     const pastorSignature = String((pastorDaIgreja as UserListItem | null)?.signature_url || "");
-    setForm(memberToForm(selectedMember, churchName, pastorSignature));
-  }, [selectedMemberId, selectedMember, workers, churchName, pastorDaIgreja]);
+    setForm(memberToForm(selectedMember, churchName, pastorSignature, churchFooter));
+  }, [selectedMemberId, selectedMember, workers, churchName, pastorDaIgreja, churchFooter]);
 
   const counters = useMemo(() => {
     return {
@@ -492,29 +673,43 @@ export default function PastorMembrosPage() {
     }
   }
 
+  const showManualForm =
+    tab === "ficha_obreiro" ||
+    (tab === "carteirinha" && manualCarteirinha) ||
+    (tab === "ficha_membro" && manualFichaMembro);
+
+  const memberTone = {
+    total: { bg: "#FFFFFF", border: "#E5E7EB", accent: "#2563EB" },
+    pastor: { bg: "#F8FAFC", border: "#E5E7EB", accent: "#2563EB" },
+    presbitero: { bg: "#F8FAFC", border: "#E5E7EB", accent: "#7C3AED" },
+    diacono: { bg: "#F8FAFC", border: "#E5E7EB", accent: "#16A34A" },
+    obreiro: { bg: "#F8FAFC", border: "#E5E7EB", accent: "#CA8A04" },
+    batizados: { bg: "#F8FAFC", border: "#E5E7EB", accent: "#334155" },
+  };
+
   return (
     <ManagementShell roleMode="pastor">
       <div className="mb-4">
-        <h2 className="bg-gradient-to-r from-emerald-500 to-cyan-500 bg-clip-text text-5xl font-extrabold tracking-tight text-transparent">Gestao de Membros</h2>
-        <p className="mt-1 text-3xl font-medium text-slate-600">Gerencie os membros da sua igreja</p>
+        <h2 className="text-4xl font-extrabold tracking-tight text-slate-900">Membros</h2>
+        <p className="mt-1 text-base text-slate-600">Gestao de membros com visualizacao, filtros e documentos.</p>
       </div>
 
       <section className="mb-5 grid gap-4 md:grid-cols-3 xl:grid-cols-6">
-        <MiniCard title="Total de Membros" value={counters.total} subtitle="membros encontrados" gradient="bg-gradient-to-r from-emerald-500 to-cyan-500" />
-        <MiniCard title="Pastor" value={counters.pastor} subtitle="pastores" gradient="bg-gradient-to-r from-violet-500 to-fuchsia-500" />
-        <MiniCard title="Presbitero" value={counters.presbitero} subtitle="presbiteros" gradient="bg-gradient-to-r from-blue-500 to-indigo-500" />
-        <MiniCard title="Diacono" value={counters.diacono} subtitle="diaconos" gradient="bg-gradient-to-r from-emerald-500 to-green-500" />
-        <MiniCard title="Obreiro" value={counters.obreiro} subtitle="obreiros" gradient="bg-gradient-to-r from-orange-500 to-amber-500" />
-        <MiniCard title="Batizados" value={counters.batizados} subtitle="batizados" gradient="bg-gradient-to-r from-sky-500 to-cyan-500" />
+        <MiniCard title="Total de membros" value={counters.total} subtitle="membros encontrados" tone={memberTone.total} />
+        <MiniCard title="Pastor" value={counters.pastor} subtitle="pastores" tone={memberTone.pastor} />
+        <MiniCard title="Presbitero" value={counters.presbitero} subtitle="presbiteros" tone={memberTone.presbitero} />
+        <MiniCard title="Diacono" value={counters.diacono} subtitle="diaconos" tone={memberTone.diacono} />
+        <MiniCard title="Obreiro" value={counters.obreiro} subtitle="obreiros" tone={memberTone.obreiro} />
+        <MiniCard title="Membros ativos" value={counters.batizados} subtitle="ministerio membro" tone={memberTone.batizados} />
       </section>
 
       <Card className="mb-4 rounded-2xl border border-slate-200 bg-white shadow-sm">
         <CardContent className="flex flex-col gap-3 p-4 lg:flex-row lg:items-center lg:justify-between">
-          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-            <Button variant={tab === "lista" ? "default" : "outline"} onClick={() => setTab("lista")}>Lista de membros</Button>
-            <Button variant={tab === "ficha_membro" ? "default" : "outline"} onClick={() => setTab("ficha_membro")}>Ficha do membro</Button>
-            <Button variant={tab === "carteirinha" ? "default" : "outline"} onClick={() => setTab("carteirinha")}>Carteirinha</Button>
-            <Button variant={tab === "ficha_obreiro" ? "default" : "outline"} onClick={() => setTab("ficha_obreiro")}>Ficha de obreiro</Button>
+          <div className="flex w-full gap-2 overflow-x-auto">
+            <Button className="rounded-none border-b-2 border-transparent px-2" variant="ghost" style={{ borderBottomColor: tab === "lista" ? "#2563EB" : "transparent", color: tab === "lista" ? "#2563EB" : "#6B7280" }} onClick={() => setTab("lista")}>Lista de membros</Button>
+            <Button className="rounded-none border-b-2 border-transparent px-2" variant="ghost" style={{ borderBottomColor: tab === "ficha_membro" ? "#2563EB" : "transparent", color: tab === "ficha_membro" ? "#2563EB" : "#6B7280" }} onClick={() => setTab("ficha_membro")}>Ficha do membro</Button>
+            <Button className="rounded-none border-b-2 border-transparent px-2" variant="ghost" style={{ borderBottomColor: tab === "carteirinha" ? "#2563EB" : "transparent", color: tab === "carteirinha" ? "#2563EB" : "#6B7280" }} onClick={() => setTab("carteirinha")}>Carteirinha</Button>
+            <Button variant="ghost" disabled className="text-slate-400">Ficha de obreiro (em breve)</Button>
           </div>
 
           <div className="flex items-center gap-2">
@@ -558,6 +753,28 @@ export default function PastorMembrosPage() {
                   <Badge variant="outline" className={statusBadge(member.is_active !== false)}>
                     {member.is_active === false ? "Inativo" : "Ativo"}
                   </Badge>
+                  <div className="grid grid-cols-2 gap-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        setSelectedMemberId(String(member.id));
+                        setTab("carteirinha");
+                      }}
+                    >
+                      Carteirinha
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        setSelectedMemberId(String(member.id));
+                        setTab("ficha_membro");
+                      }}
+                    >
+                      Ficha
+                    </Button>
+                  </div>
                 </CardContent>
               </Card>
             ))}
@@ -576,6 +793,64 @@ export default function PastorMembrosPage() {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
+            {(tab === "carteirinha" || tab === "ficha_membro") ? (
+              <div className="grid gap-3 md:grid-cols-2">
+                <div className="space-y-1">
+                  <Label>Membro</Label>
+                  <Select value={selectedMemberId} onValueChange={setSelectedMemberId}>
+                    <SelectTrigger><SelectValue placeholder="Selecione o membro" /></SelectTrigger>
+                    <SelectContent>
+                      {workers.map((member) => (
+                        <SelectItem key={member.id} value={String(member.id)}>
+                          {member.full_name} - {member.cpf || "sem cpf"}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {tab === "carteirinha" ? (
+                  <div className="space-y-1">
+                    <Label>Modelo da carteirinha</Label>
+                    <Select value={carteirinhaTemplate} onValueChange={(value) => setCarteirinhaTemplate(value as CarteirinhaTemplate)}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="padrao">Carteirinha IPDA - Padrao</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                ) : (
+                  <div className="space-y-1">
+                    <Label>Modelo da ficha</Label>
+                    <Select value={fichaTemplate} onValueChange={(value) => setFichaTemplate(value as FichaTemplate)}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="padrao">Ficha de membro - Padrao</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+              </div>
+            ) : null}
+
+            {tab === "carteirinha" ? (
+              <div className="flex justify-end">
+                <Button variant="outline" onClick={() => setManualCarteirinha((prev) => !prev)}>
+                  {manualCarteirinha ? "Ocultar preenchimento manual" : "Preenchimento manual da carteirinha"}
+                </Button>
+              </div>
+            ) : null}
+
+            {tab === "ficha_membro" ? (
+              <div className="flex justify-end">
+                <Button variant="outline" onClick={() => setManualFichaMembro((prev) => !prev)}>
+                  {manualFichaMembro ? "Ocultar preenchimento manual" : "Preenchimento manual da ficha"}
+                </Button>
+              </div>
+            ) : null}
+
+            {showManualForm ? (
+              <>
             <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
               <div className="space-y-1 xl:col-span-2">
                 <Label>Membro</Label>
@@ -630,6 +905,46 @@ export default function PastorMembrosPage() {
               <Label>Assinatura do pastor (URL)</Label>
               <Input value={form.assinatura_pastor_url} onChange={(e) => setForm((prev) => ({ ...prev, assinatura_pastor_url: e.target.value }))} />
             </div>
+              </>
+            ) : null}
+
+            {tab === "carteirinha" ? (
+              <div className="space-y-3 rounded-xl border border-slate-200 p-4">
+                {manualCarteirinha ? (
+                  <div className="space-y-1">
+                    <Label>QR Code (URL)</Label>
+                    <Input value={form.qr_code_url} onChange={(e) => setForm((prev) => ({ ...prev, qr_code_url: e.target.value }))} />
+                  </div>
+                ) : null}
+                <div className="overflow-hidden rounded-xl border border-slate-200">
+                  <iframe title="Pré-visualização carteirinha" className="h-[320px] w-full bg-white" srcDoc={carteirinhaHtml} />
+                </div>
+              </div>
+            ) : null}
+
+            {tab === "ficha_membro" ? (
+              <div className="space-y-3 rounded-xl border border-slate-200 p-4">
+                {manualFichaMembro ? (
+                  <div className="grid gap-3 md:grid-cols-3">
+                    <div className="space-y-1">
+                      <Label>Título da ficha</Label>
+                      <Input value={form.ficha_titulo} onChange={(e) => setForm((prev) => ({ ...prev, ficha_titulo: e.target.value }))} />
+                    </div>
+                    <div className="space-y-1">
+                      <Label>Subtítulo da ficha</Label>
+                      <Input value={form.ficha_subtitulo} onChange={(e) => setForm((prev) => ({ ...prev, ficha_subtitulo: e.target.value }))} />
+                    </div>
+                  <div className="space-y-1">
+                    <Label>Rodapé endereço</Label>
+                    <Input value={rodapeAuto || form.ficha_rodape} disabled />
+                  </div>
+                </div>
+                ) : null}
+                <div className="overflow-hidden rounded-xl border border-slate-200">
+                  <iframe title="Pré-visualização ficha de membro" className="h-[640px] w-full bg-white" srcDoc={fichaMembroHtml} />
+                </div>
+              </div>
+            ) : null}
 
             {tab === "ficha_obreiro" ? (
               <div className="space-y-4 rounded-xl border border-slate-200 p-4">

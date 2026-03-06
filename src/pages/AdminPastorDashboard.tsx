@@ -310,7 +310,7 @@ export default function AdminPastorDashboard() {
       <Dialog open={openReleases} onOpenChange={setOpenReleases}>
         <DialogContent className="max-w-3xl">
           <DialogHeader>
-            <DialogTitle>NotificaÃ§Ãµes</DialogTitle>
+            <DialogTitle>Notificações</DialogTitle>
           </DialogHeader>
           <div className="mb-2 flex justify-end">
             <Button variant="outline" size="sm" onClick={readAllNotifications}>
@@ -318,12 +318,12 @@ export default function AdminPastorDashboard() {
             </Button>
           </div>
           <div className="space-y-2">
-            {notifications.length === 0 ? <p className="text-sm text-slate-500">Sem notificaÃ§Ãµes.</p> : null}
+            {notifications.length === 0 ? <p className="text-sm text-slate-500">Sem notificações.</p> : null}
             {notifications.map((item) => (
               <div key={item.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border p-3 text-sm">
                 <div>
                   <p className="font-semibold">{item.title}</p>
-                  <p className="text-slate-600">{item.message || "Sem mensagem"}</p>
+                  <p className="text-slate-600">{item.message || "Sem mensagem"}
                 </div>
                 <div className="flex gap-2">
                   <Button variant="outline" onClick={() => readNotification(item.id)} disabled={item.is_read}>

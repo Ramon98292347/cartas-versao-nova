@@ -15,7 +15,7 @@ import {
   upsertAnnouncement,
   type AnnouncementItem,
 } from "@/services/saasService";
-import { ArrowLeft, Trash2 } from "lucide-react";
+import { ArrowLeft, Loader2, Megaphone, Trash2 } from "lucide-react";
 import { getFriendlyError } from "@/lib/error-map";
 import { addAuditLog } from "@/lib/audit";
 import { supabase } from "@/lib/supabase";
@@ -103,11 +103,11 @@ export default function DivulgacaoPage() {
       return;
     }
     if (form.type === "video" && !file.type.startsWith("video/")) {
-      toast.error("Selecione um arquivo de video.");
+      toast.error("Selecione um arquivo de vídeo.");
       return;
     }
     if (file.size > 20 * 1024 * 1024) {
-      toast.error("Arquivo muito grande (max 20MB).");
+      toast.error("Arquivo muito grande (máx. 20MB).");
       return;
     }
     setPendingMediaFile(file);
@@ -137,12 +137,12 @@ export default function DivulgacaoPage() {
   async function submit(e: FormEvent) {
     e.preventDefault();
 
-    if (!form.title.trim()) return toast.error("Informe o titulo.");
-    if (form.type === "text" && !form.body_text.trim()) return toast.error("Para tipo text, body_text e obrigatorio.");
+    if (!form.title.trim()) return toast.error("Informe o título.");
+    if (form.type === "text" && !form.body_text.trim()) return toast.error("Para tipo texto, preencha o campo de texto.");
     if ((form.type === "image" || form.type === "video") && !form.media_url.trim() && !(mediaSource === "file" && pendingMediaFile)) {
-      return toast.error("Para image/video, media_url e obrigatorio.");
+      return toast.error("Para imagem/vídeo, informe a mídia.");
     }
-    if (form.starts_at && form.ends_at && form.ends_at < form.starts_at) return toast.error("Data fim deve ser maior ou igual a data inicio.");
+    if (form.starts_at && form.ends_at && form.ends_at < form.starts_at) return toast.error("Data fim deve ser maior ou igual à data início.");
 
     setSaving(true);
     try {
@@ -164,7 +164,7 @@ export default function DivulgacaoPage() {
         is_active: form.is_active,
       });
 
-      toast.success(form.id ? "Divulgacao atualizada." : "Divulgacao criada.");
+      toast.success(form.id ? "Divulgação atualizada." : "Divulgação criada.");
       addAuditLog("announcement_saved", { announcement_id: form.id || null, type: form.type });
       setForm(initialForm);
       setMediaSource("url");
@@ -178,10 +178,10 @@ export default function DivulgacaoPage() {
   }
 
   async function remove(id: string) {
-    if (!window.confirm("Excluir este anuncio?")) return;
+    if (!window.confirm("Excluir esta divulgação?")) return;
     try {
       await deleteAnnouncement(id);
-      toast.success("Anuncio excluido.");
+      toast.success("Divulgação excluída.");
       addAuditLog("announcement_deleted", { announcement_id: id });
       await refresh();
     } catch (err: unknown) {
@@ -190,73 +190,68 @@ export default function DivulgacaoPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#f3f5f9] p-4">
+    <div className="min-h-screen bg-[#f6f8fc] p-4 md:p-6">
       <div className="mx-auto max-w-6xl space-y-4">
-        <div className="flex items-center justify-between">
-          <h1 className="text-2xl font-bold text-slate-900">Divulgação</h1>
-          <Button variant="outline" onClick={() => nav(-1)}>
-            <ArrowLeft className="mr-2 h-4 w-4" /> Voltar
-          </Button>
+        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm md:p-6">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h1 className="text-2xl font-bold text-slate-900">Divulgação</h1>
+              <p className="text-sm text-slate-600">Gerencie os avisos exibidos no login e no painel.</p>
+            </div>
+            <Button variant="outline" onClick={() => nav(-1)}>
+              <ArrowLeft className="mr-2 h-4 w-4" /> Voltar
+            </Button>
+          </div>
         </div>
 
         <div className="grid gap-4 lg:grid-cols-2">
-          <Card className="border border-slate-200 bg-white">
-            <CardHeader>
-              <CardTitle>{form.id ? "Editar anuncio" : "Novo anuncio"}</CardTitle>
+          <Card className="rounded-2xl border border-slate-200 bg-white shadow-sm">
+            <CardHeader className="pb-3">
+              <CardTitle className="flex items-center gap-2 text-base">
+                <Megaphone className="h-5 w-5 text-blue-600" /> {form.id ? "Editar divulgação" : "Nova divulgação"}
+              </CardTitle>
             </CardHeader>
             <CardContent>
               <form className="space-y-3" onSubmit={submit}>
                 <div className="space-y-1">
-                  <Label>Titulo</Label>
-                  <Input value={form.title} onChange={(e) => setForm((p) => ({ ...p, title: e.target.value }))} />
+                  <Label>Título</Label>
+                  <Input className="h-11 rounded-xl border-slate-300 bg-slate-50" value={form.title} onChange={(e) => setForm((p) => ({ ...p, title: e.target.value }))} />
                 </div>
 
                 <div className="space-y-1">
                   <Label>Tipo</Label>
                   <Select value={form.type} onValueChange={(v) => setForm((p) => ({ ...p, type: v as "text" | "image" | "video" }))}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
+                    <SelectTrigger className="h-11 rounded-xl border-slate-300 bg-slate-50"><SelectValue /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="text">text</SelectItem>
-                      <SelectItem value="image">image</SelectItem>
-                      <SelectItem value="video">video</SelectItem>
+                      <SelectItem value="text">Texto</SelectItem>
+                      <SelectItem value="image">Imagem</SelectItem>
+                      <SelectItem value="video">Vídeo</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
 
                 <div className="space-y-1">
                   <Label>Texto</Label>
-                  <Input value={form.body_text} onChange={(e) => setForm((p) => ({ ...p, body_text: e.target.value }))} />
+                  <Input className="h-11 rounded-xl border-slate-300 bg-slate-50" value={form.body_text} onChange={(e) => setForm((p) => ({ ...p, body_text: e.target.value }))} />
                 </div>
 
                 <div className="space-y-1">
-                  <Label>Midia (URL ou arquivo)</Label>
+                  <Label>Mídia (URL ou arquivo)</Label>
                   <div className="mb-2 flex gap-2">
-                    <Button
-                      type="button"
-                      variant={mediaSource === "url" ? "default" : "outline"}
-                      size="sm"
-                      onClick={() => {
-                        setMediaSource("url");
-                        setPendingMediaFile(null);
-                      }}
-                    >
+                    <Button type="button" variant={mediaSource === "url" ? "default" : "outline"} size="sm" className={mediaSource === "url" ? "bg-blue-600 hover:bg-blue-700" : ""} onClick={() => { setMediaSource("url"); setPendingMediaFile(null); }}>
                       URL
                     </Button>
-                    <Button type="button" variant={mediaSource === "file" ? "default" : "outline"} size="sm" onClick={() => setMediaSource("file")}>
-                      Importar arquivo
-                    </Button>
+                    <Button type="button" variant={mediaSource === "file" ? "default" : "outline"} size="sm" className={mediaSource === "file" ? "bg-blue-600 hover:bg-blue-700" : ""} onClick={() => setMediaSource("file")}>Importar</Button>
                   </div>
 
                   {mediaSource === "url" ? (
-                    <Input value={form.media_url ?? ""} onChange={(e) => setForm((p) => ({ ...p, media_url: e.target.value }))} placeholder="https://..." />
+                    <Input className="h-11 rounded-xl border-slate-300 bg-slate-50" value={form.media_url ?? ""} onChange={(e) => setForm((p) => ({ ...p, media_url: e.target.value }))} placeholder="https://..." />
                   ) : (
                     <div className="space-y-1">
                       <input
                         type="file"
                         accept={form.type === "video" ? "video/*" : "image/*"}
-                        className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm file:mr-3 file:rounded-md file:border-0 file:bg-slate-100 file:px-3 file:py-1 file:text-sm file:font-medium"
+                        className="flex h-11 w-full rounded-xl border border-slate-300 bg-slate-50 px-3 py-2 text-sm file:mr-3 file:rounded-md file:border-0 file:bg-slate-100 file:px-3 file:py-1 file:text-sm file:font-medium"
                         onChange={(e) => onFileSelected(e.target.files?.[0] || null)}
                       />
                       <p className="text-xs text-slate-500">{pendingMediaFile ? `Arquivo selecionado: ${pendingMediaFile.name}` : "Nenhum arquivo selecionado."}</p>
@@ -266,21 +261,21 @@ export default function DivulgacaoPage() {
 
                 <div className="space-y-1">
                   <Label>Link URL</Label>
-                  <Input value={form.link_url} onChange={(e) => setForm((p) => ({ ...p, link_url: e.target.value }))} />
+                  <Input className="h-11 rounded-xl border-slate-300 bg-slate-50" value={form.link_url} onChange={(e) => setForm((p) => ({ ...p, link_url: e.target.value }))} />
                 </div>
 
                 <div className="grid gap-3 md:grid-cols-3">
                   <div className="space-y-1">
-                    <Label>Posicao</Label>
-                    <Input type="number" value={form.position} onChange={(e) => setForm((p) => ({ ...p, position: e.target.value }))} />
+                    <Label>Posição</Label>
+                    <Input className="h-11 rounded-xl border-slate-300 bg-slate-50" type="number" value={form.position} onChange={(e) => setForm((p) => ({ ...p, position: e.target.value }))} />
                   </div>
                   <div className="space-y-1">
-                    <Label>Inicio</Label>
-                    <Input type="date" value={form.starts_at} onChange={(e) => setForm((p) => ({ ...p, starts_at: e.target.value }))} />
+                    <Label>Início</Label>
+                    <Input className="h-11 rounded-xl border-slate-300 bg-slate-50" type="date" value={form.starts_at} onChange={(e) => setForm((p) => ({ ...p, starts_at: e.target.value }))} />
                   </div>
                   <div className="space-y-1">
                     <Label>Fim</Label>
-                    <Input type="date" value={form.ends_at} onChange={(e) => setForm((p) => ({ ...p, ends_at: e.target.value }))} />
+                    <Input className="h-11 rounded-xl border-slate-300 bg-slate-50" type="date" value={form.ends_at} onChange={(e) => setForm((p) => ({ ...p, ends_at: e.target.value }))} />
                   </div>
                 </div>
 
@@ -289,8 +284,9 @@ export default function DivulgacaoPage() {
                   <span className="text-sm text-slate-700">Ativo</span>
                 </div>
 
-                <div className="flex gap-2">
-                  <Button type="submit" disabled={saving}>
+                <div className="flex flex-wrap gap-2">
+                  <Button type="submit" disabled={saving} className="bg-blue-600 hover:bg-blue-700">
+                    {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
                     {saving ? "Salvando..." : "Salvar"}
                   </Button>
                   <Button
@@ -309,9 +305,9 @@ export default function DivulgacaoPage() {
             </CardContent>
           </Card>
 
-          <Card className="border border-slate-200 bg-white">
+          <Card className="rounded-2xl border border-slate-200 bg-white shadow-sm">
             <CardHeader>
-              <CardTitle>Anuncios cadastrados</CardTitle>
+              <CardTitle>Divulgações cadastradas</CardTitle>
             </CardHeader>
             <CardContent className="space-y-2">
               {isLoading ? (
@@ -323,25 +319,19 @@ export default function DivulgacaoPage() {
               ) : null}
 
               {ordered.map((item) => (
-                <div key={item.id} className="flex items-start justify-between gap-2 rounded-lg border p-3">
+                <div key={item.id} className="flex flex-wrap items-start justify-between gap-2 rounded-xl border border-slate-200 p-3">
                   <div>
-                    <p className="font-semibold text-slate-900">
-                      {item.position || "-"} - {item.title}
-                    </p>
+                    <p className="font-semibold text-slate-900">{item.position || "-"} - {item.title}</p>
                     <p className="text-xs text-slate-500">{item.type}</p>
                   </div>
                   <div className="flex gap-2">
-                    <Button size="sm" variant="outline" onClick={() => edit(item)}>
-                      Editar
-                    </Button>
-                    <Button size="sm" variant="destructive" onClick={() => remove(item.id)}>
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
+                    <Button size="sm" variant="outline" onClick={() => edit(item)}>Editar</Button>
+                    <Button size="sm" variant="destructive" onClick={() => remove(item.id)}><Trash2 className="h-4 w-4" /></Button>
                   </div>
                 </div>
               ))}
 
-              {!isLoading && !ordered.length ? <p className="text-sm text-slate-500">Sem anuncios.</p> : null}
+              {!isLoading && !ordered.length ? <p className="text-sm text-slate-500">Sem divulgações cadastradas.</p> : null}
             </CardContent>
           </Card>
         </div>

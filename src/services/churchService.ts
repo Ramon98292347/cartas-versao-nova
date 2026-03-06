@@ -1,4 +1,4 @@
-﻿import { igrejasMock } from "@/data/mockChurches";
+﻿﻿﻿﻿import { igrejasMock } from "@/data/mockChurches";
 import { supabase } from "@/lib/supabase";
 
 type IgrejaRow = {

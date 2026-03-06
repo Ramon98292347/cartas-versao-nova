@@ -128,6 +128,16 @@ const App = () => (
               }
             />
             <Route
+              path="/admin/membros"
+              element={
+                <RequireRole role="admin">
+                  <Suspense fallback={<div />}>
+                    <AdminMembrosPage />
+                  </Suspense>
+                </RequireRole>
+              }
+            />
+            <Route
               path="/config"
               element={
                 <RequireAnyRole roles={["admin", "pastor"]}>
@@ -233,6 +243,7 @@ const PastorIgrejasPage = lazy(() => import("./pages/PastorIgrejasPage"));
 const PastorMembrosPage = lazy(() => import("./pages/PastorMembrosPage"));
 const AdminDashboardPage = lazy(() => import("./pages/AdminDashboardPage"));
 const AdminIgrejasPage = lazy(() => import("./pages/AdminIgrejasPage"));
+const AdminMembrosPage = lazy(() => import("./pages/AdminMembrosPage"));
 const SelectChurchPage = lazy(() => import("./pages/SelectChurch"));
 const ConfiguracoesPage = lazy(() => import("./pages/Configuracoes"));
 const DivulgacaoPage = lazy(() => import("./pages/Divulgacao"));

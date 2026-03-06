@@ -7,11 +7,13 @@ import { api } from "@/lib/endpoints";
 import { getFriendlyError } from "@/lib/error-map";
 import { addAuditLog } from "@/lib/audit";
 
-type Pastor = {
+type MemberCandidate = {
   id: string;
   full_name: string;
   cpf?: string;
   phone?: string;
+  role?: "pastor" | "obreiro" | "admin";
+  minister_role?: string;
   is_active?: boolean;
 };
 
@@ -75,25 +77,31 @@ export function ModalTrocarPastor({
   const [loadingPastors, setLoadingPastors] = useState(false);
   const [saving, setSaving] = useState(false);
   const [search, setSearch] = useState("");
-  const [pastors, setPastors] = useState<Pastor[]>([]);
+  const [members, setMembers] = useState<MemberCandidate[]>([]);
   const [selectedPastorId, setSelectedPastorId] = useState("");
 
   const currentPastorName = church?.pastor?.full_name || "Nao definido";
   const churchLabel = church ? `${church.church_name} (TOTVS ${church.totvs_id})` : "";
+  const hasPastor = Boolean(church?.pastor_user_id || church?.pastor?.id);
 
   useEffect(() => {
     if (!open || !church) return;
     setSelectedPastorId(church.pastor_user_id || church.pastor?.id || "");
-    loadPastors("");
+    loadMembers("");
   }, [open, church]);
 
-  async function loadPastors(q: string) {
+  async function loadMembers(q: string) {
     setLoadingPastors(true);
     try {
-      const res = (await api.listPastors({ search: q, page: 1, page_size: 50 })) as { pastors?: Pastor[] };
-      setPastors(Array.isArray(res?.pastors) ? res.pastors : []);
+      const res = (await api.listMembers({
+        search: q,
+        is_active: true,
+        page: 1,
+        page_size: 200,
+      })) as { members?: MemberCandidate[] };
+      setMembers(Array.isArray(res?.members) ? res.members : []);
     } catch {
-      toast.error("Falha ao carregar pastores.");
+      toast.error("Falha ao carregar membros.");
     } finally {
       setLoadingPastors(false);
     }
@@ -101,14 +109,14 @@ export function ModalTrocarPastor({
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    if (!q) return pastors;
-    return pastors.filter((p) => {
+    if (!q) return members;
+    return members.filter((p) => {
       const name = String(p.full_name || "").toLowerCase();
       const cpf = String(p.cpf || "").toLowerCase();
       const phone = String(p.phone || "").toLowerCase();
       return name.includes(q) || cpf.includes(q) || phone.includes(q);
     });
-  }, [pastors, search]);
+  }, [members, search]);
 
   async function handleSave() {
     if (!church) return;
@@ -142,7 +150,7 @@ export function ModalTrocarPastor({
   }
 
   return (
-    <ModalShell open={open} onClose={onClose} title="Trocar Pastor da Igreja">
+    <ModalShell open={open} onClose={onClose} title={hasPastor ? "Trocar Pastor da Igreja" : "Cadastrar Pastor da Igreja"}>
       {!church ? (
         <div className="text-sm text-slate-600">Nenhuma igreja selecionada.</div>
       ) : (
@@ -152,10 +160,15 @@ export function ModalTrocarPastor({
             <div className="mt-1 text-xs text-slate-600">
               Pastor atual: <span className="font-medium">{currentPastorName}</span>
             </div>
+            {!hasPastor ? (
+              <div className="mt-2 text-xs text-blue-700">
+                Esta igreja ainda nao tem pastor. Selecione um membro com perfil de pastor para cadastrar.
+              </div>
+            ) : null}
           </div>
 
           <div className="space-y-2">
-            <Label>Buscar pastor</Label>
+            <Label>Buscar membro</Label>
             <div className="flex gap-2">
               <Input
                 value={search}
@@ -163,17 +176,21 @@ export function ModalTrocarPastor({
                 placeholder="Digite nome, CPF ou telefone..."
                 className="h-11 rounded-xl"
               />
-              <Button type="button" variant="outline" className="h-11 rounded-xl" onClick={() => loadPastors(search)} disabled={loadingPastors}>
+              <Button type="button" variant="outline" className="h-11 rounded-xl" onClick={() => loadMembers(search)} disabled={loadingPastors}>
                 {loadingPastors ? "Carregando..." : "Pesquisar"}
               </Button>
             </div>
           </div>
 
           <div className="space-y-2">
-            <Label>Selecione o pastor</Label>
+            <Label>Selecione o membro que sera pastor</Label>
             <div className="max-h-64 overflow-auto rounded-xl border">
               {loadingPastors ? <div className="p-4 text-sm text-slate-600">Carregando lista...</div> : null}
-              {!loadingPastors && filtered.length === 0 ? <div className="p-4 text-sm text-slate-600">Nenhum pastor encontrado.</div> : null}
+              {!loadingPastors && filtered.length === 0 ? (
+                <div className="p-4 text-sm text-slate-600">
+                  Nenhum membro encontrado para selecionar.
+                </div>
+              ) : null}
               {!loadingPastors && filtered.length > 0 ? (
                 <ul className="divide-y">
                   {filtered.map((p) => {
@@ -186,7 +203,9 @@ export function ModalTrocarPastor({
                           onClick={() => setSelectedPastorId(p.id)}
                         >
                           <div className="text-sm font-semibold text-slate-900">{p.full_name}</div>
-                          <div className="mt-0.5 text-xs text-slate-600">CPF: {p.cpf || "-"} | Tel: {p.phone || "-"}</div>
+                          <div className="mt-0.5 text-xs text-slate-600">
+                            CPF: {p.cpf || "-"} | Tel: {p.phone || "-"} | Cargo: {p.minister_role || "-"}
+                          </div>
                         </button>
                       </li>
                     );

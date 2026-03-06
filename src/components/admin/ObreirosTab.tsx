@@ -95,13 +95,14 @@ export function ObreirosTab({ activeTotvsId }: { activeTotvsId: string }) {
   const [resetting, setResetting] = useState(false);
 
   const { data, isLoading } = useQuery({
-    queryKey: ["workers", search, ministerRole, activeFilter, page, pageSize],
+    queryKey: ["workers", activeTotvsId, search, ministerRole, activeFilter, page, pageSize],
     queryFn: () =>
       listMembers({
         search: search || undefined,
         minister_role: ministerRole === "all" ? undefined : ministerRole,
         is_active: activeFilter === "all" ? undefined : activeFilter === "active",
         roles: ["pastor", "obreiro"],
+        church_totvs_id: activeTotvsId || undefined,
         page,
         page_size: pageSize,
       }),

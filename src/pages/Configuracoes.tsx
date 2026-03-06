@@ -1,11 +1,11 @@
-import { useState } from "react";
+﻿import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ArrowLeft, Download, Megaphone, Settings2 } from "lucide-react";
+import { ArrowLeft, Download, Loader2, Megaphone, Settings2 } from "lucide-react";
 import { toast } from "sonner";
 import { listMembers, upsertStamps } from "@/services/saasService";
 import { useUser } from "@/context/UserContext";
@@ -18,7 +18,7 @@ type ExportRole = "todos" | "pastor" | "obreiro";
 function csvEscape(value: unknown) {
   const text = String(value ?? "");
   if (!text.includes(",") && !text.includes("\"") && !text.includes("\n")) return text;
-  return `"${text.replace(/"/g, "\"\"")}"`;
+  return `"${text.replace(/\"/g, "\"\"")}"`;
 }
 
 export default function ConfiguracoesPage() {
@@ -45,7 +45,7 @@ export default function ConfiguracoesPage() {
       let total = 0;
       const rows: Awaited<ReturnType<typeof listMembers>>["workers"] = [];
 
-      // Comentario: pagina todos os usuarios visiveis no escopo do logado.
+      // Comentário: pagina todos os usuários visíveis no escopo do logado.
       do {
         const res = await listMembers({
           page,
@@ -156,108 +156,95 @@ export default function ConfiguracoesPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#f3f5f9] p-4">
+    <div className="min-h-screen bg-[#f6f8fc] p-4 md:p-6">
       <div className="mx-auto max-w-6xl space-y-4">
-        <div className="flex items-center justify-between">
-          <h1 className="text-2xl font-bold text-slate-900">Configuração</h1>
-          <Button variant="outline" onClick={() => nav(-1)}>
-            <ArrowLeft className="mr-2 h-4 w-4" /> Voltar
-          </Button>
+        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm md:p-6">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h1 className="text-2xl font-bold text-slate-900">Configuração</h1>
+              <p className="text-sm text-slate-600">Ajustes gerais do sistema, exportação e assinatura da igreja.</p>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button variant="outline" onClick={() => nav("/divulgacao")} className="border-slate-300">
+                <Megaphone className="mr-2 h-4 w-4" /> Ir para divulgação
+              </Button>
+              <Button variant="outline" onClick={() => nav(-1)}>
+                <ArrowLeft className="mr-2 h-4 w-4" /> Voltar
+              </Button>
+            </div>
+          </div>
         </div>
 
         <div className="grid gap-4 lg:grid-cols-2">
-          <Card className="border border-slate-200 bg-white">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Settings2 className="h-5 w-5" /> Sistema
+          <Card className="rounded-2xl border border-slate-200 bg-white shadow-sm">
+            <CardHeader className="pb-3">
+              <CardTitle className="flex items-center gap-2 text-base">
+                <Settings2 className="h-5 w-5 text-blue-600" /> Sistema
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-2 text-sm text-slate-700">
-              <p>
-                <b>Usuário:</b> {usuario?.nome || "-"}
-              </p>
-              <p>
-                <b>Perfil:</b> {usuario?.role || "-"}
-              </p>
-              <p>
-                <b>Igreja ativa:</b> {session?.church_name || "-"}
-              </p>
-              <p>
-                <b>TOTVS:</b> {session?.totvs_id || "-"}
-              </p>
-              <Button variant="outline" className="mt-2" onClick={() => nav("/divulgacao")}>
-                <Megaphone className="mr-2 h-4 w-4" /> Abrir Divulgação
-              </Button>
+              <p><b>Usuário:</b> {usuario?.nome || "-"}</p>
+              <p><b>Perfil:</b> {usuario?.role || "-"}</p>
+              <p><b>Igreja ativa:</b> {session?.church_name || "-"}</p>
+              <p><b>TOTVS:</b> {session?.totvs_id || "-"}</p>
             </CardContent>
           </Card>
 
-          <Card className="border border-slate-200 bg-white">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Download className="h-5 w-5" /> Exportação de Usuários
+          <Card className="rounded-2xl border border-slate-200 bg-white shadow-sm">
+            <CardHeader className="pb-3">
+              <CardTitle className="flex items-center gap-2 text-base">
+                <Download className="h-5 w-5 text-blue-600" /> Exportação de usuários
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
               <div className="space-y-1">
-                <Label>Role para exportar</Label>
+                <Label>Perfil para exportar</Label>
                 <Select value={roleFilter} onValueChange={(v) => setRoleFilter(v as ExportRole)}>
-                  <SelectTrigger>
+                  <SelectTrigger className="h-11 rounded-xl border-slate-300 bg-slate-50">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="todos">Todos (pastor + obreiro)</SelectItem>
+                    <SelectItem value="todos">Pastor + Obreiro</SelectItem>
                     <SelectItem value="pastor">Somente pastor</SelectItem>
                     <SelectItem value="obreiro">Somente obreiro</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
-              <p className="text-xs text-slate-500">
-                A exportação usa os usuários permitidos no escopo da igreja ativa.
-              </p>
-              <Button onClick={exportarUsuariosCsv} disabled={loadingExport}>
+              <p className="text-xs text-slate-500">A exportação usa os usuários permitidos no escopo da igreja ativa.</p>
+              <Button onClick={exportarUsuariosCsv} disabled={loadingExport} className="bg-blue-600 hover:bg-blue-700">
+                {loadingExport ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />}
                 {loadingExport ? "Exportando..." : "Baixar CSV"}
               </Button>
             </CardContent>
           </Card>
         </div>
 
-        <Card className="border border-slate-200 bg-white">
+        <Card className="rounded-2xl border border-slate-200 bg-white shadow-sm">
           <CardHeader>
-            <CardTitle>Assinatura e Carimbos</CardTitle>
+            <CardTitle>Assinatura e carimbos</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid gap-4 md:grid-cols-3">
               <div className="space-y-2">
                 <Label>Assinatura</Label>
-                <Input type="file" accept="image/*" onChange={(e) => setSignatureFile(e.target.files?.[0] || null)} />
-                {stampUrls.signature_url ? (
-                  <a href={stampUrls.signature_url} target="_blank" rel="noreferrer" className="text-xs text-blue-600 underline">
-                    Ver assinatura atual
-                  </a>
-                ) : null}
+                <Input className="h-11 rounded-xl border-slate-300 bg-slate-50" type="file" accept="image/*" onChange={(e) => setSignatureFile(e.target.files?.[0] || null)} />
+                {stampUrls.signature_url ? <a href={stampUrls.signature_url} target="_blank" rel="noreferrer" className="text-xs text-blue-600 underline">Ver assinatura atual</a> : null}
               </div>
               <div className="space-y-2">
                 <Label>Carimbo pastor</Label>
-                <Input type="file" accept="image/*" onChange={(e) => setStampPastorFile(e.target.files?.[0] || null)} />
-                {stampUrls.stamp_pastor_url ? (
-                  <a href={stampUrls.stamp_pastor_url} target="_blank" rel="noreferrer" className="text-xs text-blue-600 underline">
-                    Ver carimbo pastor
-                  </a>
-                ) : null}
+                <Input className="h-11 rounded-xl border-slate-300 bg-slate-50" type="file" accept="image/*" onChange={(e) => setStampPastorFile(e.target.files?.[0] || null)} />
+                {stampUrls.stamp_pastor_url ? <a href={stampUrls.stamp_pastor_url} target="_blank" rel="noreferrer" className="text-xs text-blue-600 underline">Ver carimbo pastor</a> : null}
               </div>
               <div className="space-y-2">
                 <Label>Carimbo igreja</Label>
-                <Input type="file" accept="image/*" onChange={(e) => setStampChurchFile(e.target.files?.[0] || null)} />
-                {stampUrls.stamp_church_url ? (
-                  <a href={stampUrls.stamp_church_url} target="_blank" rel="noreferrer" className="text-xs text-blue-600 underline">
-                    Ver carimbo igreja
-                  </a>
-                ) : null}
+                <Input className="h-11 rounded-xl border-slate-300 bg-slate-50" type="file" accept="image/*" onChange={(e) => setStampChurchFile(e.target.files?.[0] || null)} />
+                {stampUrls.stamp_church_url ? <a href={stampUrls.stamp_church_url} target="_blank" rel="noreferrer" className="text-xs text-blue-600 underline">Ver carimbo igreja</a> : null}
               </div>
             </div>
 
-            <Button onClick={saveStamps} disabled={savingStamps}>
-              {savingStamps ? "Salvando..." : "Salvar assinatura/carimbos"}
+            <Button onClick={saveStamps} disabled={savingStamps} className="bg-blue-600 hover:bg-blue-700">
+              {savingStamps ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+              {savingStamps ? "Salvando..." : "Salvar assinatura e carimbos"}
             </Button>
           </CardContent>
         </Card>

@@ -4,25 +4,17 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
-import {
-  setLetterStatus,
-  softDeleteLetter,
-  type PastorLetter,
-} from "@/services/saasService";
-import { ArrowUpRight, Filter, RotateCcw, Search, Share2, Trash2 } from "lucide-react";
+import { setLetterStatus, softDeleteLetter, type PastorLetter } from "@/services/saasService";
+import { ArrowUpRight, Filter, MoreHorizontal, RotateCcw, Search, Share2, Trash2 } from "lucide-react";
 import { FiltersBar } from "@/components/shared/FiltersBar";
 import { getFriendlyError } from "@/lib/error-map";
 import { addAuditLog } from "@/lib/audit";
 
 type QuickPeriod = "today" | "7" | "30" | "custom";
 
-const STATUS_OPTIONS = [
-  "AUTORIZADO",
-  "BLOQUEADO",
-  "AGUARDANDO_LIBERACAO",
-  "LIBERADA",
-] as const;
+const STATUS_OPTIONS = ["AUTORIZADO", "BLOQUEADO", "AGUARDANDO_LIBERACAO", "LIBERADA"] as const;
 
 function formatDate(value?: string | null) {
   if (!value) return "-";
@@ -175,9 +167,7 @@ export function CartasTab({
 
   async function share(letter: PastorLetter) {
     const fromLetterPhone = String((letter as PastorLetter & { phone?: string | null }).phone || "").replace(/\D/g, "");
-    const fromUserMap = String(
-      (letter.preacher_user_id && phonesByUserId[letter.preacher_user_id]) || "",
-    ).replace(/\D/g, "");
+    const fromUserMap = String((letter.preacher_user_id && phonesByUserId[letter.preacher_user_id]) || "").replace(/\D/g, "");
     const fromNameMap = String(phonesByName[String(letter.preacher_name || "").trim().toLowerCase()] || "").replace(/\D/g, "");
     let targetPhone = fromLetterPhone || fromUserMap || fromNameMap;
     if (targetPhone && targetPhone.length <= 11 && !targetPhone.startsWith("55")) {
@@ -194,7 +184,7 @@ export function CartasTab({
   }
 
   async function remove(letter: PastorLetter) {
-    if (!window.confirm("Marcar carta como EXCLUIDA?")) return;
+    if (!window.confirm("Marcar carta como EXCLUÍDA?")) return;
     try {
       await softDeleteLetter(letter.id);
       addAuditLog("letter_status_changed", { letter_id: letter.id, status: "EXCLUIDA" });
@@ -225,6 +215,30 @@ export function CartasTab({
     }
   }
 
+  function renderActions(letter: PastorLetter) {
+    return (
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button size="sm" variant="outline" className="w-full justify-center">
+            <MoreHorizontal className="mr-2 h-4 w-4" />
+            Ações
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end">
+          <DropdownMenuItem onClick={() => releaseLetter(letter)} disabled={!letter.storage_path || letter.status === "LIBERADA" || updatingReleaseId === letter.id}>
+            Liberar carta
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => share(letter)}>
+            Compartilhar
+          </DropdownMenuItem>
+          <DropdownMenuItem className="text-rose-600 focus:text-rose-700" onClick={() => remove(letter)}>
+            Excluir
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    );
+  }
+
   return (
     <>
       <FiltersBar>
@@ -233,14 +247,14 @@ export function CartasTab({
           <div className="text-xs text-slate-500">Escopo TOTVS: {scopeMode === "scope" ? scopeTotvsIds.join(", ") : "ativo"}</div>
         </div>
 
-        <div className="mb-3 flex items-center gap-2 overflow-x-auto whitespace-nowrap pb-1">
-          <div className="flex items-center gap-2">
+        <div className="mb-3 flex flex-wrap items-center gap-2">
+          <div className="flex items-center gap-2 overflow-x-auto whitespace-nowrap pb-1 sm:pb-0">
             <Button variant={period === "today" ? "default" : "outline"} onClick={() => setQuick("today")}>Hoje</Button>
             <Button variant={period === "7" ? "default" : "outline"} onClick={() => setQuick("7")}>7 dias</Button>
             <Button variant={period === "30" ? "default" : "outline"} onClick={() => setQuick("30")}>30 dias</Button>
           </div>
 
-          <div className="min-w-[140px]">
+          <div className="min-w-[170px] flex-1 sm:flex-none sm:min-w-[180px]">
             <Select value={filters.church} onValueChange={(value) => setFilters((p) => ({ ...p, church: value }))}>
               <SelectTrigger><SelectValue placeholder="Igreja" /></SelectTrigger>
               <SelectContent>
@@ -270,12 +284,10 @@ export function CartasTab({
             </Select>
           </div>
 
-          <div className="shrink-0">
-            <Button variant="ghost" onClick={() => setQuick("clear")} title="Limpar período">
-              <RotateCcw className="h-4 w-4" />
-              <span className="ml-2 hidden sm:inline">Limpar período</span>
-            </Button>
-          </div>
+          <Button variant="ghost" onClick={() => setQuick("clear")} title="Limpar período" className="shrink-0">
+            <RotateCcw className="h-4 w-4" />
+            <span className="ml-2 hidden sm:inline">Limpar período</span>
+          </Button>
         </div>
 
         <div className="grid gap-3 md:grid-cols-3">
@@ -297,51 +309,48 @@ export function CartasTab({
       </FiltersBar>
 
       <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-        <div className="hidden lg:grid lg:grid-cols-[110px_1fr_130px_1fr_1fr_130px_120px_330px] lg:border-b lg:border-slate-200 lg:bg-slate-50 lg:px-4 lg:py-3 lg:text-xs lg:font-semibold lg:text-slate-600 xl:text-sm">
-          <span>Data</span><span>Nome</span><span>Dia da pregação</span><span>Igreja origem</span><span>Igreja destino</span><span>Status</span><span>PDF</span><span>Ações</span>
+        <div className="hidden overflow-x-auto xl:block">
+          <div className="min-w-[1150px]">
+            <div className="grid grid-cols-[110px_1fr_130px_1fr_1fr_130px_140px_200px] border-b border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-600">
+              <span>Data</span><span>Nome</span><span>Dia da pregação</span><span>Igreja origem</span><span>Igreja destino</span><span>Status</span><span>PDF</span><span>Ações</span>
+            </div>
+            {filtered.map((carta) => {
+              const blocked = carta.status === "BLOQUEADO";
+              const tone = blocked ? "bg-rose-50" : "bg-emerald-50/50";
+              const pulse = blocked && flashing.includes(carta.id) ? "animate-pulse" : "";
+              return (
+                <div key={carta.id} className={`grid grid-cols-[110px_1fr_130px_1fr_1fr_130px_140px_200px] items-center gap-2 border-b border-slate-200 px-4 py-3 text-sm ${tone} ${pulse}`}>
+                  <span>{formatDate(carta.created_at)}</span>
+                  <span className="truncate font-semibold">{carta.preacher_name}</span>
+                  <span>{formatDate(carta.preach_date)}</span>
+                  <span className="truncate">{carta.church_origin || "-"}</span>
+                  <span className="truncate">{carta.church_destination || "-"}</span>
+                  <div><Badge variant="outline" className={statusClass(carta.status)}>{carta.status}</Badge></div>
+                  <Button variant="outline" disabled={!carta.storage_path} onClick={() => openPdf(carta)}>
+                    <ArrowUpRight className="mr-2 h-4 w-4" /> Abrir PDF
+                  </Button>
+                  <div>{renderActions(carta)}</div>
+                </div>
+              );
+            })}
+          </div>
         </div>
+
         {filtered.length === 0 ? <p className="px-5 py-4 text-sm text-slate-500">Nenhuma carta encontrada.</p> : null}
 
-        {filtered.map((carta) => {
-          const blocked = carta.status === "BLOQUEADO";
-          const tone = blocked ? "bg-rose-100" : "bg-emerald-50";
-          const pulse = blocked && flashing.includes(carta.id) ? "animate-pulse" : "";
-          return (
-            <div key={carta.id} className={`${tone} border-b border-slate-200 p-4 last:border-b-0 xl:p-0 ${pulse}`}>
-              <div className="hidden items-center lg:grid lg:grid-cols-[110px_1fr_130px_1fr_1fr_130px_120px_330px] lg:gap-2 lg:px-4 lg:py-3 xl:text-sm">
-                <span>{formatDate(carta.created_at)}</span>
-                <span className="truncate font-semibold">{carta.preacher_name}</span>
-                <span>{formatDate(carta.preach_date)}</span>
-                <span className="truncate">{carta.church_origin || "-"}</span>
-                <span className="truncate">{carta.church_destination || "-"}</span>
-                <div>
-                  <Badge variant="outline" className={statusClass(carta.status)}>{carta.status}</Badge>
-                </div>
-                <Button variant="outline" disabled={!carta.storage_path} onClick={() => openPdf(carta)}><ArrowUpRight className="mr-2 h-4 w-4" /> Abrir PDF</Button>
-                <div className="flex flex-wrap items-center gap-2">
-                  <Button
-                    className="bg-emerald-600 hover:bg-emerald-700"
-                    onClick={() => releaseLetter(carta)}
-                    disabled={!carta.storage_path || carta.status === "LIBERADA" || updatingReleaseId === carta.id}
-                  >
-                    Liberar carta
-                  </Button>
-                  <Button className="bg-orange-500 hover:bg-orange-600" onClick={() => share(carta)}>
-                    <Share2 className="mr-2 h-4 w-4" />Compartilhar
-                  </Button>
-                  <Button variant="destructive" onClick={() => remove(carta)}>
-                    <Trash2 className="mr-2 h-4 w-4" />Excluir
-                  </Button>
-                </div>
-              </div>
-
-              <div className="rounded-2xl border border-emerald-500/70 bg-emerald-50/70 p-4 lg:hidden">
+        <div className="space-y-3 p-4 xl:hidden">
+          {filtered.map((carta) => {
+            const blocked = carta.status === "BLOQUEADO";
+            const tone = blocked ? "border-rose-200 bg-rose-50" : "border-emerald-200 bg-emerald-50/60";
+            const pulse = blocked && flashing.includes(carta.id) ? "animate-pulse" : "";
+            return (
+              <div key={`card-${carta.id}`} className={`rounded-2xl border p-4 ${tone} ${pulse}`}>
                 <div className="grid grid-cols-2 gap-2 text-sm">
                   <span className="font-semibold text-slate-500">Data</span>
                   <span className="break-words">{formatDate(carta.created_at)}</span>
                   <span className="font-semibold text-slate-500">Nome</span>
                   <span className="break-words">{carta.preacher_name}</span>
-                  <span className="font-semibold text-slate-500">Dia da pregacao</span>
+                  <span className="font-semibold text-slate-500">Dia da pregação</span>
                   <span className="break-words">{formatDate(carta.preach_date)}</span>
                   <span className="font-semibold text-slate-500">Igreja origem</span>
                   <span className="break-words">{carta.church_origin || "-"}</span>
@@ -352,28 +361,16 @@ export function CartasTab({
                 <div className="mt-3">
                   <Badge variant="outline" className={statusClass(carta.status)}>{carta.status}</Badge>
                 </div>
-                <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
+                <div className="mt-3 grid grid-cols-2 gap-2">
                   <Button className="w-full bg-emerald-600 hover:bg-emerald-700" disabled={!carta.storage_path} onClick={() => openPdf(carta)}>
                     <ArrowUpRight className="mr-2 h-4 w-4" /> Abrir PDF
                   </Button>
-                  <Button
-                    className="w-full bg-emerald-600 hover:bg-emerald-700"
-                    onClick={() => releaseLetter(carta)}
-                    disabled={!carta.storage_path || carta.status === "LIBERADA" || updatingReleaseId === carta.id}
-                  >
-                    Liberar carta
-                  </Button>
-                  <Button className="w-full bg-orange-500 hover:bg-orange-600" onClick={() => share(carta)}>
-                    <Share2 className="mr-2 h-4 w-4" /> Compartilhar
-                  </Button>
-                  <Button className="w-full sm:col-span-2" variant="destructive" onClick={() => remove(carta)}>
-                    <Trash2 className="mr-2 h-4 w-4" /> Excluir
-                  </Button>
+                  <div className="w-full">{renderActions(carta)}</div>
                 </div>
               </div>
-            </div>
-          );
-        })}
+            );
+          })}
+        </div>
       </section>
     </>
   );

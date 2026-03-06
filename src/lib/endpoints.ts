@@ -11,6 +11,14 @@ export const api = {
     full_name: string;
     phone?: string | null;
     email?: string | null;
+    avatar_url?: string | null;
+    cep?: string | null;
+    address_street?: string | null;
+    address_number?: string | null;
+    address_complement?: string | null;
+    address_neighborhood?: string | null;
+    address_city?: string | null;
+    address_state?: string | null;
     password: string;
     totvs_id: string;
   }) => post("public-register-member", body, { skipAuth: true }),
@@ -51,6 +59,7 @@ export const api = {
     minister_role?: string;
     is_active?: boolean;
     roles?: Array<"pastor" | "obreiro">;
+    church_totvs_id?: string;
     page?: number;
     page_size?: number;
   }) => post("list-members", body),

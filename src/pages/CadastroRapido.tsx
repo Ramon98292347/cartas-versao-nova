@@ -1,13 +1,14 @@
-﻿import { useMemo, useState } from "react";
+﻿import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { ArrowLeft, UserPlus } from "lucide-react";
+import { ArrowLeft, Eye, EyeOff, Search, UserPlus } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { supabase } from "@/lib/supabase";
 import { fetchChurches } from "@/services/churchService";
 import { publicRegisterMember } from "@/services/saasService";
 import { getFriendlyError } from "@/lib/error-map";
@@ -32,6 +33,16 @@ function normalizeSearch(value: string) {
     .trim();
 }
 
+function onlyDigits(value: string) {
+  return String(value || "").replace(/\D/g, "");
+}
+
+function maskCep(value: string) {
+  const digits = onlyDigits(value).slice(0, 8);
+  if (digits.length <= 5) return digits;
+  return `${digits.slice(0, 5)}-${digits.slice(5)}`;
+}
+
 export default function CadastroRapido() {
   const nav = useNavigate();
   const [loading, setLoading] = useState(false);
@@ -42,7 +53,47 @@ export default function CadastroRapido() {
   const [totvs, setTotvs] = useState("");
   const [senha, setSenha] = useState("");
   const [confirmarSenha, setConfirmarSenha] = useState("");
+  const [showSenha, setShowSenha] = useState(false);
+  const [showConfirmarSenha, setShowConfirmarSenha] = useState(false);
   const [filtroIgreja, setFiltroIgreja] = useState("");
+  const [igrejaEncontradaNome, setIgrejaEncontradaNome] = useState("");
+  const [avatarFile, setAvatarFile] = useState<File | null>(null);
+  const [avatarPreviewUrl, setAvatarPreviewUrl] = useState("");
+  const [loadingCep, setLoadingCep] = useState(false);
+  const [cep, setCep] = useState("");
+  const [addressStreet, setAddressStreet] = useState("");
+  const [addressNumber, setAddressNumber] = useState("");
+  const [addressComplement, setAddressComplement] = useState("");
+  const [addressNeighborhood, setAddressNeighborhood] = useState("");
+  const [addressCity, setAddressCity] = useState("");
+  const [addressState, setAddressState] = useState("");
+
+  useEffect(() => {
+    if (!avatarFile) {
+      setAvatarPreviewUrl("");
+      return;
+    }
+    const objectUrl = URL.createObjectURL(avatarFile);
+    setAvatarPreviewUrl(objectUrl);
+    return () => URL.revokeObjectURL(objectUrl);
+  }, [avatarFile]);
+
+  async function uploadAvatarPublico(file: File, cpfDigits: string) {
+    if (!supabase) throw new Error("supabase_not_configured");
+
+    const ext = (file.name.split(".").pop() || "jpg").toLowerCase();
+    const path = `users/cadastro-${cpfDigits}-${Date.now()}.${ext}`;
+
+    const { error } = await supabase.storage.from("avatars").upload(path, file, {
+      upsert: true,
+      contentType: file.type || "image/jpeg",
+      cacheControl: "3600",
+    });
+    if (error) throw error;
+
+    const { data } = supabase.storage.from("avatars").getPublicUrl(path);
+    return data.publicUrl;
+  }
 
   const { data: churches = [] } = useQuery({
     queryKey: ["public-register-churches"],
@@ -50,14 +101,69 @@ export default function CadastroRapido() {
     staleTime: 60_000,
   });
 
-  const sugestoes = useMemo(() => {
-    const q = normalizeSearch(filtroIgreja || totvs);
-    if (!q) return churches.slice(0, 30);
+  const buscaNormalizada = useMemo(() => normalizeSearch(filtroIgreja), [filtroIgreja]);
 
-    return churches
-      .filter((c) => normalizeSearch(`${c.codigoTotvs} ${c.nome}`).includes(q))
-      .slice(0, 30);
-  }, [churches, filtroIgreja, totvs]);
+  function buscarIgreja() {
+    const texto = buscaNormalizada;
+    if (!texto) {
+      toast.error("Digite nome ou TOTVS para buscar a igreja.");
+      return;
+    }
+
+    const textoNumerico = texto.replace(/\D/g, "");
+    const exataPorTotvs = churches.find((c) => String(c.codigoTotvs) === textoNumerico);
+    if (exataPorTotvs) {
+      setTotvs(exataPorTotvs.codigoTotvs);
+      setIgrejaEncontradaNome(exataPorTotvs.nome);
+      toast.success("Igreja encontrada.");
+      return;
+    }
+
+    const porNomeOuPrefixo = churches.find((c) => {
+      const nomeNormalizado = normalizeSearch(c.nome);
+      const totvsTexto = String(c.codigoTotvs || "");
+      return nomeNormalizado.includes(texto) || totvsTexto.startsWith(textoNumerico);
+    });
+
+    if (porNomeOuPrefixo) {
+      setTotvs(porNomeOuPrefixo.codigoTotvs);
+      setIgrejaEncontradaNome(porNomeOuPrefixo.nome);
+      toast.success("Igreja encontrada.");
+      return;
+    }
+
+    setTotvs("");
+    setIgrejaEncontradaNome("");
+    toast.error("Igreja nao encontrada. Verifique o nome ou TOTVS.");
+  }
+
+  async function buscarCep() {
+    const cepDigits = onlyDigits(cep);
+    if (cepDigits.length !== 8) {
+      toast.error("Informe um CEP valido com 8 digitos.");
+      return;
+    }
+
+    setLoadingCep(true);
+    try {
+      const resp = await fetch(`https://viacep.com.br/ws/${cepDigits}/json/`);
+      const data = await resp.json();
+      if (!resp.ok || data?.erro) {
+        toast.error("CEP nao encontrado.");
+        return;
+      }
+
+      setAddressStreet(String(data.logradouro || ""));
+      setAddressNeighborhood(String(data.bairro || ""));
+      setAddressCity(String(data.localidade || ""));
+      setAddressState(String(data.uf || ""));
+      toast.success("Endereco preenchido pelo CEP.");
+    } catch {
+      toast.error("Falha ao buscar CEP.");
+    } finally {
+      setLoadingCep(false);
+    }
+  }
 
   async function submit() {
     const cpfRaw = normalizeCpf(cpf);
@@ -84,11 +190,24 @@ export default function CadastroRapido() {
 
     setLoading(true);
     try {
+      let avatarUrl: string | null = null;
+      if (avatarFile) {
+        avatarUrl = await uploadAvatarPublico(avatarFile, cpfRaw);
+      }
+
       await publicRegisterMember({
         cpf: cpfRaw,
         full_name: nome,
         phone: telefone || null,
         email: email || null,
+        avatar_url: avatarUrl,
+        cep: onlyDigits(cep) || null,
+        address_street: addressStreet || null,
+        address_number: addressNumber || null,
+        address_complement: addressComplement || null,
+        address_neighborhood: addressNeighborhood || null,
+        address_city: addressCity || null,
+        address_state: addressState || null,
         password: senha,
         totvs_id: totvs,
       });
@@ -120,6 +239,36 @@ export default function CadastroRapido() {
           <CardContent className="space-y-4">
             <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-2 md:col-span-2">
+                <Label>Foto para avatar (opcional)</Label>
+                <div className="flex flex-col gap-3 md:flex-row md:items-start">
+                  <div className="w-full md:flex-1">
+                    <Input
+                      type="file"
+                      accept="image/*"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0] || null;
+                        setAvatarFile(file);
+                      }}
+                    />
+                    {avatarFile ? <p className="mt-1 text-xs text-slate-600">Arquivo: {avatarFile.name}</p> : null}
+                  </div>
+
+                  <div className="flex flex-col items-center">
+                    <div className="h-[160px] w-[120px] overflow-hidden rounded-md border border-slate-300 bg-slate-50">
+                      {avatarPreviewUrl ? (
+                        <img src={avatarPreviewUrl} alt="Pre-visualizacao 3x4" className="h-full w-full object-cover" />
+                      ) : (
+                        <div className="flex h-full w-full items-center justify-center text-center text-xs text-slate-500">
+                          Pre-visualizacao 3x4
+                        </div>
+                      )}
+                    </div>
+                    <span className="mt-1 text-[11px] text-slate-500">Tamanho 3x4</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-2 md:col-span-2">
                 <Label>Nome completo</Label>
                 <Input value={nome} onChange={(e) => setNome(e.target.value)} placeholder="Nome completo" />
               </div>
@@ -139,51 +288,120 @@ export default function CadastroRapido() {
                 <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="email@exemplo.com" />
               </div>
 
+              <div className="space-y-2">
+                <Label>CEP</Label>
+                <div className="flex gap-2">
+                  <Input value={maskCep(cep)} onChange={(e) => setCep(e.target.value)} placeholder="00000-000" />
+                  <Button type="button" variant="outline" onClick={buscarCep} disabled={loadingCep}>
+                    {loadingCep ? "Buscando..." : "Buscar CEP"}
+                  </Button>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label>Numero</Label>
+                <Input value={addressNumber} onChange={(e) => setAddressNumber(e.target.value)} placeholder="Numero" />
+              </div>
+
+              <div className="space-y-2 md:col-span-2">
+                <Label>Rua</Label>
+                <Input value={addressStreet} onChange={(e) => setAddressStreet(e.target.value)} placeholder="Rua" />
+              </div>
+
+              <div className="space-y-2">
+                <Label>Bairro</Label>
+                <Input value={addressNeighborhood} onChange={(e) => setAddressNeighborhood(e.target.value)} placeholder="Bairro" />
+              </div>
+
+              <div className="space-y-2">
+                <Label>Complemento</Label>
+                <Input value={addressComplement} onChange={(e) => setAddressComplement(e.target.value)} placeholder="Complemento (opcional)" />
+              </div>
+
+              <div className="space-y-2">
+                <Label>Cidade</Label>
+                <Input value={addressCity} onChange={(e) => setAddressCity(e.target.value)} placeholder="Cidade" />
+              </div>
+
+              <div className="space-y-2">
+                <Label>UF</Label>
+                <Input value={addressState} onChange={(e) => setAddressState(e.target.value.toUpperCase().slice(0, 2))} placeholder="UF" />
+              </div>
+
               <div className="space-y-2 md:col-span-2">
                 <Label>Buscar igreja por nome ou TOTVS</Label>
-                <Input
-                  value={filtroIgreja}
-                  onChange={(e) => setFiltroIgreja(e.target.value)}
-                  placeholder="Ex.: 17250 ou Estadual de Vitoria"
-                />
+                <div className="flex gap-2">
+                  <Input
+                    value={filtroIgreja}
+                    onChange={(e) => {
+                      setFiltroIgreja(e.target.value);
+                      setTotvs("");
+                      setIgrejaEncontradaNome("");
+                    }}
+                    placeholder="Ex.: 17250 ou Estadual de Vitoria"
+                  />
+                  <Button type="button" variant="outline" onClick={buscarIgreja}>
+                    <Search className="mr-2 h-4 w-4" />
+                    Buscar
+                  </Button>
+                </div>
+                {igrejaEncontradaNome ? (
+                  <p className="text-xs text-slate-600">
+                    Igreja selecionada: <span className="font-medium">{igrejaEncontradaNome}</span>
+                  </p>
+                ) : null}
               </div>
 
               <div className="space-y-2 md:col-span-2">
                 <Label>TOTVS da igreja (obrigatorio)</Label>
                 <Input
                   value={totvs}
-                  onChange={(e) => setTotvs(e.target.value.replace(/\D/g, ""))}
+                  readOnly
                   placeholder="Digite ou selecione abaixo"
                 />
-                {sugestoes.length > 0 ? (
-                  <div className="max-h-40 overflow-y-auto rounded-md border border-slate-200">
-                    {sugestoes.map((church) => (
-                      <button
-                        key={`${church.codigoTotvs}-${church.nome}`}
-                        type="button"
-                        onClick={() => {
-                          setTotvs(church.codigoTotvs);
-                          setFiltroIgreja(church.nome);
-                        }}
-                        className="block w-full border-b px-3 py-2 text-left text-sm hover:bg-slate-50"
-                      >
-                        {church.codigoTotvs} - {church.nome}
-                      </button>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="text-xs text-slate-500">Nenhuma igreja encontrada para esse filtro.</p>
-                )}
+                <p className="text-xs text-slate-500">Campo preenchido automaticamente pela busca.</p>
               </div>
 
               <div className="space-y-2">
                 <Label>Senha</Label>
-                <Input type="password" value={senha} onChange={(e) => setSenha(e.target.value)} placeholder="Minimo 6 caracteres" />
+                <div className="relative">
+                  <Input
+                    type={showSenha ? "text" : "password"}
+                    value={senha}
+                    onChange={(e) => setSenha(e.target.value)}
+                    placeholder="Minimo 6 caracteres"
+                    className="pr-10"
+                  />
+                  <button
+                    type="button"
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-500"
+                    onClick={() => setShowSenha((prev) => !prev)}
+                    aria-label={showSenha ? "Ocultar senha" : "Visualizar senha"}
+                  >
+                    {showSenha ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                </div>
               </div>
 
               <div className="space-y-2">
                 <Label>Confirmar senha</Label>
-                <Input type="password" value={confirmarSenha} onChange={(e) => setConfirmarSenha(e.target.value)} placeholder="Repita a senha" />
+                <div className="relative">
+                  <Input
+                    type={showConfirmarSenha ? "text" : "password"}
+                    value={confirmarSenha}
+                    onChange={(e) => setConfirmarSenha(e.target.value)}
+                    placeholder="Repita a senha"
+                    className="pr-10"
+                  />
+                  <button
+                    type="button"
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-500"
+                    onClick={() => setShowConfirmarSenha((prev) => !prev)}
+                    aria-label={showConfirmarSenha ? "Ocultar senha" : "Visualizar senha"}
+                  >
+                    {showConfirmarSenha ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                </div>
               </div>
             </div>
 

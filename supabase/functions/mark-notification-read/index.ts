@@ -76,7 +76,9 @@ Deno.serve(async (req) => {
 
     const { data: updated, error: updErr } = await sb
       .from("notifications")
-      .update({ read_at: new Date().toISOString() })
+      // Comentario: atualiza os dois campos para manter compatibilidade
+      // com telas/queries que usam is_read ou read_at.
+      .update({ is_read: true, read_at: new Date().toISOString() })
       .eq("id", id)
       .select("*")
       .single();

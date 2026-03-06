@@ -39,6 +39,14 @@ Deno.serve(async (req) => {
       full_name?: string;
       phone?: string | null;
       email?: string | null;
+      avatar_url?: string | null;
+      cep?: string | null;
+      address_street?: string | null;
+      address_number?: string | null;
+      address_complement?: string | null;
+      address_neighborhood?: string | null;
+      address_city?: string | null;
+      address_state?: string | null;
       password?: string;
       totvs_id?: string;
     };
@@ -49,6 +57,14 @@ Deno.serve(async (req) => {
     const totvsId = String(body.totvs_id || "").trim();
     const phone = normalizePhone(body.phone);
     const email = normalizeEmail(body.email);
+    const avatarUrl = String(body.avatar_url || "").trim() || null;
+    const cep = onlyDigits(String(body.cep || "")).slice(0, 8) || null;
+    const addressStreet = String(body.address_street || "").trim() || null;
+    const addressNumber = String(body.address_number || "").trim() || null;
+    const addressComplement = String(body.address_complement || "").trim() || null;
+    const addressNeighborhood = String(body.address_neighborhood || "").trim() || null;
+    const addressCity = String(body.address_city || "").trim() || null;
+    const addressState = String(body.address_state || "").trim().toUpperCase().slice(0, 2) || null;
 
     if (cpf.length !== 11) return json({ ok: false, error: "invalid_cpf" }, 400);
     if (!fullName) return json({ ok: false, error: "missing_full_name" }, 400);
@@ -110,6 +126,14 @@ Deno.serve(async (req) => {
         minister_role: "Membro",
         phone,
         email,
+        avatar_url: avatarUrl,
+        cep,
+        address_street: addressStreet,
+        address_number: addressNumber,
+        address_complement: addressComplement,
+        address_neighborhood: addressNeighborhood,
+        address_city: addressCity,
+        address_state: addressState,
         password_hash: passwordHash,
         default_totvs_id: totvsId,
         totvs_access: totvsAccess,

@@ -61,16 +61,17 @@ Deno.serve(async (req) => {
 
     const { error: churchErr } = await sb
       .from("notifications")
-      .update({ read_at: nowIso })
+      // Comentario: marca como lida tanto por is_read quanto por read_at.
+      .update({ is_read: true, read_at: nowIso })
       .eq("church_totvs_id", session.active_totvs_id)
-      .is("read_at", null);
+      .or("is_read.eq.false,read_at.is.null");
     if (churchErr) return json({ ok: false, error: "db_error_update_church", details: churchErr.message }, 500);
 
     const { error: userErr } = await sb
       .from("notifications")
-      .update({ read_at: nowIso })
+      .update({ is_read: true, read_at: nowIso })
       .eq("user_id", session.user_id)
-      .is("read_at", null);
+      .or("is_read.eq.false,read_at.is.null");
     if (userErr) return json({ ok: false, error: "db_error_update_user", details: userErr.message }, 500);
 
     return json({ ok: true }, 200);
