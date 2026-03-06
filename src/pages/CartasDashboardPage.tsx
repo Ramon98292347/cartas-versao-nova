@@ -117,7 +117,12 @@ export default function CartasDashboardPage() {
             <h2 className="text-4xl font-extrabold tracking-tight text-slate-900">Cartas</h2>
             <p className="mt-1 text-base text-slate-600">Painel de cartas e historico por periodo.</p>
           </div>
-          <Button className="h-11 px-5" onClick={() => nav("/carta/formulario")}>Fazer carta</Button>
+          <Button
+            className="h-11 px-6 font-semibold text-white shadow-sm bg-blue-600 hover:bg-blue-700 border border-blue-700"
+            onClick={() => nav("/carta/formulario")}
+          >
+            Fazer carta
+          </Button>
         </div>
       </section>
 

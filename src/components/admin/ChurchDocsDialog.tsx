@@ -9,6 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { supabase } from "@/lib/supabase";
+import { fetchAddressByCep, maskCep, onlyDigits } from "@/lib/cep";
 import type { ChurchInScopeItem, ChurchContratoDraft, ChurchHierarchySigner, ChurchLaudoDraft, ChurchRemanejamentoDraft } from "@/services/saasService";
 import {
   generateChurchContratoPdf,
@@ -56,6 +57,8 @@ export function ChurchDocsDialog({
   const [contrato, setContrato] = useState<ChurchContratoDraft>({ church_totvs_id: "" });
   const [laudo, setLaudo] = useState<ChurchLaudoDraft>({ church_totvs_id: "" });
   const [busyPhoto, setBusyPhoto] = useState<string>("");
+  const [cepLoading, setCepLoading] = useState(false);
+  const [lastCepLookup, setLastCepLookup] = useState("");
 
   useEffect(() => {
     setActiveTab(initialTab);
@@ -96,6 +99,39 @@ export function ChurchDocsDialog({
   function updateLaudo(field: keyof ChurchLaudoDraft, value: string) {
     setLaudo((prev) => ({ ...prev, [field]: value }));
   }
+
+  async function autofillLocadorCep(force = false) {
+    const cep = onlyDigits(textValue(contrato.locador_cep));
+    if (cep.length !== 8) return;
+    if (!force && (cepLoading || lastCepLookup === cep)) return;
+
+    setCepLoading(true);
+    try {
+      const data = await fetchAddressByCep(cep);
+      setContrato((prev) => ({
+        ...prev,
+        locador_cep: maskCep(cep),
+        locador_endereco: textValue(prev.locador_endereco) || data.logradouro,
+        locador_bairro: textValue(prev.locador_bairro) || data.bairro,
+        locador_cidade: textValue(prev.locador_cidade) || data.localidade,
+        locador_uf: textValue(prev.locador_uf) || data.uf,
+      }));
+      setLastCepLookup(cep);
+    } catch (err) {
+      if (force) {
+        toast.error(String((err as Error)?.message || "") === "cep_not_found" ? "CEP nao encontrado." : "Falha ao buscar CEP.");
+      }
+    } finally {
+      setCepLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    if (activeTab !== "contrato") return;
+    const cep = onlyDigits(textValue(contrato.locador_cep));
+    if (cep.length !== 8) return;
+    void autofillLocadorCep();
+  }, [contrato.locador_cep, activeTab]);
 
   async function uploadLaudoPhoto(file: File, slot: "foto_interna_1_url" | "foto_interna_2_url" | "foto_interna_3_url" | "foto_interna_4_url") {
     if (!church || !supabase) {
@@ -289,7 +325,16 @@ export function ChurchDocsDialog({
                   <div className="space-y-1"><Label>Bairro</Label><Input value={textValue(contrato.locador_bairro)} onChange={(e) => updateContrato("locador_bairro", e.target.value)} /></div>
                   <div className="space-y-1"><Label>Cidade</Label><Input value={textValue(contrato.locador_cidade)} onChange={(e) => updateContrato("locador_cidade", e.target.value)} /></div>
                   <div className="space-y-1"><Label>UF</Label><Input value={textValue(contrato.locador_uf)} onChange={(e) => updateContrato("locador_uf", e.target.value)} /></div>
-                  <div className="space-y-1"><Label>CEP</Label><Input value={textValue(contrato.locador_cep)} onChange={(e) => updateContrato("locador_cep", e.target.value)} /></div>
+                  <div className="space-y-1">
+                    <Label>CEP</Label>
+                    <Input
+                      value={maskCep(textValue(contrato.locador_cep))}
+                      onChange={(e) => updateContrato("locador_cep", e.target.value)}
+                      onBlur={() => void autofillLocadorCep(true)}
+                      placeholder="00000-000"
+                    />
+                    <p className="text-xs text-slate-500">{cepLoading ? "Buscando endereco..." : "Endereco preenchido automaticamente pelo CEP."}</p>
+                  </div>
                   <div className="space-y-1"><Label>Telefone</Label><Input value={textValue(contrato.locador_telefone)} onChange={(e) => updateContrato("locador_telefone", e.target.value)} /></div>
                 </CardContent>
               </Card>

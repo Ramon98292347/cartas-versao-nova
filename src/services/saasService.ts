@@ -1702,7 +1702,19 @@ export async function resetWorkerPassword(payload: { cpf?: string; user_id?: str
   (worker as AuthSessionData & { password?: string }).password = nextPassword;
 }
 
-export async function updateMyProfile(payload: { phone?: string; email?: string; address_city?: string }) {
+export async function updateMyProfile(payload: {
+  phone?: string;
+  email?: string;
+  birth_date?: string;
+  avatar_url?: string;
+  cep?: string;
+  address_street?: string;
+  address_number?: string;
+  address_complement?: string;
+  address_neighborhood?: string;
+  address_city?: string;
+  address_state?: string;
+}) {
   if (!isMockMode()) {
     await api.updateMyProfile(payload);
     return;

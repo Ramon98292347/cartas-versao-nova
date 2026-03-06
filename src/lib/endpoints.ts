@@ -51,7 +51,7 @@ export const api = {
   createLetter: (body: JsonBody) => post("create-letter", body),
   createUser: (body: JsonBody) => post("create-user", body),
   resetPassword: (body: { cpf?: string; user_id?: string; new_password: string }) => post("reset-password", body),
-  updateMyProfile: (body: { phone?: string; email?: string; address_city?: string; avatar_url?: string }) => post("update-my-profile", body),
+  updateMyProfile: (body: JsonBody) => post("update-my-profile", body),
   listWorkers: (body: { search?: string; minister_role?: string; is_active?: boolean; include_pastor?: boolean; page?: number; page_size?: number }) =>
     post("list-workers", body),
   listMembers: (body: {

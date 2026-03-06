@@ -9,7 +9,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { listNotifications, markAllNotificationsRead, markNotificationRead } from "@/services/saasService";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 
-type RoleMode = "admin" | "pastor";
+type RoleMode = "admin" | "pastor" | "obreiro";
 
 type MenuItem = {
   to: string;
@@ -32,6 +32,11 @@ const adminMenu: MenuItem[] = [
   { to: "/admin/igrejas", label: "Igrejas", icon: Building2 },
   { to: "/divulgacao", label: "Divulgacao", icon: Megaphone },
   { to: "/config", label: "Configuracoes", icon: Settings },
+];
+
+const obreiroMenu: MenuItem[] = [
+  { to: "/obreiro", label: "Dashboard", icon: FileText },
+  { to: "/usuario/documentos", label: "Documentos", icon: Users },
 ];
 
 // Comentario: item de menu com estilo SaaS corporativo (pill azul suave + underline no ativo).
@@ -70,7 +75,7 @@ export function ManagementShell({
 }) {
   const nav = useNavigate();
   const { usuario, clearAuth } = useUser();
-  const menu = roleMode === "admin" ? adminMenu : pastorMenu;
+  const menu = roleMode === "admin" ? adminMenu : roleMode === "pastor" ? pastorMenu : obreiroMenu;
   const [mobileOpen, setMobileOpen] = useState(false);
   const [openNotifications, setOpenNotifications] = useState(false);
   const [openInstallPrompt, setOpenInstallPrompt] = useState(false);

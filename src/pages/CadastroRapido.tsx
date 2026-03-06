@@ -12,6 +12,7 @@ import { supabase } from "@/lib/supabase";
 import { fetchChurches } from "@/services/churchService";
 import { publicRegisterMember } from "@/services/saasService";
 import { getFriendlyError } from "@/lib/error-map";
+import { fetchAddressByCep, maskCep, onlyDigits } from "@/lib/cep";
 
 function normalizeCpf(value: string) {
   return String(value || "").replace(/\D/g, "").slice(0, 11);
@@ -33,16 +34,6 @@ function normalizeSearch(value: string) {
     .trim();
 }
 
-function onlyDigits(value: string) {
-  return String(value || "").replace(/\D/g, "");
-}
-
-function maskCep(value: string) {
-  const digits = onlyDigits(value).slice(0, 8);
-  if (digits.length <= 5) return digits;
-  return `${digits.slice(0, 5)}-${digits.slice(5)}`;
-}
-
 export default function CadastroRapido() {
   const nav = useNavigate();
   const [loading, setLoading] = useState(false);
@@ -59,7 +50,6 @@ export default function CadastroRapido() {
   const [igrejaEncontradaNome, setIgrejaEncontradaNome] = useState("");
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
   const [avatarPreviewUrl, setAvatarPreviewUrl] = useState("");
-  const [loadingCep, setLoadingCep] = useState(false);
   const [cep, setCep] = useState("");
   const [addressStreet, setAddressStreet] = useState("");
   const [addressNumber, setAddressNumber] = useState("");
@@ -67,6 +57,8 @@ export default function CadastroRapido() {
   const [addressNeighborhood, setAddressNeighborhood] = useState("");
   const [addressCity, setAddressCity] = useState("");
   const [addressState, setAddressState] = useState("");
+  const [cepLookupLoading, setCepLookupLoading] = useState(false);
+  const [lastCepLookup, setLastCepLookup] = useState("");
 
   useEffect(() => {
     if (!avatarFile) {
@@ -137,33 +129,33 @@ export default function CadastroRapido() {
     toast.error("Igreja nao encontrada. Verifique o nome ou TOTVS.");
   }
 
-  async function buscarCep() {
+  async function buscarCepAutomatico(force = false) {
     const cepDigits = onlyDigits(cep);
-    if (cepDigits.length !== 8) {
-      toast.error("Informe um CEP valido com 8 digitos.");
-      return;
-    }
+    if (cepDigits.length !== 8) return;
+    if (!force && (cepLookupLoading || lastCepLookup === cepDigits)) return;
 
-    setLoadingCep(true);
+    setCepLookupLoading(true);
     try {
-      const resp = await fetch(`https://viacep.com.br/ws/${cepDigits}/json/`);
-      const data = await resp.json();
-      if (!resp.ok || data?.erro) {
-        toast.error("CEP nao encontrado.");
-        return;
+      const data = await fetchAddressByCep(cepDigits);
+      setAddressStreet((prev) => prev || data.logradouro);
+      setAddressNeighborhood((prev) => prev || data.bairro);
+      setAddressCity((prev) => prev || data.localidade);
+      setAddressState((prev) => prev || data.uf);
+      setLastCepLookup(cepDigits);
+    } catch (err) {
+      if (force) {
+        toast.error(String((err as Error)?.message || "") === "cep_not_found" ? "CEP nao encontrado." : "Falha ao buscar CEP.");
       }
-
-      setAddressStreet(String(data.logradouro || ""));
-      setAddressNeighborhood(String(data.bairro || ""));
-      setAddressCity(String(data.localidade || ""));
-      setAddressState(String(data.uf || ""));
-      toast.success("Endereco preenchido pelo CEP.");
-    } catch {
-      toast.error("Falha ao buscar CEP.");
     } finally {
-      setLoadingCep(false);
+      setCepLookupLoading(false);
     }
   }
+
+  useEffect(() => {
+    const cepDigits = onlyDigits(cep);
+    if (cepDigits.length !== 8) return;
+    void buscarCepAutomatico();
+  }, [cep]);
 
   async function submit() {
     const cpfRaw = normalizeCpf(cpf);
@@ -290,12 +282,13 @@ export default function CadastroRapido() {
 
               <div className="space-y-2">
                 <Label>CEP</Label>
-                <div className="flex gap-2">
-                  <Input value={maskCep(cep)} onChange={(e) => setCep(e.target.value)} placeholder="00000-000" />
-                  <Button type="button" variant="outline" onClick={buscarCep} disabled={loadingCep}>
-                    {loadingCep ? "Buscando..." : "Buscar CEP"}
-                  </Button>
-                </div>
+                <Input
+                  value={maskCep(cep)}
+                  onChange={(e) => setCep(e.target.value)}
+                  onBlur={() => void buscarCepAutomatico(true)}
+                  placeholder="00000-000"
+                />
+                <p className="text-xs text-slate-500">{cepLookupLoading ? "Buscando endereco..." : "Endereco preenchido automaticamente pelo CEP."}</p>
               </div>
 
               <div className="space-y-2">

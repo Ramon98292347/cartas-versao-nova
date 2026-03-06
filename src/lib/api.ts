@@ -140,7 +140,8 @@ export async function post<T = unknown>(
 
   if (!opts?.skipAuth) {
     if (!token) {
-      throw new ApiError("Sem token. Faça login novamente.", 401, "missing_token");
+      logout();
+      throw new ApiError("Sessão expirada. Faça login novamente.", 401, "missing_token");
     }
     if (!isJwtLike(token)) {
       logout();
@@ -162,6 +163,10 @@ export async function post<T = unknown>(
     const msg =
       String(data.detail || data.message || "") ||
       (typeof data === "string" ? data : "Erro na requisição");
+
+    if (res.status === 401 || code === "unauthorized" || code === "invalid_token_payload" || code === "missing_token") {
+      logout();
+    }
 
     throw new ApiError(msg, res.status, code, data);
   }

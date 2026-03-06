@@ -1,3 +1,5 @@
+import { getToken as getAuthToken, logout } from "@/lib/api";
+
 type ApiErrorData = {
   ok?: boolean;
   error?: string;
@@ -16,25 +18,6 @@ export class ApiError extends Error {
     super(message);
     this.status = status;
     this.data = data;
-  }
-}
-
-function getToken() {
-  const raw = String(localStorage.getItem("ipda_token") || "")
-    .replace(/^Bearer\s+/i, "")
-    .trim()
-    .replace(/^"+|"+$/g, "");
-  if (!raw) return "";
-  const parts = raw.split(".");
-  if (parts.length !== 3) return "";
-  try {
-    const payload = parts[1].replace(/-/g, "+").replace(/_/g, "/");
-    const padded = payload + "=".repeat((4 - (payload.length % 4)) % 4);
-    const data = JSON.parse(atob(padded));
-    if (!data?.sub || !data?.role || !data?.active_totvs_id) return "";
-    return raw;
-  } catch {
-    return "";
   }
 }
 
@@ -119,8 +102,12 @@ export async function apiFetch<T>(
   };
 
   if (!options?.noAuth) {
-    const token = getToken();
-    if (token) headers.Authorization = `Bearer ${token}`;
+    const token = getAuthToken();
+    if (!token) {
+      logout();
+      throw new ApiError("missing_token", 401, { error: "missing_token" });
+    }
+    headers.Authorization = `Bearer ${token}`;
   }
 
   const res = await fetch(`${base}${path.startsWith("/") ? path : `/${path}`}`, {
@@ -131,6 +118,10 @@ export async function apiFetch<T>(
 
   const data = (await res.json().catch(() => ({}))) as ApiErrorData;
   if (!res.ok || data?.ok === false) {
+    const code = String(data?.error || "");
+    if (res.status === 401 || code === "unauthorized" || code === "invalid_token_payload" || code === "missing_token") {
+      logout();
+    }
     throw new ApiError(String(data?.error || `http_${res.status}`), res.status, data);
   }
 

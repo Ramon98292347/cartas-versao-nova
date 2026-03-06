@@ -16,6 +16,7 @@ import { useUser } from "@/context/UserContext";
 import { createChurch, deactivateChurch, type ChurchInScopeItem } from "@/services/saasService";
 import { getFriendlyError } from "@/lib/error-map";
 import { addAuditLog } from "@/lib/audit";
+import { fetchAddressByCep, maskCep, onlyDigits } from "@/lib/cep";
 
 type ChurchClass = "estadual" | "setorial" | "central" | "regional" | "local";
 
@@ -138,6 +139,10 @@ export function AdminChurchesTab({
   const [editingChurch, setEditingChurch] = useState<ChurchInScopeItem | null>(null);
   const [editForm, setEditForm] = useState<NewChurchForm>(initialForm);
   const [savingEdit, setSavingEdit] = useState(false);
+  const [newCepLoading, setNewCepLoading] = useState(false);
+  const [editCepLoading, setEditCepLoading] = useState(false);
+  const [lastNewCep, setLastNewCep] = useState("");
+  const [lastEditCep, setLastEditCep] = useState("");
 
   const [tab, setTab] = useState<ChurchTab>("lista");
   const [view, setView] = useState<ChurchView>("lista");
@@ -164,6 +169,70 @@ export function AdminChurchesTab({
       setTab("lista");
     }
   }, [tab]);
+
+  async function autofillNewCep(force = false) {
+    const cep = onlyDigits(newForm.cep);
+    if (cep.length !== 8) return;
+    if (!force && (newCepLoading || lastNewCep === cep)) return;
+
+    setNewCepLoading(true);
+    try {
+      const data = await fetchAddressByCep(cep);
+      setNewForm((prev) => ({
+        ...prev,
+        cep: maskCep(cep),
+        address_street: prev.address_street || data.logradouro,
+        address_neighborhood: prev.address_neighborhood || data.bairro,
+        address_city: prev.address_city || data.localidade,
+        address_state: prev.address_state || data.uf,
+      }));
+      setLastNewCep(cep);
+    } catch (err) {
+      if (force) {
+        toast.error(String((err as Error)?.message || "") === "cep_not_found" ? "CEP nao encontrado." : "Falha ao buscar CEP.");
+      }
+    } finally {
+      setNewCepLoading(false);
+    }
+  }
+
+  async function autofillEditCep(force = false) {
+    const cep = onlyDigits(editForm.cep);
+    if (cep.length !== 8) return;
+    if (!force && (editCepLoading || lastEditCep === cep)) return;
+
+    setEditCepLoading(true);
+    try {
+      const data = await fetchAddressByCep(cep);
+      setEditForm((prev) => ({
+        ...prev,
+        cep: maskCep(cep),
+        address_street: prev.address_street || data.logradouro,
+        address_neighborhood: prev.address_neighborhood || data.bairro,
+        address_city: prev.address_city || data.localidade,
+        address_state: prev.address_state || data.uf,
+      }));
+      setLastEditCep(cep);
+    } catch (err) {
+      if (force) {
+        toast.error(String((err as Error)?.message || "") === "cep_not_found" ? "CEP nao encontrado." : "Falha ao buscar CEP.");
+      }
+    } finally {
+      setEditCepLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    const cep = onlyDigits(newForm.cep);
+    if (!newOpen || cep.length !== 8) return;
+    void autofillNewCep();
+  }, [newForm.cep, newOpen]);
+
+  useEffect(() => {
+    const cep = onlyDigits(editForm.cep);
+    if (!editingChurch || cep.length !== 8) return;
+    void autofillEditCep();
+  }, [editForm.cep, editingChurch]);
 
   function openPastorModal(church: ChurchInScopeItem) {
     setSelectedChurch(church);
@@ -586,7 +655,13 @@ export function AdminChurchesTab({
             <div className="grid gap-3 md:grid-cols-2">
               <div className="space-y-1">
                 <Label>CEP</Label>
-                <Input value={newForm.cep} onChange={(e) => setNewForm((p) => ({ ...p, cep: e.target.value }))} />
+                <Input
+                  value={maskCep(newForm.cep)}
+                  onChange={(e) => setNewForm((p) => ({ ...p, cep: e.target.value }))}
+                  onBlur={() => void autofillNewCep(true)}
+                  placeholder="00000-000"
+                />
+                <p className="text-xs text-slate-500">{newCepLoading ? "Buscando endereco..." : "Endereco preenchido automaticamente pelo CEP."}</p>
               </div>
               <div className="space-y-1">
                 <Label>Pais</Label>
@@ -696,7 +771,13 @@ export function AdminChurchesTab({
             <div className="grid gap-3 md:grid-cols-2">
               <div className="space-y-1">
                 <Label>CEP</Label>
-                <Input value={editForm.cep} onChange={(e) => setEditForm((p) => ({ ...p, cep: e.target.value }))} />
+                <Input
+                  value={maskCep(editForm.cep)}
+                  onChange={(e) => setEditForm((p) => ({ ...p, cep: e.target.value }))}
+                  onBlur={() => void autofillEditCep(true)}
+                  placeholder="00000-000"
+                />
+                <p className="text-xs text-slate-500">{editCepLoading ? "Buscando endereco..." : "Endereco preenchido automaticamente pelo CEP."}</p>
               </div>
               <div className="space-y-1">
                 <Label>Pais</Label>

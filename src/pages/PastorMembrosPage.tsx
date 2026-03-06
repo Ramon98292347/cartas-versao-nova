@@ -13,6 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { listChurchesInScope, listMembers, type UserListItem, generateMemberDocs } from "@/services/saasService";
 import { useUser } from "@/context/UserContext";
+import { fetchAddressByCep, maskCep, onlyDigits } from "@/lib/cep";
 
 type MemberTab = "lista" | "ficha_membro" | "carteirinha" | "ficha_obreiro";
 type MemberView = "lista" | "grid";
@@ -558,6 +559,8 @@ export default function PastorMembrosPage() {
   const [fichaTemplate, setFichaTemplate] = useState<FichaTemplate>("padrao");
   const [savingDraft, setSavingDraft] = useState(false);
   const [sending, setSending] = useState(false);
+  const [cepLookupLoading, setCepLookupLoading] = useState(false);
+  const [lastCepLookup, setLastCepLookup] = useState("");
   const carteirinhaHtml = useMemo(() => buildCarteirinhaHtml(form), [form]);
   const fichaMembroHtml = useMemo(() => buildFichaMembroHtml(form), [form]);
 
@@ -615,6 +618,38 @@ export default function PastorMembrosPage() {
     const pastorSignature = String((pastorDaIgreja as UserListItem | null)?.signature_url || "");
     setForm(memberToForm(selectedMember, churchName, pastorSignature, churchFooter));
   }, [selectedMemberId, selectedMember, workers, churchName, pastorDaIgreja, churchFooter]);
+
+  async function autofillCep(force = false) {
+    const cepDigits = onlyDigits(form.cep_congregacao);
+    if (cepDigits.length !== 8) return;
+    if (!force && (cepLookupLoading || lastCepLookup === cepDigits)) return;
+
+    setCepLookupLoading(true);
+    try {
+      const data = await fetchAddressByCep(cepDigits);
+      setForm((prev) => ({
+        ...prev,
+        cep_congregacao: maskCep(cepDigits),
+        congregacao_endereco: prev.congregacao_endereco || data.logradouro,
+        congregacao_bairro: prev.congregacao_bairro || data.bairro,
+        congregacao_cidade: prev.congregacao_cidade || data.localidade,
+        uf_congregacao: prev.uf_congregacao || data.uf,
+      }));
+      setLastCepLookup(cepDigits);
+    } catch (err) {
+      if (force) {
+        toast.error(String((err as Error)?.message || "") === "cep_not_found" ? "CEP nao encontrado." : "Falha ao buscar CEP.");
+      }
+    } finally {
+      setCepLookupLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    const cepDigits = onlyDigits(form.cep_congregacao);
+    if (cepDigits.length !== 8) return;
+    void autofillCep();
+  }, [form.cep_congregacao]);
 
   const counters = useMemo(() => {
     return {
@@ -1029,7 +1064,16 @@ export default function PastorMembrosPage() {
                   <div className="space-y-1"><Label>Bairro</Label><Input value={form.bairro_congregacao} onChange={(e) => setForm((prev) => ({ ...prev, bairro_congregacao: e.target.value }))} /></div>
                   <div className="space-y-1"><Label>Cidade</Label><Input value={form.cidade_congregacao} onChange={(e) => setForm((prev) => ({ ...prev, cidade_congregacao: e.target.value }))} /></div>
                   <div className="space-y-1"><Label>UF</Label><Input value={form.uf_congregacao} onChange={(e) => setForm((prev) => ({ ...prev, uf_congregacao: e.target.value }))} /></div>
-                  <div className="space-y-1"><Label>CEP</Label><Input value={form.cep_congregacao} onChange={(e) => setForm((prev) => ({ ...prev, cep_congregacao: e.target.value }))} /></div>
+                  <div className="space-y-1">
+                    <Label>CEP</Label>
+                    <Input
+                      value={maskCep(form.cep_congregacao)}
+                      onChange={(e) => setForm((prev) => ({ ...prev, cep_congregacao: e.target.value }))}
+                      onBlur={() => void autofillCep(true)}
+                      placeholder="00000-000"
+                    />
+                    <p className="text-xs text-slate-500">{cepLookupLoading ? "Buscando endereco..." : "Endereco preenchido automaticamente pelo CEP."}</p>
+                  </div>
                   <div className="space-y-1"><Label>Dirigente</Label><Input value={form.dirigente_congregacao} onChange={(e) => setForm((prev) => ({ ...prev, dirigente_congregacao: e.target.value }))} /></div>
                   <div className="space-y-1"><Label>Telefone congregação</Label><Input value={form.tel_congregacao} onChange={(e) => setForm((prev) => ({ ...prev, tel_congregacao: e.target.value }))} /></div>
                   <div className="space-y-1"><Label>Sede setorial</Label><Input value={form.sede_setorial} onChange={(e) => setForm((prev) => ({ ...prev, sede_setorial: e.target.value }))} /></div>

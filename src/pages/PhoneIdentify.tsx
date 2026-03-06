@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { useUser } from "@/context/UserContext";
+import { setToken as setStoredToken } from "@/lib/api";
 import {
   forgotPasswordRequest,
   getMyRegistrationStatus,
@@ -118,6 +119,8 @@ export default function PhoneIdentify() {
         root_totvs_id: result.session.root_totvs_id || result.session.totvs_id,
       };
 
+      // Comentario: persiste o token imediatamente para chamadas de API no mesmo fluxo.
+      setStoredToken(result.token);
       setToken(result.token);
       setSession(fixedSession);
       if (fixedSession.totvs_id) localStorage.setItem("ipda_last_totvs", fixedSession.totvs_id);

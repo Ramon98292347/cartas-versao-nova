@@ -1,4 +1,4 @@
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -21,6 +21,7 @@ import {
 import { getFriendlyError } from "@/lib/error-map";
 import { addAuditLog } from "@/lib/audit";
 import { supabase } from "@/lib/supabase";
+import { fetchAddressByCep, maskCep, onlyDigits } from "@/lib/cep";
 
 function normalizeCpf(v: string) {
   return (v || "").replace(/\D/g, "").slice(0, 11);
@@ -87,6 +88,8 @@ export function ObreirosTab({ activeTotvsId }: { activeTotvsId: string }) {
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState<WorkerForm>(initialForm);
   const [pendingAvatarFile, setPendingAvatarFile] = useState<File | null>(null);
+  const [cepLookupLoading, setCepLookupLoading] = useState(false);
+  const [lastCepLookup, setLastCepLookup] = useState("");
 
   const [openResetModal, setOpenResetModal] = useState(false);
   const [openViewModal, setOpenViewModal] = useState(false);
@@ -117,6 +120,12 @@ export function ObreirosTab({ activeTotvsId }: { activeTotvsId: string }) {
     workers.forEach((w) => w.minister_role && set.add(w.minister_role));
     return Array.from(set.values()).sort();
   }, [workers]);
+
+  useEffect(() => {
+    const cepDigits = onlyDigits(form.cep);
+    if (!openModal || cepDigits.length !== 8) return;
+    void lookupCep();
+  }, [form.cep, openModal]);
 
   async function refresh() {
     await queryClient.invalidateQueries({ queryKey: ["workers"] });
@@ -165,26 +174,29 @@ export function ObreirosTab({ activeTotvsId }: { activeTotvsId: string }) {
     setOpenViewModal(true);
   }
 
-  async function lookupCep() {
-    const cep = form.cep.replace(/\D/g, "");
-    if (cep.length !== 8) {
-      toast.error("CEP invalido.");
-      return;
-    }
+  async function lookupCep(force = false) {
+    const cep = onlyDigits(form.cep);
+    if (cep.length !== 8) return;
+    if (!force && (cepLookupLoading || lastCepLookup === cep)) return;
+
+    setCepLookupLoading(true);
     try {
-      const res = await fetch(`https://viacep.com.br/ws/${cep}/json/`);
-      const data = await res.json();
-      if (data?.erro) throw new Error("cep-not-found");
+      const data = await fetchAddressByCep(cep);
       setForm((prev) => ({
         ...prev,
         address_street: data.logradouro || prev.address_street,
         address_neighborhood: data.bairro || prev.address_neighborhood,
         address_city: data.localidade || prev.address_city,
         address_state: data.uf || prev.address_state,
+        cep: maskCep(cep),
       }));
-      toast.success("Endereco preenchido.");
-    } catch {
-      toast.error("Nao foi possivel buscar o CEP.");
+      setLastCepLookup(cep);
+    } catch (err) {
+      if (force) {
+        toast.error(String((err as Error)?.message || "") === "cep_not_found" ? "CEP nao encontrado." : "Nao foi possivel buscar o CEP.");
+      }
+    } finally {
+      setCepLookupLoading(false);
     }
   }
 
@@ -618,9 +630,14 @@ export function ObreirosTab({ activeTotvsId }: { activeTotvsId: string }) {
             <div className="grid gap-3 md:grid-cols-[1fr_auto]">
               <div className="space-y-1">
                 <Label>CEP</Label>
-                <Input value={form.cep} onChange={(e) => setForm((p) => ({ ...p, cep: e.target.value }))} />
+                <Input
+                  value={maskCep(form.cep)}
+                  onChange={(e) => setForm((p) => ({ ...p, cep: e.target.value }))}
+                  onBlur={() => void lookupCep(true)}
+                  placeholder="00000-000"
+                />
+                <p className="text-xs text-slate-500">{cepLookupLoading ? "Buscando endereco..." : "Endereco preenchido automaticamente pelo CEP."}</p>
               </div>
-              <Button type="button" variant="outline" className="self-end" onClick={lookupCep}>Buscar CEP</Button>
             </div>
 
             <div className="grid gap-3 md:grid-cols-2">

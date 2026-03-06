@@ -2,8 +2,9 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useUser } from "@/context/UserContext";
+import { ManagementShell } from "@/components/layout/ManagementShell";
 import { Button } from "@/components/ui/button";
-import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -11,19 +12,19 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
+import { supabase } from "@/lib/supabase";
+import { fetchAddressByCep, maskCep, onlyDigits } from "@/lib/cep";
 import {
   getPastorByTotvsPublic,
   getSignedPdfUrl,
-  listNotifications,
-  markAllNotificationsRead,
-  markNotificationRead,
   requestRelease,
   updateMyProfile,
   workerDashboard,
   type PastorLetter,
 } from "@/services/saasService";
-import { Share2, Download, Unlock, LogOut, Bell, RefreshCw, MoreHorizontal, Eye, IdCard } from "lucide-react";
-import { usePwaInstall } from "@/hooks/usePwaInstall";
+import { Download, Eye, IdCard, MoreHorizontal, RefreshCw, Share2, Unlock } from "lucide-react";
+
+type QuickRange = "today" | "7" | "15" | "30" | "all";
 
 function statusClass(status: string) {
   if (status === "LIBERADA") return "bg-emerald-100 text-emerald-700 border-emerald-200";
@@ -46,10 +47,14 @@ function toInputDate(date: Date) {
   return `${y}-${m}-${d}`;
 }
 
-type QuickRange = "today" | "7" | "15" | "30" | "all";
 function getAddressCity(addressJson: unknown) {
   const address = (addressJson || {}) as Record<string, unknown>;
   return String(address.city || "");
+}
+
+function getAddressField(addressJson: unknown, key: string) {
+  const address = (addressJson || {}) as Record<string, unknown>;
+  return String(address[key] || "");
 }
 
 function buildPublicCartaUrl(storagePath: string) {
@@ -61,24 +66,40 @@ function buildPublicCartaUrl(storagePath: string) {
   return `${supabaseUrl}/storage/v1/object/public/cartas/${cleaned}`;
 }
 
-
+// Comentario: dashboard do obreiro padronizado com o mesmo layout SaaS do sistema.
 export default function UsuarioDashboard() {
-  const { usuario, session, token, clearAuth, setUsuario, setTelefone } = useUser();
   const nav = useNavigate();
   const queryClient = useQueryClient();
+  const { usuario, session, setUsuario, setTelefone } = useUser();
+
   const [dateStart, setDateStart] = useState("");
   const [dateEnd, setDateEnd] = useState("");
   const [quickRange, setQuickRange] = useState<QuickRange>("7");
   const [openUpdateModal, setOpenUpdateModal] = useState(false);
   const [openCadastroModal, setOpenCadastroModal] = useState(false);
-  const [openNotificationsModal, setOpenNotificationsModal] = useState(false);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
-  const [profileForm, setProfileForm] = useState({ phone: "", email: "", address_city: "" });
   const [savingProfile, setSavingProfile] = useState(false);
-  const { canInstall, install } = usePwaInstall();
+  const [cepLookupLoading, setCepLookupLoading] = useState(false);
+  const [lastCepLookup, setLastCepLookup] = useState("");
+  const [profileForm, setProfileForm] = useState({
+    phone: "",
+    email: "",
+    birth_date: "",
+    avatar_url: "",
+    cep: "",
+    address_street: "",
+    address_number: "",
+    address_complement: "",
+    address_neighborhood: "",
+    address_city: "",
+    address_state: "",
+  });
+  const [avatarFile, setAvatarFile] = useState<File | null>(null);
 
   const userId = String(usuario?.id || "");
+  const activeTotvs = String(session?.totvs_id || "");
+  const isCadastroPendente = usuario?.registration_status === "PENDENTE";
 
   useEffect(() => {
     const now = new Date();
@@ -102,37 +123,9 @@ export default function UsuarioDashboard() {
 
   const { data, isLoading } = useQuery({
     queryKey: ["worker-dashboard", userId, dateStart, dateEnd],
-    queryFn: () => workerDashboard(dateStart || undefined, dateEnd || undefined, 1, 50),
+    queryFn: () => workerDashboard(dateStart || undefined, dateEnd || undefined, 1, 80),
     enabled: Boolean(userId),
   });
-  const { data: notificationsData } = useQuery({
-    queryKey: ["worker-notifications", 1, 50],
-    queryFn: () => listNotifications(1, 50, false),
-    enabled: Boolean((session?.totvs_id || session?.root_totvs_id) && token),
-  });
-
-  const letters = useMemo(() => (data?.letters || []).sort((a, b) => (a.created_at < b.created_at ? 1 : -1)), [data?.letters]);
-  const filteredLetters = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    return letters.filter((l) => {
-      // Comentario: aplica periodo local para os filtros Hoje/7/15/30 dias funcionarem
-      // mesmo quando o backend retornar um conjunto maior de cartas.
-      const createdDate = toInputDate(new Date(l.created_at));
-      if (dateStart && createdDate < dateStart) return false;
-      if (dateEnd && createdDate > dateEnd) return false;
-
-      const matchesStatus = statusFilter === "all" || l.status === statusFilter;
-      const haystack = `${l.preacher_name || ""} ${l.church_origin || ""} ${l.church_destination || ""} ${l.preach_date || ""}`.toLowerCase();
-      const matchesSearch = !q || haystack.includes(q);
-      return matchesStatus && matchesSearch;
-    });
-  }, [letters, search, statusFilter, dateStart, dateEnd]);
-  const profile = data?.user;
-  const church = data?.church;
-  const activeTotvs = String(session?.totvs_id || church?.totvs_id || "");
-  const notifications = notificationsData?.notifications || [];
-  const unreadCount = notificationsData?.unread_count || 0;
-  const isCadastroPendente = usuario?.registration_status === "PENDENTE";
 
   const { data: pastorFromUsers } = useQuery({
     queryKey: ["pastor-by-totvs", activeTotvs],
@@ -140,24 +133,82 @@ export default function UsuarioDashboard() {
     enabled: Boolean(activeTotvs),
   });
 
+  const letters = useMemo(
+    () => (data?.letters || []).sort((a, b) => (a.created_at < b.created_at ? 1 : -1)),
+    [data?.letters]
+  );
+  const profile = data?.user;
+  const church = data?.church;
   const cityFromProfile = useMemo(() => getAddressCity(profile?.address_json), [profile?.address_json]);
 
   useEffect(() => {
     setProfileForm({
       phone: profile?.phone || "",
       email: profile?.email || "",
+      birth_date: String(profile?.birth_date || ""),
+      avatar_url: String(profile?.avatar_url || ""),
+      cep: getAddressField(profile?.address_json, "cep"),
+      address_street: getAddressField(profile?.address_json, "street"),
+      address_number: getAddressField(profile?.address_json, "number"),
+      address_complement: getAddressField(profile?.address_json, "complement"),
+      address_neighborhood: getAddressField(profile?.address_json, "neighborhood"),
       address_city: cityFromProfile,
+      address_state: getAddressField(profile?.address_json, "state"),
     });
-  }, [profile?.phone, profile?.email, cityFromProfile]);
+  }, [profile?.phone, profile?.email, profile?.birth_date, profile?.avatar_url, profile?.address_json, cityFromProfile]);
+
+  async function autofillCep(force = false) {
+    const cepDigits = onlyDigits(profileForm.cep);
+    if (cepDigits.length !== 8) return;
+    if (!force && (cepLookupLoading || lastCepLookup === cepDigits)) return;
+
+    setCepLookupLoading(true);
+    try {
+      const data = await fetchAddressByCep(cepDigits);
+      setProfileForm((prev) => ({
+        ...prev,
+        cep: maskCep(cepDigits),
+        address_street: prev.address_street || data.logradouro,
+        address_neighborhood: prev.address_neighborhood || data.bairro,
+        address_city: prev.address_city || data.localidade,
+        address_state: prev.address_state || data.uf,
+      }));
+      setLastCepLookup(cepDigits);
+    } catch (err) {
+      if (force) {
+        toast.error(String((err as Error)?.message || "") === "cep_not_found" ? "CEP nao encontrado." : "Falha ao buscar CEP.");
+      }
+    } finally {
+      setCepLookupLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    const cepDigits = onlyDigits(profileForm.cep);
+    if (!openUpdateModal || cepDigits.length !== 8) return;
+    void autofillCep();
+  }, [profileForm.cep, openUpdateModal]);
 
   useEffect(() => {
     if (!profile?.phone) return;
     setTelefone(profile.phone);
     setUsuario({
-      ...(usuario || { nome: profile.full_name || "Usuário", telefone: "" }),
+      ...(usuario || { nome: profile.full_name || "Usuario", telefone: "" }),
       telefone: profile.phone || "",
     });
   }, [profile?.phone, profile?.full_name, setTelefone, setUsuario, usuario]);
+
+  const filteredLetters = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return letters.filter((l) => {
+      const createdDate = toInputDate(new Date(l.created_at));
+      if (dateStart && createdDate < dateStart) return false;
+      if (dateEnd && createdDate > dateEnd) return false;
+      const matchesStatus = statusFilter === "all" || l.status === statusFilter;
+      const haystack = `${l.preacher_name || ""} ${l.church_origin || ""} ${l.church_destination || ""} ${l.preach_date || ""}`.toLowerCase();
+      return matchesStatus && (!q || haystack.includes(q));
+    });
+  }, [letters, search, statusFilter, dateStart, dateEnd]);
 
   const stats = useMemo(() => {
     const now = new Date();
@@ -165,135 +216,98 @@ export default function UsuarioDashboard() {
     const start7 = new Date(now);
     start7.setDate(now.getDate() - 6);
     const start7Str = toInputDate(start7);
-
-    const cartasHoje = filteredLetters.filter((l) => toInputDate(new Date(l.created_at)) === today).length;
-    const cartas7dias = filteredLetters.filter((l) => toInputDate(new Date(l.created_at)) >= start7Str).length;
-    const aguardando = filteredLetters.filter((l) => l.status === "AGUARDANDO_LIBERACAO").length;
-    const liberadas = filteredLetters.filter((l) => l.status === "LIBERADA").length;
-    const totalCartas = filteredLetters.length;
-
-    return { cartasHoje, cartas7dias, aguardando, liberadas, totalCartas };
+    return {
+      totalCartas: filteredLetters.length,
+      cartasHoje: filteredLetters.filter((l) => toInputDate(new Date(l.created_at)) === today).length,
+      cartas7dias: filteredLetters.filter((l) => toInputDate(new Date(l.created_at)) >= start7Str).length,
+      aguardando: filteredLetters.filter((l) => l.status === "AGUARDANDO_LIBERACAO").length,
+    };
   }, [filteredLetters]);
 
-  function logout() {
-    clearAuth();
-    nav("/");
-  }
-
-  async function refreshNotifications() {
-    await queryClient.invalidateQueries({ queryKey: ["worker-notifications"] });
-  }
-
-  async function readNotification(id: string) {
-    try {
-      await markNotificationRead(id);
-      await refreshNotifications();
-    } catch {
-      toast.error("Falha ao marcar notificação como lida.");
-    }
-  }
-
-  async function readAllNotifications() {
-    try {
-      await markAllNotificationsRead();
-      await refreshNotifications();
-    } catch {
-      toast.error("Falha ao marcar notificações.");
-    }
-  }
-
   async function openPdf(letter: PastorLetter) {
-    if (isCadastroPendente) {
-      toast.error("Cadastro pendente. Procure a secretaria da igreja para liberar acesso.");
-      return;
-    }
-    if (letter.status !== "LIBERADA") {
-      toast.error("Carta bloqueada.");
-      return;
-    }
-    if (!letter.storage_path) {
-      toast.error("PDF ainda indisponivel.");
-      return;
-    }
+    if (isCadastroPendente) return toast.error("Cadastro pendente. Procure a secretaria da igreja.");
+    if (letter.status !== "LIBERADA") return toast.error("Carta bloqueada.");
+    if (!letter.storage_path) return toast.error("PDF ainda indisponivel.");
+
     try {
       const url = letter.storage_path ? buildPublicCartaUrl(letter.storage_path) : await getSignedPdfUrl(letter.id);
       if (!url) throw new Error("signed-url-empty");
       window.open(url, "_blank");
     } catch {
-      if (letter.storage_path) {
-        const fallbackUrl = buildPublicCartaUrl(letter.storage_path);
-        if (fallbackUrl) {
-          window.open(fallbackUrl, "_blank");
-          toast.message("PDF aberto com link público.");
-          return;
-        }
-      }
       toast.error("Falha ao abrir PDF.");
     }
   }
 
   async function shareLetter(letter: PastorLetter) {
-    if (isCadastroPendente) {
-      toast.error("Cadastro pendente. Compartilhamento bloqueado ate a liberacao.");
-      return;
-    }
-    if (letter.status !== "LIBERADA") {
-      toast.error("Carta bloqueada.");
-      return;
-    }
+    if (isCadastroPendente) return toast.error("Cadastro pendente. Compartilhamento bloqueado.");
+    if (letter.status !== "LIBERADA") return toast.error("Carta bloqueada.");
     try {
       const url = letter.storage_path ? buildPublicCartaUrl(letter.storage_path) : await getSignedPdfUrl(letter.id);
-      if (url) {
-        window.open(`https://wa.me/?text=${encodeURIComponent(`Carta de pregacao: ${url}`)}`, "_blank");
-      }
+      if (!url) throw new Error("share-url-empty");
+      window.open(`https://wa.me/?text=${encodeURIComponent(`Carta de pregacao: ${url}`)}`, "_blank");
     } catch {
       toast.error("Falha ao compartilhar.");
     }
   }
 
   async function pedirLiberacao(letter: PastorLetter) {
-    if (isCadastroPendente) {
-      toast.error("Cadastro pendente. Solicite liberacao na secretaria da igreja.");
-      return;
-    }
+    if (isCadastroPendente) return toast.error("Cadastro pendente. Procure a secretaria da igreja.");
     try {
       await requestRelease(letter.id, userId, session?.totvs_id || "");
       toast.success("Pedido enviado.");
-      queryClient.invalidateQueries({ queryKey: ["worker-dashboard"] });
+      await queryClient.invalidateQueries({ queryKey: ["worker-dashboard"] });
     } catch {
       toast.error("Falha ao solicitar liberacao.");
     }
   }
 
   async function pedirPrimeiraLiberacao() {
-    const candidate = letters.find((l) => l.status === "AUTORIZADO" || l.status === "AGUARDANDO_LIBERAÇÃO");
-    if (!candidate) {
-      toast.error("Nenhuma carta disponivel para pedir liberção.");
-      return;
-    }
+    const candidate = letters.find((l) => l.status === "AUTORIZADO" || l.status === "AGUARDANDO_LIBERACAO");
+    if (!candidate) return toast.error("Nenhuma carta disponivel para pedir liberacao.");
     await pedirLiberacao(candidate);
   }
 
   async function baixarPrimeiraLiberada() {
     const candidate = letters.find((l) => l.status === "LIBERADA" && !!l.storage_path);
-    if (!candidate) {
-      toast.error("Nenhuma carta liberada para baixar.");
-      return;
-    }
+    if (!candidate) return toast.error("Nenhuma carta liberada para baixar.");
     await openPdf(candidate);
   }
 
   async function salvarPerfil() {
     setSavingProfile(true);
     try {
+      let avatarUrl = profileForm.avatar_url || undefined;
+      if (avatarFile && supabase) {
+        const ext = (avatarFile.name.split(".").pop() || "png").toLowerCase();
+        const cpf = String(profile?.cpf || usuario?.cpf || "tmp").replace(/\D/g, "");
+        const path = `users/${cpf || Date.now()}.${ext}`;
+        const { error } = await supabase.storage.from("avatars").upload(path, avatarFile, {
+          upsert: true,
+          contentType: avatarFile.type || undefined,
+          cacheControl: "3600",
+        });
+        if (error) throw new Error(error.message || "avatar_upload_failed");
+        const { data: publicData } = supabase.storage.from("avatars").getPublicUrl(path);
+        avatarUrl = publicData.publicUrl || avatarUrl;
+      }
+
       await updateMyProfile({
         phone: profileForm.phone || undefined,
         email: profileForm.email || undefined,
+        birth_date: profileForm.birth_date || undefined,
+        avatar_url: avatarUrl,
+        cep: profileForm.cep || undefined,
+        address_street: profileForm.address_street || undefined,
+        address_number: profileForm.address_number || undefined,
+        address_complement: profileForm.address_complement || undefined,
+        address_neighborhood: profileForm.address_neighborhood || undefined,
         address_city: profileForm.address_city || undefined,
+        address_state: profileForm.address_state || undefined,
       });
       toast.success("Perfil atualizado.");
       setOpenUpdateModal(false);
-      queryClient.invalidateQueries({ queryKey: ["worker-dashboard"] });
+      setAvatarFile(null);
+      await queryClient.invalidateQueries({ queryKey: ["worker-dashboard"] });
     } catch {
       toast.error("Falha ao atualizar perfil.");
     } finally {
@@ -301,111 +315,31 @@ export default function UsuarioDashboard() {
     }
   }
 
-  async function installApp() {
-    await install();
-  }
-
   return (
-    <div className="min-h-screen bg-[#f6f8fc]">
-      <header className="border-b border-slate-200 bg-white shadow-sm">
-        <div className="mx-auto flex w-full max-w-[1600px] flex-col gap-3 px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <h1 className="text-xl font-bold text-slate-900 sm:hidden">Gestão Eclesiástica</h1>
-            <h1 className="hidden text-3xl font-extrabold text-slate-900 sm:block">Sistema de Gestão Eclesiástica</h1>
-            <p className="text-sm text-slate-600">Painel do Obreiro</p>
-          </div>
-          <div className="w-full sm:w-auto">
-            <div className="mt-2 flex items-center justify-between gap-2 sm:mt-0">
-              <div className="flex items-center gap-2">
-                <Button
-                  variant="outline"
-                  size="icon"
-                  className="h-9 w-9 border-slate-300 bg-white text-slate-700 hover:bg-slate-50 sm:hidden"
-                  onClick={() => setOpenCadastroModal(true)}
-                  aria-label="Visualizar cadastro"
-                >
-                  <Eye className="h-4 w-4" />
-                </Button>
-                <Button
-                  variant="outline"
-                  className="hidden h-10 border-slate-300 bg-white px-3 text-slate-700 hover:bg-slate-50 sm:inline-flex sm:px-4"
-                  onClick={() => setOpenCadastroModal(true)}
-                >
-                  Visualizar cadastro
-                </Button>
-                {canInstall ? (
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    className="h-9 w-9 border-slate-300 bg-white text-slate-700 hover:bg-slate-50 sm:hidden"
-                    onClick={installApp}
-                    aria-label="Instalar app"
-                  >
-                    <Download className="h-4 w-4" />
-                  </Button>
-                ) : null}
-                {canInstall ? (
-                  <Button
-                    variant="outline"
-                    className="hidden h-10 border-slate-300 bg-white px-3 text-slate-700 hover:bg-slate-50 sm:inline-flex sm:px-4"
-                    onClick={installApp}
-                  >
-                    <Download className="mr-2 h-4 w-4" /> Instalar app
-                  </Button>
-                ) : null}
-                <Button
-                  variant="outline"
-                  size="icon"
-                  className="relative h-9 w-9 border-slate-300 bg-white text-slate-700 hover:bg-slate-50 sm:h-10 sm:w-10"
-                  onClick={() => setOpenNotificationsModal(true)}
-                >
-                  <Bell className="h-4 w-4 sm:h-5 sm:w-5" />
-                  {unreadCount > 0 ? (
-                    <span className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-rose-500 text-xs font-semibold text-white">
-                      {unreadCount}
-                    </span>
-                  ) : null}
-                </Button>
-                <Button variant="outline" className="h-9 border-slate-300 bg-white px-3 text-slate-700 hover:bg-slate-50 sm:h-10 sm:px-4" onClick={logout}>
-                  <LogOut className="h-4 w-4 sm:mr-2" /> <span className="hidden sm:inline">Sair</span>
-                </Button>
-              </div>
-              <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-2 py-1">
-                {profile?.avatar_url ? (
-                  <img
-                    src={profile.avatar_url}
-                    alt="Avatar usuario"
-                    className="mt-px h-11 w-11 rounded-full border border-slate-300 object-cover object-[center_top] sm:h-9 sm:w-9 md:h-12 md:w-12"
-                  />
-                ) : (
-                  <div className="flex h-11 w-11 items-center justify-center rounded-full border border-slate-300 bg-slate-200 text-base font-semibold text-slate-700 sm:h-9 sm:w-9 md:h-12 md:w-12">
-                    {(profile?.full_name || usuario?.nome || "U").charAt(0).toUpperCase()}
-                  </div>
-                )}
-                <span className="max-w-[120px] truncate text-xs font-medium text-slate-700 sm:max-w-[220px] sm:text-sm">
-                  {profile?.full_name || usuario?.nome || "Usuario logado"}
-                </span>
-              </div>
-            </div>
-          </div>
-        </div>
-      </header>
+    <ManagementShell roleMode="obreiro">
+      <div className="space-y-5">
+        <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+          <h2 className="text-4xl font-extrabold tracking-tight text-slate-900">Dashboard</h2>
+          <p className="mt-1 text-base text-slate-600">Visao geral das suas cartas e dados cadastrais.</p>
+        </section>
 
-      <main className="mx-auto w-full max-w-[1600px] space-y-5 px-4 py-4">
         <section className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
           {isCadastroPendente ? (
             <div className="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
               Seu cadastro esta pendente de liberacao. Cartas e documentos ficam bloqueados ate aprovacao.
             </div>
           ) : null}
-          <div className="grid gap-2 md:grid-cols-2">
+          <div className="grid gap-2 md:grid-cols-3">
+            <Button onClick={() => nav("/carta/formulario")} className="w-full bg-blue-600 hover:bg-blue-700" disabled={isCadastroPendente}>
+              Pedir carta
+            </Button>
             <Button variant="outline" onClick={pedirPrimeiraLiberacao} className="w-full" disabled={isCadastroPendente}>
-              <Unlock className="mr-2 h-4 w-4" /> Pedir liberação de carta
+              <Unlock className="mr-2 h-4 w-4" /> Pedir liberacao de carta
             </Button>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="outline" className="w-full" disabled={isCadastroPendente}>
-                  <MoreHorizontal className="mr-2 h-4 w-4" /> Ações
+                  <MoreHorizontal className="mr-2 h-4 w-4" /> Acoes
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent className="w-64">
@@ -418,169 +352,155 @@ export default function UsuarioDashboard() {
                 <DropdownMenuItem onClick={() => setOpenUpdateModal(true)}>
                   <RefreshCw className="mr-2 h-4 w-4" /> Atualizar cadastro
                 </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setOpenCadastroModal(true)}>
+                  <Eye className="mr-2 h-4 w-4" /> Visualizar cadastro
+                </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
         </section>
 
-        <section>
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          <Card className="border-0 bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-sm">
-            <CardContent className="pt-4">
-              <p className="text-sm opacity-90">Total de cartas</p>
-              <p className="text-3xl font-bold">{stats.totalCartas}</p>
+        <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <Card className="rounded-xl border border-slate-200 bg-white shadow-sm">
+            <CardContent className="border-l-4 border-l-blue-600 p-5">
+              <p className="text-sm font-semibold text-slate-800">Total de cartas</p>
+              <p className="text-4xl font-extrabold text-slate-900">{stats.totalCartas}</p>
             </CardContent>
           </Card>
-          <Card className="border-0 bg-gradient-to-r from-cyan-500 to-blue-500 text-white shadow-sm">
-            <CardContent className="pt-4">
-              <p className="text-sm opacity-90">Total de cartas (7 dias)</p>
-              <p className="text-3xl font-bold">{stats.cartas7dias}</p>
+          <Card className="rounded-xl border border-slate-200 bg-white shadow-sm">
+            <CardContent className="border-l-4 border-l-cyan-600 p-5">
+              <p className="text-sm font-semibold text-slate-800">Total de cartas (7 dias)</p>
+              <p className="text-4xl font-extrabold text-slate-900">{stats.cartas7dias}</p>
             </CardContent>
           </Card>
-          <Card className="border-0 bg-gradient-to-r from-emerald-500 to-green-500 text-white shadow-sm">
-            <CardContent className="pt-4">
-              <p className="text-sm opacity-90">Cartas hoje</p>
-              <p className="text-3xl font-bold">{stats.cartasHoje}</p>
+          <Card className="rounded-xl border border-slate-200 bg-white shadow-sm">
+            <CardContent className="border-l-4 border-l-emerald-600 p-5">
+              <p className="text-sm font-semibold text-slate-800">Cartas hoje</p>
+              <p className="text-4xl font-extrabold text-slate-900">{stats.cartasHoje}</p>
             </CardContent>
           </Card>
-          <Card className="border-0 bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-sm">
-            <CardContent className="pt-4">
-              <p className="text-sm opacity-90">Aguardando liberação</p>
-              <p className="text-3xl font-bold">{stats.aguardando}</p>
+          <Card className="rounded-xl border border-slate-200 bg-white shadow-sm">
+            <CardContent className="border-l-4 border-l-amber-600 p-5">
+              <p className="text-sm font-semibold text-slate-800">Aguardando liberacao</p>
+              <p className="text-4xl font-extrabold text-slate-900">{stats.aguardando}</p>
             </CardContent>
           </Card>
-          </div>
         </section>
 
-        <div className="grid gap-4">
-          <Card className="border border-slate-200 bg-white shadow-sm">
-            <CardHeader>
-              <CardTitle>Historico de Cartas</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex gap-2 overflow-x-auto pb-1">
-                <Button variant={quickRange === "today" ? "default" : "outline"} onClick={() => setQuickRange("today")} className="shrink-0">Hoje</Button>
-                <Button variant={quickRange === "7" ? "default" : "outline"} onClick={() => setQuickRange("7")} className="shrink-0">7 dias</Button>
-                <Button variant={quickRange === "15" ? "default" : "outline"} onClick={() => setQuickRange("15")} className="shrink-0">15 dias</Button>
-                <Button variant={quickRange === "30" ? "default" : "outline"} onClick={() => setQuickRange("30")} className="shrink-0">30 dias</Button>
-                <Button variant={quickRange === "all" ? "default" : "outline"} onClick={() => setQuickRange("all")} className="shrink-0">Todos</Button>
-              </div>
+        <Card className="border border-slate-200 bg-white shadow-sm">
+          <CardHeader>
+            <CardTitle>Historico de Cartas</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex gap-2 overflow-x-auto pb-1">
+              <Button variant={quickRange === "today" ? "default" : "outline"} onClick={() => setQuickRange("today")} className="shrink-0">Hoje</Button>
+              <Button variant={quickRange === "7" ? "default" : "outline"} onClick={() => setQuickRange("7")} className="shrink-0">7 dias</Button>
+              <Button variant={quickRange === "15" ? "default" : "outline"} onClick={() => setQuickRange("15")} className="shrink-0">15 dias</Button>
+              <Button variant={quickRange === "30" ? "default" : "outline"} onClick={() => setQuickRange("30")} className="shrink-0">30 dias</Button>
+              <Button variant={quickRange === "all" ? "default" : "outline"} onClick={() => setQuickRange("all")} className="shrink-0">Todos</Button>
+            </div>
 
-              <div className="grid gap-2 md:grid-cols-[1fr_220px]">
-                <Input placeholder="Buscar por destino, origem, nome..." value={search} onChange={(e) => setSearch(e.target.value)} />
-                <Select value={statusFilter} onValueChange={setStatusFilter}>
-                  <SelectTrigger><SelectValue placeholder="Status" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">Todos status</SelectItem>
-                    <SelectItem value="AUTORIZADO">AUTORIZADO</SelectItem>
-                    <SelectItem value="AGUARDANDO_LIBERACAO">AGUARDANDO_LIBERAÇÃO</SelectItem>
-                    <SelectItem value="LIBERADA">LIBERADA</SelectItem>
-                    <SelectItem value="BLOQUEADO">BLOQUEADO</SelectItem>
-                    <SelectItem value="ENVIADA">ENVIADA</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+            <div className="grid gap-2 md:grid-cols-[1fr_220px]">
+              <Input placeholder="Buscar por destino, origem, nome..." value={search} onChange={(e) => setSearch(e.target.value)} />
+              <Select value={statusFilter} onValueChange={setStatusFilter}>
+                <SelectTrigger><SelectValue placeholder="Status" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos status</SelectItem>
+                  <SelectItem value="AUTORIZADO">AUTORIZADO</SelectItem>
+                  <SelectItem value="AGUARDANDO_LIBERACAO">AGUARDANDO_LIBERACAO</SelectItem>
+                  <SelectItem value="LIBERADA">LIBERADA</SelectItem>
+                  <SelectItem value="BLOQUEADO">BLOQUEADO</SelectItem>
+                  <SelectItem value="ENVIADA">ENVIADA</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
 
-              {isLoading ? <p className="text-sm text-slate-500">Carregando...</p> : null}
+            {isLoading ? <p className="text-sm text-slate-500">Carregando...</p> : null}
 
-              <div className="hidden overflow-x-auto rounded-xl border border-slate-200 md:block">
-                <div className="min-w-[980px]">
-                  <div className="grid grid-cols-[120px_120px_180px_180px_120px_1fr] border-b bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-600">
-                    <span>Criada em</span>
-                    <span>Data pregacao</span>
-                    <span>Origem</span>
-                    <span>Destino</span>
-                    <span>Status</span>
-                    <span>Ações</span>
-                  </div>
-
-                  {filteredLetters.map((letter) => {
-                    const canOpen = letter.status === "LIBERADA" && Boolean(letter.storage_path);
-                    const canRequest = letter.status === "AUTORIZADO" || letter.status === "AGUARDANDO_LIBERACAO";
-                    return (
-                      <div key={letter.id} className="grid grid-cols-[120px_120px_180px_180px_120px_1fr] items-center border-b px-4 py-3 text-sm">
-                        <span>{formatDate(letter.created_at)}</span>
-                        <span>{formatDate(letter.preach_date)}</span>
-                        <span className="truncate">{letter.church_origin || "-"}</span>
-                        <span className="truncate">{letter.church_destination || "-"}</span>
-                        <span>
-                          <Badge variant="outline" className={statusClass(letter.status)}>{letter.status}</Badge>
-                        </span>
-                        <div className="flex flex-wrap gap-2">
-                          <Button variant="outline" disabled={!canOpen} onClick={() => openPdf(letter)}>
-                            <Download className="mr-2 h-4 w-4" /> Abrir
-                          </Button>
-                          <Button variant="outline" disabled={!canOpen} onClick={() => shareLetter(letter)}>
-                            <Share2 className="mr-2 h-4 w-4" /> Compartilhar
-                          </Button>
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button variant="outline" size="icon"><MoreHorizontal className="h-4 w-4" /></Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent>
-                              <DropdownMenuItem disabled={!canRequest} onClick={() => pedirLiberacao(letter)}>
-                                <Unlock className="mr-2 h-4 w-4" /> Pedir liberação
-                              </DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
+            <div className="space-y-3 md:hidden">
+              {filteredLetters.map((letter) => {
+                const canOpen = letter.status === "LIBERADA" && Boolean(letter.storage_path);
+                const canRequest = letter.status === "AUTORIZADO" || letter.status === "AGUARDANDO_LIBERACAO";
+                return (
+                  <Card key={letter.id} className="border border-slate-200">
+                    <CardContent className="space-y-2 p-4">
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <p className="text-sm font-semibold">{letter.church_destination || "-"}</p>
+                          <p className="text-xs text-slate-500">Pregacao: {formatDate(letter.preach_date)}</p>
                         </div>
+                        <Badge variant="outline" className={statusClass(letter.status)}>{letter.status}</Badge>
                       </div>
-                    );
-                  })}
+                      <p className="text-xs text-slate-600">Origem: {letter.church_origin || "-"}</p>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="outline" className="w-full"><MoreHorizontal className="mr-2 h-4 w-4" /> Acoes</Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent>
+                          <DropdownMenuItem disabled={!canOpen} onClick={() => openPdf(letter)}>
+                            <Download className="mr-2 h-4 w-4" /> Abrir PDF
+                          </DropdownMenuItem>
+                          <DropdownMenuItem disabled={!canOpen} onClick={() => shareLetter(letter)}>
+                            <Share2 className="mr-2 h-4 w-4" /> Compartilhar
+                          </DropdownMenuItem>
+                          <DropdownMenuItem disabled={!canRequest} onClick={() => pedirLiberacao(letter)}>
+                            <Unlock className="mr-2 h-4 w-4" /> Pedir liberacao
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </CardContent>
+                  </Card>
+                );
+              })}
+            </div>
 
-                  {!isLoading && filteredLetters.length === 0 ? <div className="px-4 py-4 text-sm text-slate-500">Nenhuma carta encontrada.</div> : null}
+            <div className="hidden overflow-x-auto rounded-xl border border-slate-200 md:block">
+              <div className="min-w-[980px]">
+                <div className="grid grid-cols-[120px_120px_180px_180px_120px_1fr] border-b bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-600">
+                  <span>Criada em</span>
+                  <span>Data pregacao</span>
+                  <span>Origem</span>
+                  <span>Destino</span>
+                  <span>Status</span>
+                  <span>Acoes</span>
                 </div>
-              </div>
-
-              <div className="space-y-3 md:hidden">
                 {filteredLetters.map((letter) => {
                   const canOpen = letter.status === "LIBERADA" && Boolean(letter.storage_path);
                   const canRequest = letter.status === "AUTORIZADO" || letter.status === "AGUARDANDO_LIBERACAO";
                   return (
-                    <Card key={letter.id} className="border border-slate-200">
-                      <CardContent className="space-y-2 p-4">
-                        <div className="flex items-start justify-between gap-2">
-                          <div>
-                            <p className="text-sm font-semibold">{letter.church_destination || "-"}</p>
-                            <p className="text-xs text-slate-500">Pregação: {formatDate(letter.preach_date)}</p>
-                          </div>
-                          <Badge variant="outline" className={statusClass(letter.status)}>{letter.status}</Badge>
-                        </div>
-                        <p className="text-xs text-slate-600">Origem: {letter.church_origin || "-"}</p>
-                        <div className="flex gap-2">
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button variant="outline" className="flex-1"><MoreHorizontal className="mr-2 h-4 w-4" /> Ações</Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent>
-                              <DropdownMenuItem disabled={!canOpen} onClick={() => openPdf(letter)}>
-                                <Download className="mr-2 h-4 w-4" /> Abrir PDF
-                              </DropdownMenuItem>
-                              <DropdownMenuItem disabled={!canOpen} onClick={() => shareLetter(letter)}>
-                                <Share2 className="mr-2 h-4 w-4" /> Compartilhar
-                              </DropdownMenuItem>
-                              <DropdownMenuItem disabled={!canRequest} onClick={() => pedirLiberacao(letter)}>
-                                <Unlock className="mr-2 h-4 w-4" /> Pedir liberação
-                              </DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        </div>
-                      </CardContent>
-                    </Card>
+                    <div key={letter.id} className="grid grid-cols-[120px_120px_180px_180px_120px_1fr] items-center border-b px-4 py-3 text-sm">
+                      <span>{formatDate(letter.created_at)}</span>
+                      <span>{formatDate(letter.preach_date)}</span>
+                      <span className="truncate">{letter.church_origin || "-"}</span>
+                      <span className="truncate">{letter.church_destination || "-"}</span>
+                      <span><Badge variant="outline" className={statusClass(letter.status)}>{letter.status}</Badge></span>
+                      <div className="flex flex-wrap gap-2">
+                        <Button variant="outline" disabled={!canOpen} onClick={() => openPdf(letter)}>
+                          <Download className="mr-2 h-4 w-4" /> Abrir
+                        </Button>
+                        <Button variant="outline" disabled={!canOpen} onClick={() => shareLetter(letter)}>
+                          <Share2 className="mr-2 h-4 w-4" /> Compartilhar
+                        </Button>
+                        <Button variant="outline" disabled={!canRequest} onClick={() => pedirLiberacao(letter)}>
+                          <Unlock className="mr-2 h-4 w-4" /> Pedir liberacao
+                        </Button>
+                      </div>
+                    </div>
                   );
                 })}
-                {!isLoading && filteredLetters.length === 0 ? <div className="rounded-xl border border-slate-200 p-4 text-sm text-slate-500">Nenhuma carta encontrada.</div> : null}
               </div>
-            </CardContent>
-          </Card>
-        </div>
-      </main>
+            </div>
+
+            {!isLoading && filteredLetters.length === 0 ? <div className="rounded-xl border border-slate-200 p-4 text-sm text-slate-500">Nenhuma carta encontrada.</div> : null}
+          </CardContent>
+        </Card>
+      </div>
 
       <Dialog open={openCadastroModal} onOpenChange={setOpenCadastroModal}>
         <DialogContent className="max-h-[90vh] max-w-3xl overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Cadastro</DialogTitle>
-            <DialogDescription>Dados do usuário e do pastor responsável.</DialogDescription>
+            <DialogDescription>Dados do usuario e do pastor responsavel.</DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 md:grid-cols-2">
             <Card className="border border-slate-200 bg-white shadow-sm">
@@ -588,66 +508,23 @@ export default function UsuarioDashboard() {
                 <CardTitle>Resumo do Usuario</CardTitle>
               </CardHeader>
               <CardContent className="space-y-2 text-sm">
-                <div className="grid grid-cols-[1fr_120px] gap-4 sm:grid-cols-[1fr_150px]">
-                  <div className="space-y-2">
-                    <p><strong>Nome:</strong> {profile?.full_name || usuario?.nome || "-"}</p>
-                    <p><strong>CPF:</strong> {profile?.cpf || usuario?.cpf || "-"}</p>
-                    <p><strong>Cargo:</strong> {profile?.minister_role || usuario?.ministerial || "-"}</p>
-                    <p><strong>Igreja:</strong> {session?.church_name || church?.church_name || "-"}</p>
-                    <p><strong>Celular:</strong> {profile?.phone || "-"}</p>
-                    <p><strong>Nascimento:</strong> {formatDate(profile?.birth_date || null)}</p>
-                  </div>
-                  <div className="flex justify-end">
-                    {profile?.avatar_url ? (
-                      <>
-                        <img src={profile.avatar_url} alt="Foto do membro" className="mt-px h-20 w-20 rounded-full border border-slate-200 object-cover object-[center_top] md:hidden" />
-                        <img src={profile.avatar_url} alt="Foto 3x4 do membro" className="mt-px hidden h-48 w-36 rounded-lg border border-slate-200 object-cover object-[center_top] md:block" />
-                      </>
-                    ) : (
-                      <>
-                        <div className="flex h-20 w-20 items-center justify-center rounded-full border border-slate-200 bg-slate-100 text-2xl font-bold text-slate-500 md:hidden">
-                          {(profile?.full_name || usuario?.nome || "U").charAt(0).toUpperCase()}
-                        </div>
-                        <div className="hidden h-48 w-36 items-center justify-center rounded-lg border border-slate-200 bg-slate-100 text-6xl font-bold text-slate-400 md:flex">
-                          {(profile?.full_name || usuario?.nome || "U").charAt(0).toUpperCase()}
-                        </div>
-                      </>
-                    )}
-                  </div>
-                </div>
+                <p><strong>Nome:</strong> {profile?.full_name || usuario?.nome || "-"}</p>
+                <p><strong>CPF:</strong> {profile?.cpf || usuario?.cpf || "-"}</p>
+                <p><strong>Cargo:</strong> {profile?.minister_role || usuario?.ministerial || "-"}</p>
+                <p><strong>Igreja:</strong> {session?.church_name || church?.church_name || "-"}</p>
+                <p><strong>Celular:</strong> {profile?.phone || "-"}</p>
+                <p><strong>Nascimento:</strong> {formatDate(profile?.birth_date || null)}</p>
               </CardContent>
             </Card>
-
             <Card className="border border-slate-200 bg-white shadow-sm">
               <CardHeader>
                 <CardTitle>Dados do seu pastor</CardTitle>
               </CardHeader>
               <CardContent className="space-y-2 text-sm">
-                <div className="grid grid-cols-[1fr_120px] gap-4 sm:grid-cols-[1fr_150px]">
-                  <div className="space-y-2">
-                    <p><strong>Nome:</strong> {pastorFromUsers?.full_name || church?.pastor_name || "-"}</p>
-                    <p><strong>Telefone:</strong> {pastorFromUsers?.phone || church?.pastor_phone || "-"}</p>
-                    <p><strong>Email:</strong> {pastorFromUsers?.email || church?.pastor_email || "-"}</p>
-                    <p><strong>Endereco:</strong> {church?.address_full || "-"}</p>
-                  </div>
-                  <div className="flex justify-end">
-                    {pastorFromUsers?.avatar_url ? (
-                      <>
-                        <img src={pastorFromUsers.avatar_url} alt="Foto do pastor" className="mt-px h-20 w-20 rounded-full border border-slate-200 object-cover object-[center_top] md:hidden" />
-                        <img src={pastorFromUsers.avatar_url} alt="Foto 3x4 do pastor" className="mt-px hidden h-48 w-36 rounded-lg border border-slate-200 object-cover object-[center_top] md:block" />
-                      </>
-                    ) : (
-                      <>
-                        <div className="flex h-20 w-20 items-center justify-center rounded-full border border-slate-200 bg-slate-100 text-2xl font-bold text-slate-500 md:hidden">
-                          {(pastorFromUsers?.full_name || church?.pastor_name || "P").charAt(0).toUpperCase()}
-                        </div>
-                        <div className="hidden h-48 w-36 items-center justify-center rounded-lg border border-slate-200 bg-slate-100 text-6xl font-bold text-slate-400 md:flex">
-                          {(pastorFromUsers?.full_name || church?.pastor_name || "P").charAt(0).toUpperCase()}
-                        </div>
-                      </>
-                    )}
-                  </div>
-                </div>
+                <p><strong>Nome:</strong> {pastorFromUsers?.full_name || church?.pastor_name || "-"}</p>
+                <p><strong>Telefone:</strong> {pastorFromUsers?.phone || church?.pastor_phone || "-"}</p>
+                <p><strong>Email:</strong> {pastorFromUsers?.email || church?.pastor_email || "-"}</p>
+                <p><strong>Endereco:</strong> {church?.address_full || "-"}</p>
               </CardContent>
             </Card>
           </div>
@@ -655,10 +532,10 @@ export default function UsuarioDashboard() {
       </Dialog>
 
       <Dialog open={openUpdateModal} onOpenChange={setOpenUpdateModal}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="max-h-[90vh] max-w-4xl overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Atualizar cadastro</DialogTitle>
-            <DialogDescription>Atualize telefone, e-mail e cidade.</DialogDescription>
+            <DialogDescription>Atualize seus dados, endereco e foto 3x4.</DialogDescription>
           </DialogHeader>
           <div className="space-y-3">
             <div className="grid gap-2 md:grid-cols-2">
@@ -675,6 +552,36 @@ export default function UsuarioDashboard() {
               <Label>Cargo</Label>
               <Input value={profile?.minister_role || ""} disabled />
             </div>
+            <div className="grid gap-3 md:grid-cols-[160px_1fr]">
+              <div className="space-y-1">
+                <Label>Foto 3x4</Label>
+                <div className="h-44 w-32 overflow-hidden rounded-lg border border-slate-200 bg-slate-100">
+                  <img
+                    src={
+                      avatarFile
+                        ? URL.createObjectURL(avatarFile)
+                        : profileForm.avatar_url || profile?.avatar_url || "/placeholder.svg"
+                    }
+                    alt="Pre-visualizacao avatar"
+                    className="h-full w-full object-cover object-[center_top]"
+                  />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <div className="space-y-1">
+                  <Label>Selecionar foto</Label>
+                  <Input
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) => setAvatarFile(e.target.files?.[0] || null)}
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label>URL da foto</Label>
+                  <Input value={profileForm.avatar_url} onChange={(e) => setProfileForm((p) => ({ ...p, avatar_url: e.target.value }))} />
+                </div>
+              </div>
+            </div>
             <div className="space-y-1">
               <Label>Telefone</Label>
               <Input value={profileForm.phone} onChange={(e) => setProfileForm((p) => ({ ...p, phone: e.target.value }))} />
@@ -684,8 +591,48 @@ export default function UsuarioDashboard() {
               <Input value={profileForm.email} onChange={(e) => setProfileForm((p) => ({ ...p, email: e.target.value }))} />
             </div>
             <div className="space-y-1">
-              <Label>Cidade</Label>
-              <Input value={profileForm.address_city} onChange={(e) => setProfileForm((p) => ({ ...p, address_city: e.target.value }))} />
+              <Label>Data de nascimento</Label>
+              <Input type="date" value={profileForm.birth_date} onChange={(e) => setProfileForm((p) => ({ ...p, birth_date: e.target.value }))} />
+            </div>
+            <div className="grid gap-2 md:grid-cols-3">
+              <div className="space-y-1">
+                <Label>CEP</Label>
+                <Input
+                  value={maskCep(profileForm.cep)}
+                  onChange={(e) => setProfileForm((p) => ({ ...p, cep: e.target.value }))}
+                  onBlur={() => void autofillCep(true)}
+                  placeholder="00000-000"
+                />
+                <p className="text-xs text-slate-500">{cepLookupLoading ? "Buscando endereco..." : "Endereco preenchido automaticamente pelo CEP."}</p>
+              </div>
+              <div className="space-y-1 md:col-span-2">
+                <Label>Endereco</Label>
+                <Input value={profileForm.address_street} onChange={(e) => setProfileForm((p) => ({ ...p, address_street: e.target.value }))} />
+              </div>
+            </div>
+            <div className="grid gap-2 md:grid-cols-3">
+              <div className="space-y-1">
+                <Label>Numero</Label>
+                <Input value={profileForm.address_number} onChange={(e) => setProfileForm((p) => ({ ...p, address_number: e.target.value }))} />
+              </div>
+              <div className="space-y-1 md:col-span-2">
+                <Label>Complemento</Label>
+                <Input value={profileForm.address_complement} onChange={(e) => setProfileForm((p) => ({ ...p, address_complement: e.target.value }))} />
+              </div>
+            </div>
+            <div className="grid gap-2 md:grid-cols-3">
+              <div className="space-y-1">
+                <Label>Bairro</Label>
+                <Input value={profileForm.address_neighborhood} onChange={(e) => setProfileForm((p) => ({ ...p, address_neighborhood: e.target.value }))} />
+              </div>
+              <div className="space-y-1">
+                <Label>Cidade</Label>
+                <Input value={profileForm.address_city} onChange={(e) => setProfileForm((p) => ({ ...p, address_city: e.target.value }))} />
+              </div>
+              <div className="space-y-1">
+                <Label>UF</Label>
+                <Input value={profileForm.address_state} onChange={(e) => setProfileForm((p) => ({ ...p, address_state: e.target.value }))} />
+              </div>
             </div>
             <Button className="w-full" onClick={salvarPerfil} disabled={savingProfile}>
               {savingProfile ? "Salvando..." : "Atualizar perfil"}
@@ -693,34 +640,6 @@ export default function UsuarioDashboard() {
           </div>
         </DialogContent>
       </Dialog>
-
-      <Dialog open={openNotificationsModal} onOpenChange={setOpenNotificationsModal}>
-        <DialogContent className="max-w-3xl">
-          <DialogHeader>
-            <DialogTitle>Notificações</DialogTitle>
-            <DialogDescription>Mensagens recentes do sistema.</DialogDescription>
-          </DialogHeader>
-          <div className="mb-2 flex justify-end">
-            <Button variant="outline" size="sm" onClick={readAllNotifications}>
-              Marcar todas como lidas
-            </Button>
-          </div>
-          <div className="space-y-2">
-            {notifications.length === 0 ? <p className="text-sm text-slate-500">Sem notificações.</p> : null}
-            {notifications.map((item) => (
-              <div key={item.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border p-3 text-sm">
-                <div>
-                  <p className="font-semibold">{item.title}</p>
-                  <p className="text-slate-600">{item.message || "Sem mensagem"}</p>
-                </div>
-                <Button variant="outline" onClick={() => readNotification(item.id)} disabled={item.is_read}>
-                  {item.is_read ? "Lida" : "Marcar lida"}
-                </Button>
-              </div>
-            ))}
-          </div>
-        </DialogContent>
-      </Dialog>
-    </div>
+    </ManagementShell>
   );
 }
