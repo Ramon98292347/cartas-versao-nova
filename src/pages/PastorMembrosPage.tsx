@@ -709,7 +709,7 @@ export default function PastorMembrosPage() {
   const counters = useMemo(() => {
     return {
       total: workers.length,
-      pastor: workers.filter((w) => w.role === "pastor").length,
+      pastor: workers.filter((w) => String(w.minister_role || "").toLowerCase() === "pastor").length,
       presbitero: workers.filter((w) => String(w.minister_role || "").toLowerCase() === "presbitero").length,
       diacono: workers.filter((w) => String(w.minister_role || "").toLowerCase() === "diacono").length,
       obreiro: workers.filter((w) => String(w.minister_role || "").toLowerCase() === "obreiro").length,

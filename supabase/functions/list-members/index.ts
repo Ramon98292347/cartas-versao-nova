@@ -17,7 +17,7 @@ function json(data: unknown, status = 200) {
 
 type Role = "admin" | "pastor" | "obreiro";
 type ChurchClass = "estadual" | "setorial" | "central" | "regional" | "local";
-type SessionClaims = { user_id: string; role: Role; active_totvs_id: string };
+type SessionClaims = { user_id: string; role: Role; active_totvs_id: string; scope_totvs_ids?: string[] };
 type ChurchRow = { totvs_id: string; parent_totvs_id: string | null; class: string | null };
 type Body = {
   search?: string;
@@ -106,9 +106,12 @@ async function verifySessionJWT(req: Request): Promise<SessionClaims | null> {
     const user_id = String(payload.sub || "");
     const role = String(payload.role || "").toLowerCase() as Role;
     const active_totvs_id = String(payload.active_totvs_id || "");
+    const scope_totvs_ids = Array.isArray((payload as Record<string, unknown>).scope_totvs_ids)
+      ? (payload as Record<string, unknown>).scope_totvs_ids as string[]
+      : [];
     if (!user_id || !active_totvs_id) return null;
     if (!["admin", "pastor", "obreiro"].includes(role)) return null;
-    return { user_id, role, active_totvs_id };
+    return { user_id, role, active_totvs_id, scope_totvs_ids };
   } catch {
     return null;
   }
@@ -134,7 +137,9 @@ Deno.serve(async (req) => {
     const { data: churches, error: churchesErr } = await sb.from("churches").select("totvs_id,parent_totvs_id,class");
     if (churchesErr) return json({ ok: false, error: "db_error_churches", details: churchesErr.message }, 500);
     const churchRows = (churches || []) as ChurchRow[];
-    const scope = computeScope(session.active_totvs_id, churchRows);
+    const scope = session.scope_totvs_ids && session.scope_totvs_ids.length
+      ? new Set(session.scope_totvs_ids.map((id) => String(id)))
+      : computeScope(session.active_totvs_id, churchRows);
     if (churchTotvsFilter && !scope.has(churchTotvsFilter)) {
       return json({ ok: false, error: "forbidden_church_out_of_scope" }, 403);
     }

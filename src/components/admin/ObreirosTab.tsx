@@ -10,6 +10,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Search, PlusCircle, Upload, MoreHorizontal } from "lucide-react";
 import { toast } from "sonner";
+import { useUser } from "@/context/UserContext";
 import {
   listMembers,
   resetWorkerPassword,
@@ -102,12 +103,16 @@ const initialForm: WorkerForm = {
 const ministerRoleOptions = ["Pastor", "Presbitero", "Diacono", "Obreiro", "Membro"];
 
 export function ObreirosTab({ activeTotvsId }: { activeTotvsId: string }) {
+  const { session, usuario } = useUser();
+  const roleLower = String(session?.role || usuario?.role || "").toLowerCase();
+  const churchClass = String(session?.church_class || "").toLowerCase();
+  const useScopeList = roleLower === "admin" || churchClass === "estadual";
   const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
   const [ministerRole, setMinisterRole] = useState("all");
   const [activeFilter, setActiveFilter] = useState<"all" | "active" | "inactive">("all");
   const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(10);
+  const [pageSize, setPageSize] = useState(200);
 
   const [openModal, setOpenModal] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -130,7 +135,7 @@ export function ObreirosTab({ activeTotvsId }: { activeTotvsId: string }) {
         minister_role: ministerRole === "all" ? undefined : ministerRole,
         is_active: activeFilter === "all" ? undefined : activeFilter === "active",
         roles: ["pastor", "obreiro"],
-        church_totvs_id: activeTotvsId || undefined,
+        church_totvs_id: useScopeList ? undefined : activeTotvsId || undefined,
         page,
         page_size: pageSize,
       }),
@@ -547,9 +552,10 @@ export function ObreirosTab({ activeTotvsId }: { activeTotvsId: string }) {
               <Select value={String(pageSize)} onValueChange={(v) => { setPageSize(Number(v)); setPage(1); }}>
                 <SelectTrigger className="w-24"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="10">10</SelectItem>
+              <SelectItem value="10">10</SelectItem>
                   <SelectItem value="20">20</SelectItem>
                   <SelectItem value="50">50</SelectItem>
+                  <SelectItem value="200">200</SelectItem>
                 </SelectContent>
               </Select>
               <Button variant="outline" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>Anterior</Button>
