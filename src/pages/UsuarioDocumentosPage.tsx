@@ -286,10 +286,12 @@ export default function UsuarioDocumentosPage() {
             <div className="flex gap-2">
               <Button variant={docTab === "carteirinha" ? "default" : "outline"} onClick={() => setDocTab("carteirinha")}>Carteirinha</Button>
               <Button variant={docTab === "ficha" ? "default" : "outline"} onClick={() => setDocTab("ficha")}>Ficha do membro</Button>
-              <Button onClick={() => void enviarParaConfeccao()} disabled={sendingDoc || fetchingDocsStatus || isCadastroPendente}>
-                <Send className="mr-2 h-4 w-4" />
-                {sendingDoc ? "Enviando..." : "Enviar para confecção"}
-              </Button>
+              {!carteirinhaPronta && !fichaPronta ? (
+                <Button onClick={() => void enviarParaConfeccao()} disabled={sendingDoc || fetchingDocsStatus || isCadastroPendente}>
+                  <Send className="mr-2 h-4 w-4" />
+                  {sendingDoc ? "Enviando..." : "Enviar para confecção"}
+                </Button>
+              ) : null}
             </div>
             {docTab === "carteirinha" && carteirinhaPronta ? (
               <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4">

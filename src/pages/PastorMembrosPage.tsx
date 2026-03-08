@@ -1254,9 +1254,11 @@ export default function PastorMembrosPage() {
               <Button variant="outline" onClick={saveDraft} disabled={savingDraft}>
                 <Save className="mr-2 h-4 w-4" /> {savingDraft ? "Salvando..." : "Salvar rascunho"}
               </Button>
-              <Button onClick={sendToGenerateDocs} disabled={sending || fetchingDocsStatus}>
-                <Send className="mr-2 h-4 w-4" /> {sending ? "Enviando..." : "Enviar para confecção"}
-              </Button>
+              {!carteirinhaPronta && !fichaPronta ? (
+                <Button onClick={sendToGenerateDocs} disabled={sending || fetchingDocsStatus}>
+                  <Send className="mr-2 h-4 w-4" /> {sending ? "Enviando..." : "Enviar para confeccao"}
+                </Button>
+              ) : null}
             </div>
           </CardContent>
         </Card>
