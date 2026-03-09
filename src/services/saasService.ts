@@ -1281,7 +1281,7 @@ async function notifyBirthdayWebhookOnce(payload: {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        action: "birthdays_today",
+        action: "aniversario",
         date: dateKey,
         church_totvs_id: payload.church_totvs_id,
         scope_totvs_ids: payload.scope_totvs_ids || [payload.church_totvs_id],
