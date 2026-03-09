@@ -1282,10 +1282,19 @@ async function notifyBirthdayWebhookOnce(payload: {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         action: "aniversario",
+        event_type: "aniversario",
         date: dateKey,
         church_totvs_id: payload.church_totvs_id,
         scope_totvs_ids: payload.scope_totvs_ids || [payload.church_totvs_id],
-        birthdays: payload.birthdays,
+        birthdays: payload.birthdays.map((b) => ({
+          id: String(b.id || ""),
+          full_name: String(b.full_name || ""),
+          role: String((b as Record<string, unknown>)?.role || "obreiro"),
+          phone: b.phone || null,
+          email: b.email || null,
+          avatar_url: b.avatar_url || null,
+          birth_date: b.birth_date || null,
+        })),
       }),
     });
 
