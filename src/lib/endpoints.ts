@@ -6,6 +6,7 @@ export const api = {
   login: (body: { cpf: string; password: string }) => post("login", body, { skipAuth: true }),
   selectChurch: (body: { cpf: string; totvs_id: string }) => post("select-church", body, { skipAuth: true }),
   forgotPasswordRequest: (body: { cpf?: string; email?: string }) => post("forgot-password-request", body, { skipAuth: true }),
+  resetPasswordConfirm: (body: { token: string; new_password: string }) => post("reset-password-confirm", body, { skipAuth: true }),
   publicRegisterMember: (body: {
     cpf: string;
     full_name: string;

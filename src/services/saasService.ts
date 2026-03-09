@@ -1396,6 +1396,12 @@ export async function forgotPasswordRequest(payload: { cpf?: string; email?: str
   return await api.forgotPasswordRequest(payload);
 }
 
+export async function resetPasswordConfirm(payload: { token: string; new_password: string }) {
+  if (!String(payload.token || "").trim()) throw new Error("missing_token");
+  if (String(payload.new_password || "").length < 6) throw new Error("password_too_short");
+  return await api.resetPasswordConfirm(payload);
+}
+
 export async function publicRegisterMember(payload: {
   cpf: string;
   full_name: string;

@@ -32,6 +32,14 @@ const App = () => (
               element={<CadastroRapido />}
             />
             <Route
+              path="/reset-senha"
+              element={
+                <Suspense fallback={<div />}>
+                  <ResetSenhaPage />
+                </Suspense>
+              }
+            />
+            <Route
               path="/usuario"
               element={
                 <RequireAuth>
@@ -223,7 +231,7 @@ function OnReloadRedirect() {
       const entries = performance.getEntriesByType("navigation") as PerformanceEntry[];
       const last = entries && entries.length ? entries[entries.length - 1] : undefined;
       const type = (last && (last as unknown as { type?: string }).type) ?? undefined;
-      const publicPaths = new Set(["/", "/cadastro"]);
+      const publicPaths = new Set(["/", "/cadastro", "/reset-senha"]);
       const isPublicPath = publicPaths.has(loc.pathname);
       const isSelectChurchValid = loc.pathname === "/select-church" && !!pendingCpf && availableChurches.length > 0;
       if (type === "reload" && !isPublicPath && (!usuario || !token) && !isSelectChurchValid) {
@@ -245,5 +253,6 @@ const AdminDashboardPage = lazy(() => import("./pages/AdminDashboardPage"));
 const AdminIgrejasPage = lazy(() => import("./pages/AdminIgrejasPage"));
 const AdminMembrosPage = lazy(() => import("./pages/AdminMembrosPage"));
 const SelectChurchPage = lazy(() => import("./pages/SelectChurch"));
+const ResetSenhaPage = lazy(() => import("./pages/ResetSenhaPage"));
 const ConfiguracoesPage = lazy(() => import("./pages/Configuracoes"));
 const DivulgacaoPage = lazy(() => import("./pages/Divulgacao"));

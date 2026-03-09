@@ -34,6 +34,8 @@ const CODE_MAP: Record<string, string> = {
   church_not_found: "Sua igreja não existe no cadastro. Peça ao pastor para cadastrar primeiro.",
   cpf_already_registered: "CPF já cadastrado no sistema.",
   password_too_short: "A senha precisa ter pelo menos 6 caracteres.",
+  invalid_or_expired_token: "Link de redefinicao invalido ou expirado. Solicite um novo.",
+  missing_token: "Link de redefinicao invalido.",
 };
 
 const DEFAULT_MAP: Record<ErrorContext, string> = {

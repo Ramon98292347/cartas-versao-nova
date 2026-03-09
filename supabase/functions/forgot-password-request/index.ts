@@ -22,6 +22,21 @@ function normalizeEmail(value: string) {
   return String(value || "").trim().toLowerCase();
 }
 
+function toHex(buffer: ArrayBuffer) {
+  return Array.from(new Uint8Array(buffer))
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+}
+
+async function hashToken(value: string) {
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
+  return toHex(digest);
+}
+
+function generateToken() {
+  return crypto.randomUUID().replace(/-/g, "") + crypto.randomUUID().replace(/-/g, "");
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders() });
   if (req.method !== "POST") return json({ ok: false, error: "method_not_allowed" }, 405);
@@ -62,12 +77,40 @@ Deno.serve(async (req) => {
 
     if (!user) return json(response, 200);
 
+    const token = generateToken();
+    const token_hash = await hashToken(token);
+    const expires_at = new Date(Date.now() + 15 * 60 * 1000).toISOString();
+
+    const { data: resetRow, error: resetErr } = await sb
+      .from("password_resets")
+      .insert({
+        user_id: user.id,
+        token_hash,
+        expires_at,
+        request_ip:
+          req.headers.get("x-forwarded-for") ||
+          req.headers.get("x-real-ip") ||
+          null,
+      })
+      .select("id")
+      .single();
+
+    if (resetErr) return json({ ok: false, error: "db_error_password_reset", details: resetErr.message }, 500);
+
+    const appBaseUrl = (Deno.env.get("APP_BASE_URL") || "http://localhost:5175").replace(/\/$/, "");
+    const resetUrl = `${appBaseUrl}/reset-senha?token=${encodeURIComponent(token)}`;
+
     const webhookUrl = Deno.env.get("N8N_FORGOT_PASSWORD_WEBHOOK_URL")
       || "https://n8n-n8n.ynlng8.easypanel.host/webhook/senha";
 
     const payload = {
       action: "forgot_password_request",
       requested_at: new Date().toISOString(),
+      reset: {
+        request_id: resetRow?.id || null,
+        expires_at,
+        reset_url: resetUrl,
+      },
       user: {
         id: user.id,
         full_name: user.full_name,
