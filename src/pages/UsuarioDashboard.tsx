@@ -114,9 +114,9 @@ export default function UsuarioDashboard() {
   const [savingStamps, setSavingStamps] = useState(false);
 
   const userId = String(usuario?.id || "");
-  const activeTotvs = String(profile?.default_totvs_id || session?.totvs_id || "");
+  const activeTotvs = String(session?.totvs_id || "");
   const isCadastroPendente = usuario?.registration_status === "PENDENTE";
-  const isObreiro = String(usuario?.role || profile?.role || "").toLowerCase() === "obreiro";
+  const isObreiro = String(usuario?.role || "").toLowerCase() === "obreiro";
 
   useEffect(() => {
     const now = new Date();

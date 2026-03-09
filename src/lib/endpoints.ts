@@ -75,6 +75,7 @@ export const api = {
     post("set-worker-direct-release", body),
   setUserRegistrationStatus: (body: { user_id: string; registration_status: "APROVADO" | "PENDENTE" }) =>
     post("set-user-registration-status", body),
+  deleteUser: (body: { user_id: string }) => post("delete-user", body),
 
   workerDashboard: (body: JsonBody) => post("worker-dashboard", body),
   requestRelease: (body: { letter_id: string; message?: string | null }) => post("request-release", body),

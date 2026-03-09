@@ -117,6 +117,25 @@ async function verifySessionJWT(req: Request): Promise<SessionClaims | null> {
   }
 }
 
+async function resolveScopeRootTotvs(
+  sb: ReturnType<typeof createClient>,
+  session: SessionClaims,
+): Promise<string> {
+  if (session.role !== "pastor") return session.active_totvs_id;
+
+  const { data, error } = await sb
+    .from("churches")
+    .select("totvs_id")
+    .eq("pastor_user_id", session.user_id)
+    .eq("is_active", true);
+
+  if (error || !data || data.length === 0) return session.active_totvs_id;
+
+  const pastorChurches = data.map((row: Record<string, unknown>) => String(row.totvs_id || "")).filter(Boolean);
+  if (pastorChurches.includes(session.active_totvs_id)) return session.active_totvs_id;
+  return pastorChurches[0];
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders() });
   if (req.method !== "POST") return json({ ok: false, error: "method_not_allowed" }, 405);
@@ -134,16 +153,17 @@ Deno.serve(async (req) => {
 
     const sb = createClient(Deno.env.get("SUPABASE_URL") || "", Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "");
 
+    const scopeRootTotvs = await resolveScopeRootTotvs(sb, session);
+
     const { data: churches, error: churchesErr } = await sb.from("churches").select("totvs_id,parent_totvs_id,class");
     if (churchesErr) return json({ ok: false, error: "db_error_churches", details: churchesErr.message }, 500);
     const churchRows = (churches || []) as ChurchRow[];
-    const scope = session.scope_totvs_ids && session.scope_totvs_ids.length
-      ? new Set(session.scope_totvs_ids.map((id) => String(id)))
-      : computeScope(session.active_totvs_id, churchRows);
+    // Comentario: escopo sempre calculado da igreja efetiva do pastor (churches.pastor_user_id).
+    const scope = computeScope(scopeRootTotvs, churchRows);
     if (churchTotvsFilter && !scope.has(churchTotvsFilter)) {
       return json({ ok: false, error: "forbidden_church_out_of_scope" }, 403);
     }
-    const sessionChurchClass = normalizeChurchClass(churchRows.find((c) => c.totvs_id === session.active_totvs_id)?.class);
+    const sessionChurchClass = normalizeChurchClass(churchRows.find((c) => c.totvs_id === scopeRootTotvs)?.class);
     const churchMap = new Map(churchRows.map((c) => [String(c.totvs_id), c]));
 
     let q = sb
@@ -178,7 +198,7 @@ Deno.serve(async (req) => {
       const targetClass = normalizeChurchClass(churchMap.get(defaultTotvs)?.class);
       const can_manage = canManageMember(
         session.role,
-        session.active_totvs_id,
+        scopeRootTotvs,
         defaultTotvs,
         sessionChurchClass,
         targetClass,

@@ -522,7 +522,8 @@ function mapSessionLike(raw: Record<string, unknown> | null | undefined): AppSes
       : raw?.totvs_id
         ? [String(raw.totvs_id)]
         : [];
-  const totvsId = String(raw?.totvs_id || raw?.default_totvs_id || scope[0] || "");
+  // Comentario: prioriza explicitamente o active_totvs_id vindo do backend.
+  const totvsId = String(raw?.active_totvs_id || raw?.totvs_id || raw?.default_totvs_id || scope[0] || "");
   return {
     totvs_id: totvsId,
     root_totvs_id: raw?.root_totvs_id ? String(raw.root_totvs_id) : totvsId || undefined,
@@ -1758,6 +1759,15 @@ export async function setUserRegistrationStatus(userId: string, registrationStat
   if (user) {
     (user as AuthSessionData).registration_status = registrationStatus;
   }
+}
+
+export async function deleteUserPermanently(userId: string) {
+  if (!isMockMode()) {
+    await api.deleteUser({ user_id: userId });
+    return;
+  }
+  const idx = MOCK_USERS.findIndex((u) => String(u.id) === String(userId));
+  if (idx >= 0) MOCK_USERS.splice(idx, 1);
 }
 
 export async function setChurchPastor(church_totvs_id: string, pastor_user_id: string) {

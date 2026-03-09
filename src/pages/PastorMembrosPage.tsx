@@ -12,7 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { listChurchesInScope, listMembers, type UserListItem, generateMemberDocs, getMemberDocsStatus } from "@/services/saasService";
+import { listChurchesInScope, listMembers, type UserListItem, generateMemberDocs, getMemberDocsStatus, deleteUserPermanently } from "@/services/saasService";
 import { useUser } from "@/context/UserContext";
 import { fetchAddressByCep, maskCep, onlyDigits } from "@/lib/cep";
 import { PageLoading } from "@/components/shared/PageLoading";
@@ -337,6 +337,25 @@ function calcularIdadeBr(dataIso: string | null | undefined) {
   return idade < 0 ? "" : String(idade);
 }
 
+function MemberPhoto({ src, alt }: { src?: string | null; alt: string }) {
+  const [failed, setFailed] = useState(false);
+  if (src && !failed) {
+    return (
+      <img
+        src={src}
+        alt={alt}
+        className="h-[220px] w-full object-cover object-top"
+        onError={() => setFailed(true)}
+      />
+    );
+  }
+  return (
+    <div className="flex h-[220px] w-full items-center justify-center">
+      <Users className="h-7 w-7 text-slate-400" />
+    </div>
+  );
+}
+
 // Comentario: monta endereco completo da igreja no padrao BR para rodape/webhook.
 function buildChurchAddressFooter(params: {
   street?: string | null;
@@ -587,7 +606,7 @@ function buildFichaMembroHtml(form: MemberDocForm) {
 .value{font-weight:500;border-bottom:.25mm solid rgba(0,0,0,.25);padding:0 1mm .6mm 1mm;min-width:40mm;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .w-70{min-width:70mm}.w-60{min-width:60mm}.w-50{min-width:50mm}.w-45{min-width:45mm}.w-40{min-width:40mm}.w-35{min-width:35mm}.w-30{min-width:30mm}.w-25{min-width:25mm}
 .section-title{text-align:center;margin:22mm 0 8mm 0;font-size:14pt;font-weight:900}
-.footer{position:absolute;bottom:10mm;left:0;right:0;text-align:center;font-weight:800;font-size:11pt}
+.footer{margin-top:14mm;text-align:center;font-weight:800;font-size:11pt;line-height:1.35;white-space:normal;word-break:break-word}
 </style></head><body><div class="page">
 <div class="header"><div class="header-photo"><img src="${foto}" alt="Foto" /></div><img class="logo" src="${logo}" alt="Logo" /></div>
 <div class="title"><h1>${titulo}</h1><h2>${subtitulo}</h2></div>
@@ -626,7 +645,7 @@ export default function PastorMembrosPage() {
   const carteirinhaHtml = useMemo(() => buildCarteirinhaHtml(form), [form]);
   const fichaMembroHtml = useMemo(() => buildFichaMembroHtml(form), [form]);
 
-  const { data, isLoading: loadingMembers, isFetching: fetchingMembers } = useQuery({
+  const { data, isLoading: loadingMembers, isFetching: fetchingMembers, refetch: refetchMembers } = useQuery({
     queryKey: ["pastor-members-page"],
     queryFn: () => listMembers({ page: 1, page_size: 400, roles: ["pastor", "obreiro"] }),
   });
@@ -662,6 +681,23 @@ export default function PastorMembrosPage() {
     () => workers.find((member) => String(member.id) === selectedMemberId) || null,
     [workers, selectedMemberId],
   );
+
+  async function handleDeleteMember(member: UserListItem) {
+    const role = String(session?.role || usuario?.role || "").toLowerCase();
+    if (!["admin", "pastor"].includes(role)) {
+      toast.error("Sem permissao para deletar usuario.");
+      return;
+    }
+    const confirmed = window.confirm(`Tem certeza que deseja deletar ${member.full_name || "este usuario"}?`);
+    if (!confirmed) return;
+    try {
+      await deleteUserPermanently(String(member.id));
+      toast.success("Usuario deletado.");
+      await refetchMembers();
+    } catch (err) {
+      toast.error(String((err as Error)?.message || "Falha ao deletar usuario."));
+    }
+  }
   const pastorDaIgreja = useMemo(
     () => workers.find((member) => member.role === "pastor" && String(member.default_totvs_id || "") === activeTotvsId) || null,
     [workers, activeTotvsId],
@@ -869,13 +905,7 @@ export default function PastorMembrosPage() {
               <Card key={member.id} className="border border-slate-200">
                 <CardContent className="space-y-3 p-4">
                   <div className="mx-auto w-full max-w-[220px] overflow-hidden rounded-xl border border-slate-200 bg-slate-50">
-                    {member.avatar_url ? (
-                      <img src={member.avatar_url} alt={`Foto de ${member.full_name}`} className="h-[220px] w-full object-cover object-top" />
-                    ) : (
-                      <div className="flex h-[220px] w-full items-center justify-center">
-                        <Users className="h-7 w-7 text-slate-400" />
-                      </div>
-                    )}
+                    <MemberPhoto src={member.avatar_url || null} alt={`Foto de ${member.full_name}`} />
                   </div>
                   <div className="min-w-0 space-y-1">
                     <p className="truncate text-base font-semibold text-slate-900">{member.full_name || "Sem nome"}</p>
@@ -915,6 +945,12 @@ export default function PastorMembrosPage() {
                           }}
                         >
                           Ficha
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          className="text-rose-600 focus:text-rose-700"
+                          onClick={() => void handleDeleteMember(member)}
+                        >
+                          Deletar usuario
                         </DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>

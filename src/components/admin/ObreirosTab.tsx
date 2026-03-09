@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { Search, PlusCircle, Upload, MoreHorizontal } from "lucide-react";
+import { Search, PlusCircle, Upload, MoreHorizontal, User } from "lucide-react";
 import { toast } from "sonner";
 import { useUser } from "@/context/UserContext";
 import {
@@ -17,6 +17,7 @@ import {
   setUserRegistrationStatus,
   setWorkerActive,
   setWorkerDirectRelease,
+  deleteUserPermanently,
   upsertWorkerByPastor,
   type UserListItem,
 } from "@/services/saasService";
@@ -101,6 +102,25 @@ const initialForm: WorkerForm = {
 };
 
 const ministerRoleOptions = ["Pastor", "Presbitero", "Diacono", "Obreiro", "Membro"];
+
+function AvatarWithFallback({ src, alt, className }: { src?: string | null; alt: string; className: string }) {
+  const [failed, setFailed] = useState(false);
+  if (src && !failed) {
+    return (
+      <img
+        src={src}
+        alt={alt}
+        className={className}
+        onError={() => setFailed(true)}
+      />
+    );
+  }
+  return (
+    <div className={`${className} flex items-center justify-center border border-slate-200 bg-slate-100 text-slate-400`}>
+      <User className="h-5 w-5" />
+    </div>
+  );
+}
 
 export function ObreirosTab({ activeTotvsId }: { activeTotvsId: string }) {
   const { session, usuario } = useUser();
@@ -359,6 +379,23 @@ export function ObreirosTab({ activeTotvsId }: { activeTotvsId: string }) {
     }
   }
 
+  async function deleteWorker(worker: UserListItem) {
+    if (worker.can_manage === false) {
+      toast.error("Sem permissao para excluir este usuario.");
+      return;
+    }
+    const ok = window.confirm(`Tem certeza que deseja deletar ${worker.full_name || "este usuario"}? Esta acao apaga o cadastro do banco.`);
+    if (!ok) return;
+    try {
+      await deleteUserPermanently(String(worker.id));
+      toast.success("Usuario deletado.");
+      addAuditLog("worker_deleted", { worker_id: String(worker.id) });
+      await refresh();
+    } catch (err: unknown) {
+      toast.error(getFriendlyError(err, "workers"));
+    }
+  }
+
   async function confirmResetPassword() {
     if (!selectedWorker) return;
     if (newPassword.length < 8) {
@@ -423,6 +460,9 @@ export function ObreirosTab({ activeTotvsId }: { activeTotvsId: string }) {
           <DropdownMenuItem onClick={() => openResetPassword(worker)} disabled={worker.can_manage === false}>
             Resetar senha
           </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => deleteWorker(worker)} disabled={worker.can_manage === false} className="text-rose-600 focus:text-rose-700">
+            Deletar usuario
+          </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
     );
@@ -486,13 +526,11 @@ export function ObreirosTab({ activeTotvsId }: { activeTotvsId: string }) {
               {workers.map((w) => (
                 <div key={w.id} className="grid grid-cols-[92px_200px_150px_140px_140px_120px_120px_120px_120px_140px] items-center border-b px-4 py-3 text-sm">
                   <span>
-                    {w.avatar_url ? (
-                      <img src={w.avatar_url} alt={`Avatar de ${w.full_name}`} className="h-10 w-10 rounded-full border border-slate-200 object-cover object-[center_top]" />
-                    ) : (
-                      <div className="flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 bg-slate-100 text-sm font-semibold text-slate-500">
-                        {(w.full_name || "M").charAt(0).toUpperCase()}
-                      </div>
-                    )}
+                    <AvatarWithFallback
+                      src={w.avatar_url || null}
+                      alt={`Avatar de ${w.full_name}`}
+                      className="h-10 w-10 rounded-full object-cover object-[center_top]"
+                    />
                   </span>
                   <span className="truncate">{w.full_name}</span>
                   <span>{maskCpf(w.cpf || "")}</span>
@@ -519,13 +557,11 @@ export function ObreirosTab({ activeTotvsId }: { activeTotvsId: string }) {
               <Card key={`mobile-${w.id}`} className="border border-slate-200">
                 <CardContent className="space-y-3 p-4">
                   <div className="flex items-start gap-3">
-                    {w.avatar_url ? (
-                      <img src={w.avatar_url} alt={`Avatar de ${w.full_name}`} className="h-16 w-16 rounded-full border border-slate-200 object-cover object-[center_top]" />
-                    ) : (
-                      <div className="flex h-16 w-16 items-center justify-center rounded-full border border-slate-200 bg-slate-100 text-lg font-semibold text-slate-500">
-                        {(w.full_name || "M").charAt(0).toUpperCase()}
-                      </div>
-                    )}
+                    <AvatarWithFallback
+                      src={w.avatar_url || null}
+                      alt={`Avatar de ${w.full_name}`}
+                      className="h-16 w-16 rounded-full object-cover object-[center_top]"
+                    />
                     <div className="min-w-0 space-y-1 text-sm">
                       <p className="truncate font-semibold text-slate-900">{w.full_name}</p>
                       <p className="text-slate-600">CPF: {maskCpf(w.cpf || "")}</p>
@@ -751,17 +787,11 @@ export function ObreirosTab({ activeTotvsId }: { activeTotvsId: string }) {
               <CardContent className="space-y-6 p-5">
                 <div className="flex flex-col gap-4 md:flex-row md:items-start">
                   <div className="h-[140px] w-[140px] shrink-0 overflow-hidden rounded-xl border border-slate-200 bg-slate-100">
-                    {selectedWorker.avatar_url ? (
-                      <img
-                        src={selectedWorker.avatar_url}
-                        alt="Avatar do membro"
-                        className="h-full w-full object-cover"
-                      />
-                    ) : (
-                      <div className="flex h-full w-full items-center justify-center text-5xl font-bold text-slate-400">
-                        {(selectedWorker.full_name || "M").charAt(0).toUpperCase()}
-                      </div>
-                    )}
+                    <AvatarWithFallback
+                      src={selectedWorker.avatar_url || null}
+                      alt="Avatar do membro"
+                      className="h-full w-full rounded-none object-cover"
+                    />
                   </div>
 
                   <div className="space-y-3">

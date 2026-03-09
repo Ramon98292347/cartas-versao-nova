@@ -64,6 +64,25 @@ function computeScope(rootTotvs: string, churches: ChurchRow[]): Set<string> {
   return scope;
 }
 
+async function resolveScopeRootTotvs(
+  sb: ReturnType<typeof createClient>,
+  session: SessionClaims,
+): Promise<string> {
+  if (session.role !== "pastor") return session.active_totvs_id;
+
+  const { data, error } = await sb
+    .from("churches")
+    .select("totvs_id")
+    .eq("pastor_user_id", session.user_id)
+    .eq("is_active", true);
+
+  if (error || !data || data.length === 0) return session.active_totvs_id;
+
+  const pastorChurches = data.map((row: Record<string, unknown>) => String(row.totvs_id || "")).filter(Boolean);
+  if (pastorChurches.includes(session.active_totvs_id)) return session.active_totvs_id;
+  return pastorChurches[0];
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders() });
   if (req.method !== "POST") return json({ ok: false, error: "method_not_allowed" }, 405);
@@ -84,7 +103,8 @@ Deno.serve(async (req) => {
 
     if (aErr) return json({ ok: false, error: "db_error_scope", details: aErr.message }, 500);
 
-    const scope = computeScope(session.active_totvs_id, (all || []) as ChurchRow[]);
+    const scopeRootTotvs = await resolveScopeRootTotvs(sb, session);
+    const scope = computeScope(scopeRootTotvs, (all || []) as ChurchRow[]);
     const scopeList = [...scope];
 
     // 2) Busca igrejas do escopo + pastor (join)
