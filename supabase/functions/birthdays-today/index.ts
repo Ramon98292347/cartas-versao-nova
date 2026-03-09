@@ -85,9 +85,10 @@ async function persistBirthdayNotifications(
   churchTotvsId: string,
   birthdays: BirthdayRow[],
 ) {
-  if (!birthdays.length) return;
+  if (!birthdays.length) return 0;
 
   const today = todayDateSaoPaulo();
+  let insertedCount = 0;
 
   for (const b of birthdays) {
     const relatedId = `birthday:${churchTotvsId}:${b.id}:${today}`;
@@ -101,7 +102,7 @@ async function persistBirthdayNotifications(
 
     if (existing?.id) continue;
 
-    await sb.from("notifications").insert({
+    const { error: insertErr } = await sb.from("notifications").insert({
       church_totvs_id: churchTotvsId,
       user_id: null,
       type: "birthday",
@@ -118,7 +119,9 @@ async function persistBirthdayNotifications(
         date: today,
       },
     });
+    if (!insertErr) insertedCount += 1;
   }
+  return insertedCount;
 }
 
 Deno.serve(async (req) => {
@@ -160,17 +163,21 @@ Deno.serve(async (req) => {
         birth_date: u.birth_date,
       }));
 
-    await persistBirthdayNotifications(sb, session.active_totvs_id, birthdays as BirthdayRow[]);
+    const insertedBirthdays = await persistBirthdayNotifications(sb, session.active_totvs_id, birthdays as BirthdayRow[]);
 
     let message = "";
     let n8n: { ok: boolean; status: number; response: unknown } | null = null;
 
-    if (birthdays.length > 0) {
+    // Comentario: dispara webhook apenas quando houver aniversario novo inserido no dia.
+    if (birthdays.length > 0 && insertedBirthdays > 0) {
       try {
         const resp = await fetch(N8N_BIRTHDAYS_WEBHOOK, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
+            action: "aniversario",
+            event_type: "aniversario",
+            requested_at: new Date().toISOString(),
             church_totvs_id: session.active_totvs_id,
             birthdays,
             date: new Date().toISOString().slice(0, 10),

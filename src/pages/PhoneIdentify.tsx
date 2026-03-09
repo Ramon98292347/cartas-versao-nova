@@ -167,12 +167,17 @@ export default function PhoneIdentify() {
       try {
         const birthdaysToday = await listBirthdaysToday(30);
         const currentUserBirthday = birthdaysToday.find((b) => String(b.id || "") === String(result.user.id));
+        const todayKey = new Intl.DateTimeFormat("sv-SE", { timeZone: "America/Sao_Paulo" }).format(new Date());
+        const toastKey = `ipda_birthday_toast_${todayKey}_${String(result.user.id)}`;
 
-        if (currentUserBirthday) {
-          toast.success(`Parabens, ${currentUserBirthday.full_name}! Deus abencoe seu dia.`);
-        } else if (birthdaysToday.length > 0) {
-          const names = birthdaysToday.slice(0, 3).map((b) => b.full_name).join(", ");
-          toast.message(`Aniversariantes de hoje: ${names}${birthdaysToday.length > 3 ? "..." : ""}`);
+        if (localStorage.getItem(toastKey) !== "1") {
+          if (currentUserBirthday) {
+            toast.success(`Parabens, ${currentUserBirthday.full_name}! Deus abencoe seu dia.`);
+          } else if (birthdaysToday.length > 0) {
+            const names = birthdaysToday.slice(0, 3).map((b) => b.full_name).join(", ");
+            toast.message(`Aniversariantes de hoje: ${names}${birthdaysToday.length > 3 ? "..." : ""}`);
+          }
+          localStorage.setItem(toastKey, "1");
         }
       } catch {
         // Comentario: erro de aniversariantes nao bloqueia o login.
