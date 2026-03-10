@@ -29,6 +29,15 @@ type Body = {
   page_size?: number;
 };
 
+function normalizeMinisterRole(value: unknown): string {
+  return String(value || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^\w]+/g, " ")
+    .trim();
+}
+
 function normalizeChurchClass(value: string | null | undefined): ChurchClass | null {
   const safe = String(value || "").trim().toLowerCase();
   if (safe === "estadual" || safe === "setorial" || safe === "central" || safe === "regional" || safe === "local") return safe;
@@ -169,7 +178,7 @@ Deno.serve(async (req) => {
     let q = sb
       .from("users")
       .select(
-        "id,full_name,role,cpf,rg,phone,email,profession,minister_role,birth_date,baptism_date,marital_status,matricula,ordination_date,avatar_url,signature_url,cep,address_street,address_number,address_complement,address_neighborhood,address_city,address_state,default_totvs_id,totvs_access,is_active,can_create_released_letter",
+        "id,full_name,role,cpf,rg,phone,email,profession,minister_role,birth_date,baptism_date,marital_status,matricula,ordination_date,avatar_url,signature_url,cep,address_street,address_number,address_complement,address_neighborhood,address_city,address_state,default_totvs_id,totvs_access,is_active,can_create_released_letter,payment_status,payment_block_reason",
         { count: "exact" },
       )
       .in("role", roles)
@@ -211,11 +220,27 @@ Deno.serve(async (req) => {
     });
 
     const total = mapped.length;
+    const metrics = {
+      total,
+      pastor: 0,
+      presbitero: 0,
+      diacono: 0,
+      obreiro: 0,
+      membro: 0,
+    };
+    for (const member of mapped as Array<Record<string, unknown>>) {
+      const role = normalizeMinisterRole(member.minister_role);
+      if (role === "pastor") metrics.pastor += 1;
+      else if (role === "presbitero") metrics.presbitero += 1;
+      else if (role === "diacono") metrics.diacono += 1;
+      else if (role === "membro") metrics.membro += 1;
+      else if (role === "obreiro" || role === "cooperador" || role === "obreiro cooperador") metrics.obreiro += 1;
+    }
     const from = (page - 1) * page_size;
     const to = from + page_size;
     const pageRows = mapped.slice(from, to);
 
-    return json({ ok: true, members: pageRows, total, page, page_size }, 200);
+    return json({ ok: true, members: pageRows, total, page, page_size, metrics }, 200);
   } catch (err) {
     return json({ ok: false, error: "exception", details: String(err) }, 500);
   }

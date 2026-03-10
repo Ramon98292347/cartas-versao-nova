@@ -76,6 +76,13 @@ export const api = {
     post("set-worker-direct-release", body),
   setUserRegistrationStatus: (body: { user_id: string; registration_status: "APROVADO" | "PENDENTE" }) =>
     post("set-user-registration-status", body),
+  setUserPaymentStatus: (body: {
+    user_id: string;
+    payment_status: "ATIVO" | "BLOQUEADO_PAGAMENTO";
+    reason?: string | null;
+    amount?: number | null;
+    due_date?: string | null;
+  }) => post("set-user-payment-status", body),
   deleteUser: (body: { user_id: string }) => post("delete-user", body),
 
   workerDashboard: (body: JsonBody) => post("worker-dashboard", body),

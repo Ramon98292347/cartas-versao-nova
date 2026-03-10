@@ -23,6 +23,17 @@ import {
 import { AnnouncementCarousel } from "@/components/shared/AnnouncementCarousel";
 import { getFriendlyError } from "@/lib/error-map";
 
+function isBlockedPaymentError(err: unknown) {
+  const data = (err || {}) as {
+    code?: string;
+    message?: string;
+    details?: { error?: string; message?: string };
+  };
+  const code = String(data.code || data.details?.error || "").toLowerCase();
+  const message = String(data.message || data.details?.message || "").toLowerCase();
+  return code === "blocked_payment" || message.includes("blocked_payment");
+}
+
 function maskCpf(value: string) {
   const digits = String(value || "").replace(/\D/g, "").slice(0, 11);
   if (digits.length <= 3) return digits;
@@ -186,7 +197,19 @@ export default function PhoneIdentify() {
 
       nav(routeByRole(result.user.role));
     } catch (err) {
-      toast.error(getFriendlyError(err, "auth"));
+      const msg = getFriendlyError(err, "auth");
+      if (isBlockedPaymentError(err)) {
+        toast.error(msg, {
+          duration: 12000,
+          style: {
+            background: "#fee2e2",
+            border: "1px solid #fca5a5",
+            color: "#991b1b",
+          },
+        });
+      } else {
+        toast.error(msg);
+      }
     } finally {
       setLoading(false);
     }

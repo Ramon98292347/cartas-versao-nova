@@ -24,6 +24,7 @@ function csvEscape(value: unknown) {
 export default function ConfiguracoesPage() {
   const nav = useNavigate();
   const { usuario, session } = useUser();
+  const isAdmin = String(usuario?.role || "").toLowerCase() === "admin";
   const [roleFilter, setRoleFilter] = useState<ExportRole>("todos");
   const [loadingExport, setLoadingExport] = useState(false);
   const [savingStamps, setSavingStamps] = useState(false);
@@ -185,8 +186,8 @@ export default function ConfiguracoesPage() {
             <CardContent className="space-y-2 text-sm text-slate-700">
               <p><b>Usuário:</b> {usuario?.nome || "-"}</p>
               <p><b>Perfil:</b> {usuario?.role || "-"}</p>
-              <p><b>Igreja ativa:</b> {session?.church_name || "-"}</p>
-              <p><b>TOTVS:</b> {session?.totvs_id || "-"}</p>
+              <p><b>Igreja ativa:</b> {isAdmin ? "Admin global (sem igreja fixa)" : (session?.church_name || "-")}</p>
+              <p><b>TOTVS:</b> {isAdmin ? "-" : (session?.totvs_id || "-")}</p>
             </CardContent>
           </Card>
 

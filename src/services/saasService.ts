@@ -6,6 +6,7 @@ import type { AppSession, PendingChurch } from "@/context/UserContext";
 
 export type AppRole = "admin" | "pastor" | "obreiro";
 export type RegistrationStatus = "APROVADO" | "PENDENTE";
+export type PaymentStatus = "ATIVO" | "BLOQUEADO_PAGAMENTO";
 
 export type AuthSessionData = {
   id: string;
@@ -26,6 +27,8 @@ export type AuthSessionData = {
   address_json?: Record<string, unknown> | null;
   can_create_released_letter?: boolean | null;
   registration_status?: RegistrationStatus | null;
+  payment_status?: PaymentStatus | null;
+  payment_block_reason?: string | null;
 };
 
 export type LoginResult =
@@ -108,6 +111,8 @@ export type UserListItem = {
   can_create_released_letter?: boolean | null;
   can_manage?: boolean | null;
   registration_status?: RegistrationStatus | null;
+  payment_status?: PaymentStatus | null;
+  payment_block_reason?: string | null;
 };
 
 export type WorkerListParams = {
@@ -134,6 +139,14 @@ export type WorkerListResponse = {
   total: number;
   page: number;
   page_size: number;
+  metrics?: {
+    total: number;
+    pastor: number;
+    presbitero: number;
+    diacono: number;
+    obreiro: number;
+    membro: number;
+  };
 };
 
 export type AdminChurchSummary = {
@@ -577,6 +590,8 @@ function mapUserLike(raw: Record<string, unknown> | null | undefined): AuthSessi
     address_json: raw?.address_json || null,
     can_create_released_letter: Boolean(raw?.can_create_released_letter),
     registration_status: resolveRegistrationStatus(raw),
+    payment_status: String(raw?.payment_status || "").toUpperCase() === "BLOQUEADO_PAGAMENTO" ? "BLOQUEADO_PAGAMENTO" : "ATIVO",
+    payment_block_reason: typeof raw?.payment_block_reason === "string" ? raw.payment_block_reason : null,
   };
 }
 
@@ -758,10 +773,22 @@ export async function listMembers(params: MemberListParams): Promise<WorkerListR
             : String(w?.registration_status || "").toUpperCase() === "APROVADO"
               ? "APROVADO"
               : resolveRegistrationStatusFromTotvsAccess(w?.totvs_access || null)),
+        payment_status: String(w?.payment_status || "").toUpperCase() === "BLOQUEADO_PAGAMENTO" ? "BLOQUEADO_PAGAMENTO" : "ATIVO",
+        payment_block_reason: typeof w?.payment_block_reason === "string" ? w.payment_block_reason : null,
       })),
       total: Number(data?.total || rows.length),
       page: Number(data?.page || params.page || 1),
       page_size: Number(data?.page_size || params.page_size || 20),
+      metrics: data?.metrics
+        ? {
+            total: Number((data.metrics as Record<string, unknown>)?.total || 0),
+            pastor: Number((data.metrics as Record<string, unknown>)?.pastor || 0),
+            presbitero: Number((data.metrics as Record<string, unknown>)?.presbitero || 0),
+            diacono: Number((data.metrics as Record<string, unknown>)?.diacono || 0),
+            obreiro: Number((data.metrics as Record<string, unknown>)?.obreiro || 0),
+            membro: Number((data.metrics as Record<string, unknown>)?.membro || 0),
+          }
+        : undefined,
     };
   }
 
@@ -822,6 +849,8 @@ export async function listWorkers(params: WorkerListParams): Promise<WorkerListR
             : String(w?.registration_status || "").toUpperCase() === "APROVADO"
               ? "APROVADO"
               : resolveRegistrationStatusFromTotvsAccess(w?.totvs_access || null)),
+        payment_status: String(w?.payment_status || "").toUpperCase() === "BLOQUEADO_PAGAMENTO" ? "BLOQUEADO_PAGAMENTO" : "ATIVO",
+        payment_block_reason: typeof w?.payment_block_reason === "string" ? w.payment_block_reason : null,
       })),
       total: Number(data?.total || rows.length),
       page: Number(data?.page || params.page || 1),
@@ -853,6 +882,8 @@ export async function listWorkers(params: WorkerListParams): Promise<WorkerListR
       (u as AuthSessionData & { can_create_released_letter?: boolean }).can_create_released_letter ?? false,
     registration_status:
       (u as AuthSessionData).registration_status || "APROVADO",
+    payment_status: (u as AuthSessionData).payment_status || "ATIVO",
+    payment_block_reason: (u as AuthSessionData).payment_block_reason || null,
   })) as UserListItem[];
 
   if (params.search) {
@@ -1775,6 +1806,30 @@ export async function setUserRegistrationStatus(userId: string, registrationStat
   const user = MOCK_USERS.find((u) => u.id === userId);
   if (user) {
     (user as AuthSessionData).registration_status = registrationStatus;
+  }
+}
+
+export async function setUserPaymentStatus(payload: {
+  user_id: string;
+  payment_status: PaymentStatus;
+  reason?: string | null;
+  amount?: number | null;
+  due_date?: string | null;
+}) {
+  if (!isMockMode()) {
+    await api.setUserPaymentStatus({
+      user_id: payload.user_id,
+      payment_status: payload.payment_status,
+      reason: payload.reason ?? null,
+      amount: typeof payload.amount === "number" ? payload.amount : null,
+      due_date: payload.due_date ?? null,
+    });
+    return;
+  }
+  const user = MOCK_USERS.find((u) => u.id === payload.user_id);
+  if (user) {
+    (user as AuthSessionData).payment_status = payload.payment_status;
+    (user as AuthSessionData).payment_block_reason = payload.reason ?? null;
   }
 }
 

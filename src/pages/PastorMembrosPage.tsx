@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Grid2X2, IdCard, List, MoreVertical, Save, Send, Users } from "lucide-react";
 import { toast } from "sonner";
 import { ManagementShell } from "@/components/layout/ManagementShell";
@@ -629,6 +629,7 @@ function buildFichaMembroHtml(form: MemberDocForm) {
 
 export default function PastorMembrosPage() {
   const { session, usuario } = useUser();
+  const queryClient = useQueryClient();
   const activeTotvsId = String(session?.totvs_id || usuario?.default_totvs_id || usuario?.totvs || "");
   const [tab, setTab] = useState<MemberTab>("lista");
   const [view, setView] = useState<MemberView>("lista");
@@ -656,36 +657,6 @@ export default function PastorMembrosPage() {
   const workers = data?.workers || [];
   const membersTotal = Number(data?.total || workers.length);
   const membersTotalPages = Math.max(1, Math.ceil(membersTotal / membersPageSize));
-  const { data: kpiTotalData } = useQuery({
-    queryKey: ["pastor-members-kpi-total"],
-    queryFn: () => listMembers({ page: 1, page_size: 1, roles: ["pastor", "obreiro"] }),
-    staleTime: 30_000,
-  });
-  const { data: kpiPastorData } = useQuery({
-    queryKey: ["pastor-members-kpi-pastor"],
-    queryFn: () => listMembers({ page: 1, page_size: 1, roles: ["pastor", "obreiro"], minister_role: "Pastor" }),
-    staleTime: 30_000,
-  });
-  const { data: kpiPresbiteroData } = useQuery({
-    queryKey: ["pastor-members-kpi-presbitero"],
-    queryFn: () => listMembers({ page: 1, page_size: 1, roles: ["pastor", "obreiro"], minister_role: "Presbitero" }),
-    staleTime: 30_000,
-  });
-  const { data: kpiDiaconoData } = useQuery({
-    queryKey: ["pastor-members-kpi-diacono"],
-    queryFn: () => listMembers({ page: 1, page_size: 1, roles: ["pastor", "obreiro"], minister_role: "Diacono" }),
-    staleTime: 30_000,
-  });
-  const { data: kpiObreiroData } = useQuery({
-    queryKey: ["pastor-members-kpi-obreiro"],
-    queryFn: () => listMembers({ page: 1, page_size: 1, roles: ["pastor", "obreiro"], minister_role: "Obreiro" }),
-    staleTime: 30_000,
-  });
-  const { data: kpiMembroData } = useQuery({
-    queryKey: ["pastor-members-kpi-membro"],
-    queryFn: () => listMembers({ page: 1, page_size: 1, roles: ["pastor", "obreiro"], minister_role: "Membro" }),
-    staleTime: 30_000,
-  });
   const { data: churchesInScope = [], isLoading: loadingChurches, isFetching: fetchingChurches } = useQuery({
     queryKey: ["pastor-members-churches-footer", activeTotvsId],
     queryFn: () => listChurchesInScope(1, 400),
@@ -797,15 +768,38 @@ export default function PastorMembrosPage() {
   }, [form.cep_congregacao]);
 
   const counters = useMemo(() => {
+    if (data?.metrics) {
+      return {
+        total: Number(data.metrics.total || 0),
+        pastor: Number(data.metrics.pastor || 0),
+        presbitero: Number(data.metrics.presbitero || 0),
+        diacono: Number(data.metrics.diacono || 0),
+        obreiro: Number(data.metrics.obreiro || 0),
+        batizados: Number(data.metrics.membro || 0),
+      };
+    }
     return {
-      total: Number(kpiTotalData?.total || 0),
-      pastor: Number(kpiPastorData?.total || 0),
-      presbitero: Number(kpiPresbiteroData?.total || 0),
-      diacono: Number(kpiDiaconoData?.total || 0),
-      obreiro: Number(kpiObreiroData?.total || 0),
-      batizados: Number(kpiMembroData?.total || 0),
+      total: workers.length,
+      pastor: workers.filter((w) => normalizeMinisterRole(w.minister_role) === "pastor").length,
+      presbitero: workers.filter((w) => normalizeMinisterRole(w.minister_role) === "presbitero").length,
+      diacono: workers.filter((w) => normalizeMinisterRole(w.minister_role) === "diacono").length,
+      obreiro: workers.filter((w) => {
+        const role = normalizeMinisterRole(w.minister_role);
+        return role === "obreiro" || role === "cooperador" || role === "obreiro cooperador";
+      }).length,
+      batizados: workers.filter((w) => normalizeMinisterRole(w.minister_role) === "membro").length,
     };
-  }, [kpiTotalData?.total, kpiPastorData?.total, kpiPresbiteroData?.total, kpiDiaconoData?.total, kpiObreiroData?.total, kpiMembroData?.total]);
+  }, [data?.metrics, workers]);
+
+  useEffect(() => {
+    if (membersPage >= membersTotalPages) return;
+    const nextPage = membersPage + 1;
+    void queryClient.prefetchQuery({
+      queryKey: ["pastor-members-page", nextPage, membersPageSize],
+      queryFn: () => listMembers({ page: nextPage, page_size: membersPageSize, roles: ["pastor", "obreiro"] }),
+      staleTime: 30_000,
+    });
+  }, [membersPage, membersPageSize, membersTotalPages, queryClient]);
 
   async function saveDraft() {
     if (!selectedMemberId) {

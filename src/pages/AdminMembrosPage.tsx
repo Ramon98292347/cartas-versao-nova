@@ -129,7 +129,7 @@ export default function AdminMembrosPage() {
           <MiniCard title="Membros ativos" value={counters.membrosAtivos} subtitle="ministerio membro" tone={memberTone.ativo} />
         </section>
 
-        <ObreirosTab activeTotvsId={selectedChurchTotvs} />
+        <ObreirosTab activeTotvsId={selectedChurchTotvs} forceSingleChurchFilter />
         </div>
       )}
     </ManagementShell>

@@ -1,5 +1,5 @@
-import { useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useEffect, useMemo, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Church } from "lucide-react";
 import { ManagementShell } from "@/components/layout/ManagementShell";
 import { AdminChurchesTab } from "@/components/admin/AdminChurchesTab";
@@ -39,6 +39,7 @@ function KpiCard({
 
 // Comentario: pagina de igrejas com layout SaaS corporativo e cards de KPI neutros/suaves.
 export default function PastorIgrejasPage() {
+  const queryClient = useQueryClient();
   const [filterTotvs, setFilterTotvs] = useState("all");
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
@@ -82,6 +83,16 @@ export default function PastorIgrejasPage() {
   }, [optionsRows, filterTotvs]);
 
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
+
+  useEffect(() => {
+    if (page >= totalPages) return;
+    const nextPage = page + 1;
+    void queryClient.prefetchQuery({
+      queryKey: ["pastor-igrejas-page", nextPage, pageSize, filterTotvs],
+      queryFn: () => listChurchesInScopePaged(nextPage, pageSize, filterTotvs === "all" ? undefined : filterTotvs),
+      staleTime: 30_000,
+    });
+  }, [page, totalPages, pageSize, filterTotvs, queryClient]);
 
   const totals = useMemo(() => {
     return {

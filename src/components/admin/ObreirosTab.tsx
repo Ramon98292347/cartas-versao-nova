@@ -15,6 +15,7 @@ import {
   listMembers,
   resetWorkerPassword,
   setUserRegistrationStatus,
+  setUserPaymentStatus,
   setWorkerActive,
   setWorkerDirectRelease,
   deleteUserPermanently,
@@ -122,11 +123,18 @@ function AvatarWithFallback({ src, alt, className }: { src?: string | null; alt:
   );
 }
 
-export function ObreirosTab({ activeTotvsId }: { activeTotvsId: string }) {
+export function ObreirosTab({
+  activeTotvsId,
+  forceSingleChurchFilter = false,
+}: {
+  activeTotvsId: string;
+  forceSingleChurchFilter?: boolean;
+}) {
   const { session, usuario } = useUser();
-  const roleLower = String(session?.role || usuario?.role || "").toLowerCase();
+  const roleLower = String(usuario?.role || session?.role || "").toLowerCase();
   const churchClass = String(session?.church_class || "").toLowerCase();
-  const useScopeList = roleLower === "admin" || churchClass === "estadual";
+  const useScopeList = !forceSingleChurchFilter && churchClass === "estadual";
+  const isAdminUser = roleLower === "admin";
   const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
   const [ministerRole, setMinisterRole] = useState("all");
@@ -393,6 +401,48 @@ export function ObreirosTab({ activeTotvsId }: { activeTotvsId: string }) {
     }
   }
 
+  async function togglePaymentBlock(worker: UserListItem) {
+    const isSelf = String(worker.id || "") === String(usuario?.id || "");
+    if (isSelf) {
+      toast.error("Você não pode bloquear o seu próprio cadastro por pagamento.");
+      return;
+    }
+    if (roleLower !== "admin") {
+      toast.error("Somente admin pode bloquear por pagamento.");
+      return;
+    }
+
+    const current = String(worker.payment_status || "ATIVO").toUpperCase();
+    const next = current === "BLOQUEADO_PAGAMENTO" ? "ATIVO" : "BLOQUEADO_PAGAMENTO";
+
+    let reason = "";
+    if (next === "BLOQUEADO_PAGAMENTO") {
+      reason = window.prompt("Motivo do bloqueio por pagamento:")?.trim() || "";
+      if (!reason) {
+        toast.error("Informe o motivo do bloqueio.");
+        return;
+      }
+    }
+
+    const confirmMessage =
+      next === "BLOQUEADO_PAGAMENTO"
+        ? `Bloquear ${worker.full_name || "este usuário"} por falta de pagamento?`
+        : `Desbloquear ${worker.full_name || "este usuário"} por pagamento?`;
+    if (!window.confirm(confirmMessage)) return;
+
+    try {
+      await setUserPaymentStatus({
+        user_id: String(worker.id),
+        payment_status: next as "ATIVO" | "BLOQUEADO_PAGAMENTO",
+        reason: next === "BLOQUEADO_PAGAMENTO" ? reason : null,
+      });
+      toast.success(next === "BLOQUEADO_PAGAMENTO" ? "Usuário bloqueado por pagamento." : "Usuário liberado por pagamento.");
+      await refresh();
+    } catch (err: unknown) {
+      toast.error(getFriendlyError(err, "workers"));
+    }
+  }
+
   async function deleteWorker(worker: UserListItem) {
     const isSelf = String(worker.id || "") === String(usuario?.id || "");
     if (isSelf) {
@@ -459,6 +509,7 @@ export function ObreirosTab({ activeTotvsId }: { activeTotvsId: string }) {
     const isObreiroTarget = String(worker.role || "").toLowerCase() === "obreiro";
     const blockDangerActions = worker.can_manage === false || isSelf;
     const blockDirectRelease = blockDangerActions || !isObreiroTarget;
+    const canPaymentAction = isAdminUser && !isSelf;
     return (
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
@@ -479,6 +530,11 @@ export function ObreirosTab({ activeTotvsId }: { activeTotvsId: string }) {
           </DropdownMenuItem>
           <DropdownMenuItem onClick={() => toggleRegistration(worker)} disabled={blockDangerActions}>
             {worker.registration_status === "PENDENTE" ? "Liberar cadastro" : "Bloquear cadastro"}
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => togglePaymentBlock(worker)} disabled={!canPaymentAction}>
+            {String(worker.payment_status || "ATIVO").toUpperCase() === "BLOQUEADO_PAGAMENTO"
+              ? "Liberar por pagamento"
+              : "Bloquear por pagamento"}
           </DropdownMenuItem>
           <DropdownMenuItem onClick={() => openResetPassword(worker)} disabled={blockDangerActions}>
             Resetar senha
@@ -531,8 +587,8 @@ export function ObreirosTab({ activeTotvsId }: { activeTotvsId: string }) {
           </div>
 
           <div className="hidden overflow-x-auto rounded-xl border border-slate-200 md:block">
-            <div className="min-w-[1160px]">
-              <div className="grid grid-cols-[92px_200px_150px_140px_140px_120px_120px_120px_120px_140px] border-b bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-700">
+            <div className="min-w-[1280px]">
+              <div className="grid grid-cols-[92px_200px_150px_140px_140px_120px_120px_120px_140px_120px_140px] border-b bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-700">
                 <span>Avatar</span>
                 <span>Nome</span>
                 <span>CPF</span>
@@ -541,13 +597,14 @@ export function ObreirosTab({ activeTotvsId }: { activeTotvsId: string }) {
                 <span>Tipo</span>
                 <span>Status</span>
                 <span>Carta direta</span>
+                <span>Pagamento</span>
                 <span>Ver</span>
                 <span>Acoes</span>
               </div>
               {isLoading ? <div className="px-4 py-4 text-sm text-slate-500">Carregando...</div> : null}
               {!isLoading && workers.length === 0 ? <div className="px-4 py-4 text-sm text-slate-500">Nenhum membro encontrado.</div> : null}
               {workers.map((w) => (
-                <div key={w.id} className="grid grid-cols-[92px_200px_150px_140px_140px_120px_120px_120px_120px_140px] items-center border-b px-4 py-3 text-sm">
+                <div key={w.id} className="grid grid-cols-[92px_200px_150px_140px_140px_120px_120px_120px_140px_120px_140px] items-center border-b px-4 py-3 text-sm">
                   <span>
                     <AvatarWithFallback
                       src={w.avatar_url || null}
@@ -565,6 +622,9 @@ export function ObreirosTab({ activeTotvsId }: { activeTotvsId: string }) {
                   </span>
                   <span className={`inline-flex w-fit rounded-full px-2 py-1 text-xs ${w.can_create_released_letter ? "bg-blue-100 text-blue-700" : "bg-rose-100 text-rose-700"}`}>
                     {w.can_create_released_letter ? "Liberado" : "Bloqueado"}
+                  </span>
+                  <span className={`inline-flex w-fit rounded-full px-2 py-1 text-xs ${String(w.payment_status || "ATIVO").toUpperCase() === "BLOQUEADO_PAGAMENTO" ? "bg-rose-100 text-rose-700" : "bg-emerald-100 text-emerald-700"}`}>
+                    {String(w.payment_status || "ATIVO").toUpperCase() === "BLOQUEADO_PAGAMENTO" ? "Bloqueado" : "Ativo"}
                   </span>
                   <div><Button size="sm" variant="outline" onClick={() => openView(w)}>Visualizar</Button></div>
                   <div>{renderWorkerActions(w)}</div>
@@ -592,6 +652,9 @@ export function ObreirosTab({ activeTotvsId }: { activeTotvsId: string }) {
                       <p className="text-slate-600">Cargo: {w.minister_role || "-"}</p>
                       <p className="text-slate-600">
                         Carta direta: {w.can_create_released_letter ? "Liberado" : "Bloqueado"}
+                      </p>
+                      <p className="text-slate-600">
+                        Pagamento: {String(w.payment_status || "ATIVO").toUpperCase() === "BLOQUEADO_PAGAMENTO" ? "Bloqueado" : "Ativo"}
                       </p>
                     </div>
                   </div>
