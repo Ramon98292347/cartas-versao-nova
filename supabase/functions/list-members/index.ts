@@ -147,7 +147,7 @@ Deno.serve(async (req) => {
 
     const body = (await req.json().catch(() => ({}))) as Body;
     const page = Number.isFinite(body.page) ? Math.max(1, Number(body.page)) : 1;
-    const page_size = Number.isFinite(body.page_size) ? Math.max(1, Math.min(200, Number(body.page_size))) : 20;
+    const page_size = Number.isFinite(body.page_size) ? Math.max(1, Math.min(1000, Number(body.page_size))) : 20;
     const roles = Array.isArray(body.roles) && body.roles.length ? body.roles : ["pastor", "obreiro"];
     const churchTotvsFilter = String(body.church_totvs_id || "").trim();
 

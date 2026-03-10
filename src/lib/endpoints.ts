@@ -30,7 +30,7 @@ export const api = {
   getMyRegistrationStatus: () => post("get-my-registration-status", {}),
 
   dashboardStats: (body: JsonBody = {}) => post("dashboard-stats", body),
-  listChurchesInScope: (body: { page?: number; page_size?: number } = {}) => post("list-churches-in-scope", body),
+  listChurchesInScope: (body: { page?: number; page_size?: number; root_totvs_id?: string } = {}) => post("list-churches-in-scope", body),
   createChurch: (body: {
     totvs_id: string;
     parent_totvs_id?: string | null;

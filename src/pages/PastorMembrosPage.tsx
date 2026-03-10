@@ -638,6 +638,8 @@ export default function PastorMembrosPage() {
   const [manualFichaMembro, setManualFichaMembro] = useState(false);
   const [carteirinhaTemplate, setCarteirinhaTemplate] = useState<CarteirinhaTemplate>("padrao");
   const [fichaTemplate, setFichaTemplate] = useState<FichaTemplate>("padrao");
+  const [membersPage, setMembersPage] = useState(1);
+  const [membersPageSize, setMembersPageSize] = useState(50);
   const [savingDraft, setSavingDraft] = useState(false);
   const [sending, setSending] = useState(false);
   const [cepLookupLoading, setCepLookupLoading] = useState(false);
@@ -646,11 +648,44 @@ export default function PastorMembrosPage() {
   const fichaMembroHtml = useMemo(() => buildFichaMembroHtml(form), [form]);
 
   const { data, isLoading: loadingMembers, isFetching: fetchingMembers, refetch: refetchMembers } = useQuery({
-    queryKey: ["pastor-members-page"],
-    queryFn: () => listMembers({ page: 1, page_size: 400, roles: ["pastor", "obreiro"] }),
+    queryKey: ["pastor-members-page", membersPage, membersPageSize],
+    queryFn: () => listMembers({ page: membersPage, page_size: membersPageSize, roles: ["pastor", "obreiro"] }),
+    staleTime: 30_000,
   });
 
   const workers = data?.workers || [];
+  const membersTotal = Number(data?.total || workers.length);
+  const membersTotalPages = Math.max(1, Math.ceil(membersTotal / membersPageSize));
+  const { data: kpiTotalData } = useQuery({
+    queryKey: ["pastor-members-kpi-total"],
+    queryFn: () => listMembers({ page: 1, page_size: 1, roles: ["pastor", "obreiro"] }),
+    staleTime: 30_000,
+  });
+  const { data: kpiPastorData } = useQuery({
+    queryKey: ["pastor-members-kpi-pastor"],
+    queryFn: () => listMembers({ page: 1, page_size: 1, roles: ["pastor", "obreiro"], minister_role: "Pastor" }),
+    staleTime: 30_000,
+  });
+  const { data: kpiPresbiteroData } = useQuery({
+    queryKey: ["pastor-members-kpi-presbitero"],
+    queryFn: () => listMembers({ page: 1, page_size: 1, roles: ["pastor", "obreiro"], minister_role: "Presbitero" }),
+    staleTime: 30_000,
+  });
+  const { data: kpiDiaconoData } = useQuery({
+    queryKey: ["pastor-members-kpi-diacono"],
+    queryFn: () => listMembers({ page: 1, page_size: 1, roles: ["pastor", "obreiro"], minister_role: "Diacono" }),
+    staleTime: 30_000,
+  });
+  const { data: kpiObreiroData } = useQuery({
+    queryKey: ["pastor-members-kpi-obreiro"],
+    queryFn: () => listMembers({ page: 1, page_size: 1, roles: ["pastor", "obreiro"], minister_role: "Obreiro" }),
+    staleTime: 30_000,
+  });
+  const { data: kpiMembroData } = useQuery({
+    queryKey: ["pastor-members-kpi-membro"],
+    queryFn: () => listMembers({ page: 1, page_size: 1, roles: ["pastor", "obreiro"], minister_role: "Membro" }),
+    staleTime: 30_000,
+  });
   const { data: churchesInScope = [], isLoading: loadingChurches, isFetching: fetchingChurches } = useQuery({
     queryKey: ["pastor-members-churches-footer", activeTotvsId],
     queryFn: () => listChurchesInScope(1, 400),
@@ -683,11 +718,6 @@ export default function PastorMembrosPage() {
   );
 
   async function handleDeleteMember(member: UserListItem) {
-    const role = String(session?.role || usuario?.role || "").toLowerCase();
-    if (!["admin", "pastor"].includes(role)) {
-      toast.error("Sem permissao para deletar usuario.");
-      return;
-    }
     const confirmed = window.confirm(`Tem certeza que deseja deletar ${member.full_name || "este usuario"}?`);
     if (!confirmed) return;
     try {
@@ -768,17 +798,14 @@ export default function PastorMembrosPage() {
 
   const counters = useMemo(() => {
     return {
-      total: workers.length,
-      pastor: workers.filter((w) => normalizeMinisterRole(w.minister_role) === "pastor").length,
-      presbitero: workers.filter((w) => normalizeMinisterRole(w.minister_role) === "presbitero").length,
-      diacono: workers.filter((w) => normalizeMinisterRole(w.minister_role) === "diacono").length,
-      obreiro: workers.filter((w) => {
-        const role = normalizeMinisterRole(w.minister_role);
-        return role === "obreiro" || role === "cooperador" || role === "obreiro cooperador";
-      }).length,
-      batizados: workers.filter((w) => normalizeMinisterRole(w.minister_role) === "membro").length,
+      total: Number(kpiTotalData?.total || 0),
+      pastor: Number(kpiPastorData?.total || 0),
+      presbitero: Number(kpiPresbiteroData?.total || 0),
+      diacono: Number(kpiDiaconoData?.total || 0),
+      obreiro: Number(kpiObreiroData?.total || 0),
+      batizados: Number(kpiMembroData?.total || 0),
     };
-  }, [workers]);
+  }, [kpiTotalData?.total, kpiPastorData?.total, kpiPresbiteroData?.total, kpiDiaconoData?.total, kpiObreiroData?.total, kpiMembroData?.total]);
 
   async function saveDraft() {
     if (!selectedMemberId) {
@@ -961,6 +988,41 @@ export default function PastorMembrosPage() {
 
             {workers.length === 0 ? <p className="text-sm text-slate-500">Nenhum membro encontrado.</p> : null}
           </CardContent>
+          <div className="flex flex-wrap items-center justify-end gap-2 border-t border-slate-200 px-4 py-3">
+            <Select
+              value={String(membersPageSize)}
+              onValueChange={(value) => {
+                setMembersPageSize(Number(value));
+                setMembersPage(1);
+              }}
+            >
+              <SelectTrigger className="w-24">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="20">20</SelectItem>
+                <SelectItem value="50">50</SelectItem>
+                <SelectItem value="100">100</SelectItem>
+              </SelectContent>
+            </Select>
+            <Button
+              variant="outline"
+              disabled={membersPage <= 1}
+              onClick={() => setMembersPage((prev) => Math.max(1, prev - 1))}
+            >
+              Anterior
+            </Button>
+            <span className="text-sm text-slate-600">
+              Pagina {membersPage} / {membersTotalPages}
+            </span>
+            <Button
+              variant="outline"
+              disabled={membersPage >= membersTotalPages}
+              onClick={() => setMembersPage((prev) => Math.min(membersTotalPages, prev + 1))}
+            >
+              Proxima
+            </Button>
+          </div>
         </Card>
       ) : null}
 

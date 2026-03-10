@@ -16,6 +16,11 @@ function json(obj: any, status = 200) {
 
 type Role = "admin" | "pastor" | "obreiro";
 type SessionClaims = { user_id: string; role: Role; active_totvs_id: string };
+type Body = {
+  page?: number;
+  page_size?: number;
+  root_totvs_id?: string;
+};
 
 async function verifySessionJWT(req: Request): Promise<SessionClaims | null> {
   const auth = req.headers.get("authorization") || "";
@@ -91,6 +96,11 @@ Deno.serve(async (req) => {
     const session = await verifySessionJWT(req);
     if (!session) return json({ ok: false, error: "unauthorized" }, 401);
     if (session.role === "obreiro") return json({ ok: false, error: "forbidden" }, 403);
+    const body = (await req.json().catch(() => ({}))) as Body;
+    const page = Number.isFinite(body.page) ? Math.max(1, Number(body.page)) : 1;
+    const page_size = Number.isFinite(body.page_size) ? Math.max(1, Math.min(200, Number(body.page_size))) : 20;
+    const from = (page - 1) * page_size;
+    const to = from + page_size - 1;
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -104,8 +114,16 @@ Deno.serve(async (req) => {
     if (aErr) return json({ ok: false, error: "db_error_scope", details: aErr.message }, 500);
 
     const scopeRootTotvs = await resolveScopeRootTotvs(sb, session);
-    const scope = computeScope(scopeRootTotvs, (all || []) as ChurchRow[]);
+    const baseScope = computeScope(scopeRootTotvs, (all || []) as ChurchRow[]);
+    const requestedRoot = String(body.root_totvs_id || "").trim();
+    if (requestedRoot && !baseScope.has(requestedRoot)) {
+      return json({ ok: false, error: "forbidden_church_out_of_scope" }, 403);
+    }
+
+    const effectiveRoot = requestedRoot || scopeRootTotvs;
+    const scope = computeScope(effectiveRoot, (all || []) as ChurchRow[]);
     const scopeList = [...scope];
+    const scopeTotal = scopeList.length;
 
     // 2) Busca igrejas do escopo + pastor (join)
     const { data: churches, error: cErr } = await sb
@@ -128,19 +146,24 @@ Deno.serve(async (req) => {
         )
       `)
       .in("totvs_id", scopeList)
-      .order("church_name", { ascending: true });
+      .order("church_name", { ascending: true })
+      .range(from, to);
 
     if (cErr) return json({ ok: false, error: "db_error_list_churches", details: cErr.message }, 500);
 
     // 3) Conta obreiros por igreja (default_totvs_id)
-    const { data: workers, error: wErr } = await sb
-      .from("users")
-      .select("id, default_totvs_id")
-      .eq("role", "obreiro")
-      .eq("is_active", true)
-      .in("default_totvs_id", scopeList);
-
-    if (wErr) return json({ ok: false, error: "db_error_workers_count", details: wErr.message }, 500);
+    const churchIdsPage = (churches || []).map((ch: any) => String(ch.totvs_id || "")).filter(Boolean);
+    let workers: Array<Record<string, unknown>> = [];
+    if (churchIdsPage.length > 0) {
+      const { data: workersData, error: wErr } = await sb
+        .from("users")
+        .select("id, default_totvs_id")
+        .eq("role", "obreiro")
+        .eq("is_active", true)
+        .in("default_totvs_id", churchIdsPage);
+      if (wErr) return json({ ok: false, error: "db_error_workers_count", details: wErr.message }, 500);
+      workers = workersData || [];
+    }
 
     const counts = new Map<string, number>();
     for (const w of workers || []) {
@@ -154,7 +177,7 @@ Deno.serve(async (req) => {
       workers_count: counts.get(String(ch.totvs_id)) || 0,
     }));
 
-    return json({ ok: true, churches: enriched }, 200);
+    return json({ ok: true, churches: enriched, total: scopeTotal, page, page_size }, 200);
   } catch (err) {
     return json({ ok: false, error: "exception", details: String(err) }, 500);
   }

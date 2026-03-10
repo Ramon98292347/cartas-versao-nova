@@ -16,8 +16,42 @@ function json(obj: unknown, status = 200) {
 }
 
 type Role = "admin" | "pastor" | "obreiro";
+type ChurchClass = "estadual" | "setorial" | "central" | "regional" | "local";
 type SessionClaims = { user_id: string; role: Role; active_totvs_id: string };
+type ChurchRow = { totvs_id: string; parent_totvs_id: string | null; class: string | null };
 type Body = { worker_id?: string; can_create_released_letter?: boolean };
+
+function normalizeChurchClass(value: string | null | undefined): ChurchClass | null {
+  const safe = String(value || "").trim().toLowerCase();
+  if (safe === "estadual" || safe === "setorial" || safe === "central" || safe === "regional" || safe === "local") return safe;
+  return null;
+}
+
+function computeScope(rootTotvs: string, churches: ChurchRow[]): Set<string> {
+  const children = new Map<string, string[]>();
+  for (const c of churches) {
+    const parent = String(c.parent_totvs_id || "");
+    if (!children.has(parent)) children.set(parent, []);
+    children.get(parent)!.push(String(c.totvs_id));
+  }
+
+  const scope = new Set<string>();
+  const queue = [rootTotvs];
+  while (queue.length > 0) {
+    const current = queue.shift()!;
+    if (scope.has(current)) continue;
+    scope.add(current);
+    for (const child of children.get(current) || []) queue.push(child);
+  }
+  return scope;
+}
+
+function canManage(sessionRole: Role, sessionClass: ChurchClass | null, targetClass: ChurchClass | null): boolean {
+  if (sessionRole === "admin") return true;
+  if (!sessionClass || !targetClass) return false;
+  const rank: Record<ChurchClass, number> = { estadual: 5, setorial: 4, central: 3, regional: 2, local: 1 };
+  return rank[targetClass] <= rank[sessionClass];
+}
 
 async function verifySessionJWT(req: Request): Promise<SessionClaims | null> {
   const auth = req.headers.get("authorization") || "";
@@ -72,11 +106,30 @@ Deno.serve(async (req) => {
 
     if (targetErr) return json({ ok: false, error: "db_error_target", details: targetErr.message }, 500);
     if (!target) return json({ ok: false, error: "worker_not_found" }, 404);
-    if (String(target.role || "").toLowerCase() !== "obreiro") {
-      return json({ ok: false, error: "target_is_not_obreiro" }, 400);
+    if (String(target.id) === session.user_id) {
+      return json({ ok: false, error: "cannot_release_self_direct" }, 403);
     }
-    if (String(target.default_totvs_id || "") !== String(session.active_totvs_id)) {
-      return json({ ok: false, error: "forbidden_wrong_church" }, 403);
+    if (String(target.role || "").toLowerCase() !== "obreiro") {
+      return json({ ok: false, error: "target_is_not_obreiro" }, 403);
+    }
+
+    if (session.role !== "admin") {
+      const { data: churches, error: churchesErr } = await sb.from("churches").select("totvs_id,parent_totvs_id,class");
+      if (churchesErr) return json({ ok: false, error: "db_error_churches", details: churchesErr.message }, 500);
+
+      const churchRows = (churches || []) as ChurchRow[];
+      const scope = computeScope(session.active_totvs_id, churchRows);
+      const map = new Map(churchRows.map((c) => [String(c.totvs_id), c]));
+      const sessionClass = normalizeChurchClass(map.get(session.active_totvs_id)?.class);
+      const targetTotvs = String(target.default_totvs_id || "").trim();
+      const targetClass = normalizeChurchClass(map.get(targetTotvs)?.class);
+
+      if (!targetTotvs || !scope.has(targetTotvs)) {
+        return json({ ok: false, error: "worker_out_of_scope" }, 403);
+      }
+      if (!canManage(session.role, sessionClass, targetClass)) {
+        return json({ ok: false, error: "forbidden_hierarchy" }, 403);
+      }
     }
 
     const { data: updated, error: updateErr } = await sb

@@ -705,7 +705,7 @@ export async function listPastorLetters(_activeTotvsId: string, filters: PastorF
 }
 
 export async function listObreiros(_scopeTotvsIds: string[]): Promise<UserListItem[]> {
-  const res = await listMembers({ page: 1, page_size: 200, roles: ["pastor", "obreiro"] });
+  const res = await listMembers({ page: 1, page_size: 1000, roles: ["pastor", "obreiro"] });
   return res.workers;
 }
 
@@ -898,8 +898,8 @@ export async function listAdminChurchSummary(scopeTotvsIds: string[]): Promise<A
   return Array.from(groups.values()).sort((a, b) => a.church_name.localeCompare(b.church_name));
 }
 
-export async function listChurchesInScope(page = 1, pageSize = 200): Promise<ChurchInScopeItem[]> {
-  const data = await api.listChurchesInScope({ page, page_size: pageSize });
+export async function listChurchesInScope(page = 1, pageSize = 200, rootTotvsId?: string): Promise<ChurchInScopeItem[]> {
+  const data = await api.listChurchesInScope({ page, page_size: pageSize, root_totvs_id: rootTotvsId });
   const rows = Array.isArray(data?.churches)
     ? data.churches
     : Array.isArray(data?.items)
@@ -937,8 +937,8 @@ export async function listChurchesInScope(page = 1, pageSize = 200): Promise<Chu
   }));
 }
 
-export async function listChurchesInScopePaged(page = 1, pageSize = 20): Promise<{ churches: ChurchInScopeItem[]; total: number; page: number; page_size: number }> {
-  const data = await api.listChurchesInScope({ page, page_size: pageSize });
+export async function listChurchesInScopePaged(page = 1, pageSize = 20, rootTotvsId?: string): Promise<{ churches: ChurchInScopeItem[]; total: number; page: number; page_size: number }> {
+  const data = await api.listChurchesInScope({ page, page_size: pageSize, root_totvs_id: rootTotvsId });
   const rows = Array.isArray(data?.churches)
     ? data.churches
     : Array.isArray(data?.items)

@@ -322,6 +322,11 @@ export function ObreirosTab({ activeTotvsId }: { activeTotvsId: string }) {
   }
 
   async function toggle(worker: UserListItem) {
+    const isSelf = String(worker.id || "") === String(usuario?.id || "");
+    if (isSelf) {
+      toast.error("Você não pode desativar o seu próprio cadastro.");
+      return;
+    }
     if (worker.can_manage === false) {
       toast.error("Sem permissao para alterar este usuario.");
       return;
@@ -339,6 +344,15 @@ export function ObreirosTab({ activeTotvsId }: { activeTotvsId: string }) {
   }
 
   async function toggleDirectRelease(worker: UserListItem) {
+    const isSelf = String(worker.id || "") === String(usuario?.id || "");
+    if (isSelf) {
+      toast.error("Você não pode liberar o seu próprio cadastro. Peça para a igreja acima liberar.");
+      return;
+    }
+    if (String(worker.role || "").toLowerCase() !== "obreiro") {
+      toast.error("Liberação direta é permitida somente para obreiro.");
+      return;
+    }
     if (worker.can_manage === false) {
       toast.error("Sem permissao para alterar este usuario.");
       return;
@@ -380,6 +394,11 @@ export function ObreirosTab({ activeTotvsId }: { activeTotvsId: string }) {
   }
 
   async function deleteWorker(worker: UserListItem) {
+    const isSelf = String(worker.id || "") === String(usuario?.id || "");
+    if (isSelf) {
+      toast.error("Você não pode deletar o seu próprio cadastro.");
+      return;
+    }
     if (worker.can_manage === false) {
       toast.error("Sem permissao para excluir este usuario.");
       return;
@@ -436,6 +455,10 @@ export function ObreirosTab({ activeTotvsId }: { activeTotvsId: string }) {
   }
 
   function renderWorkerActions(worker: UserListItem) {
+    const isSelf = String(worker.id || "") === String(usuario?.id || "");
+    const isObreiroTarget = String(worker.role || "").toLowerCase() === "obreiro";
+    const blockDangerActions = worker.can_manage === false || isSelf;
+    const blockDirectRelease = blockDangerActions || !isObreiroTarget;
     return (
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
@@ -448,19 +471,19 @@ export function ObreirosTab({ activeTotvsId }: { activeTotvsId: string }) {
           <DropdownMenuItem onClick={() => openEdit(worker)} disabled={worker.can_manage === false}>
             Editar
           </DropdownMenuItem>
-          <DropdownMenuItem onClick={() => toggle(worker)} disabled={worker.can_manage === false}>
+          <DropdownMenuItem onClick={() => toggle(worker)} disabled={blockDangerActions}>
             {worker.is_active === false ? "Ativar" : "Desativar"}
           </DropdownMenuItem>
-          <DropdownMenuItem onClick={() => toggleDirectRelease(worker)} disabled={worker.can_manage === false}>
+          <DropdownMenuItem onClick={() => toggleDirectRelease(worker)} disabled={blockDirectRelease}>
             {worker.can_create_released_letter ? "Remover liberacao direta" : "Liberar direto"}
           </DropdownMenuItem>
-          <DropdownMenuItem onClick={() => toggleRegistration(worker)} disabled={worker.can_manage === false}>
+          <DropdownMenuItem onClick={() => toggleRegistration(worker)} disabled={blockDangerActions}>
             {worker.registration_status === "PENDENTE" ? "Liberar cadastro" : "Bloquear cadastro"}
           </DropdownMenuItem>
-          <DropdownMenuItem onClick={() => openResetPassword(worker)} disabled={worker.can_manage === false}>
+          <DropdownMenuItem onClick={() => openResetPassword(worker)} disabled={blockDangerActions}>
             Resetar senha
           </DropdownMenuItem>
-          <DropdownMenuItem onClick={() => deleteWorker(worker)} disabled={worker.can_manage === false} className="text-rose-600 focus:text-rose-700">
+          <DropdownMenuItem onClick={() => deleteWorker(worker)} disabled={blockDangerActions} className="text-rose-600 focus:text-rose-700">
             Deletar usuario
           </DropdownMenuItem>
         </DropdownMenuContent>

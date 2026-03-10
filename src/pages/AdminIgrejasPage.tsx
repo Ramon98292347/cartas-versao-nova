@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Church } from "lucide-react";
 import { ManagementShell } from "@/components/layout/ManagementShell";
 import { AdminChurchesTab } from "@/components/admin/AdminChurchesTab";
-import { listChurchesInScope } from "@/services/saasService";
+import { listChurchesInScope, listChurchesInScopePaged } from "@/services/saasService";
 import { Card, CardContent } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { PageLoading } from "@/components/shared/PageLoading";
@@ -43,18 +43,27 @@ export default function AdminIgrejasPage() {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
 
-  const { data: allRows = [], isLoading, isFetching } = useQuery({
-    queryKey: ["admin-igrejas-page-all"],
+  const { data: optionsRows = [] } = useQuery({
+    queryKey: ["admin-igrejas-options"],
     queryFn: () => listChurchesInScope(1, 1000),
   });
 
-  const showPageLoading = isLoading || (isFetching && allRows.length === 0);
+  const { data: pageData, isLoading, isFetching } = useQuery({
+    queryKey: ["admin-igrejas-page", page, pageSize, filterTotvs],
+    queryFn: () => listChurchesInScopePaged(page, pageSize, filterTotvs === "all" ? undefined : filterTotvs),
+    staleTime: 30_000,
+  });
 
-  const filteredRows = useMemo(() => {
-    if (filterTotvs === "all") return allRows;
+  const rows = pageData?.churches || [];
+  const total = Number(pageData?.total || 0);
+
+  const showPageLoading = isLoading || (isFetching && rows.length === 0);
+
+  const filteredRowsForCounters = useMemo(() => {
+    if (filterTotvs === "all") return optionsRows;
 
     const children = new Map<string, string[]>();
-    for (const church of allRows) {
+    for (const church of optionsRows) {
       const parent = String(church.parent_totvs_id || "");
       if (!children.has(parent)) children.set(parent, []);
       children.get(parent)!.push(String(church.totvs_id));
@@ -69,27 +78,21 @@ export default function AdminIgrejasPage() {
       for (const child of children.get(current) || []) queue.push(child);
     }
 
-    return allRows.filter((church) => scope.has(String(church.totvs_id)));
-  }, [allRows, filterTotvs]);
+    return optionsRows.filter((church) => scope.has(String(church.totvs_id)));
+  }, [optionsRows, filterTotvs]);
 
-  const total = filteredRows.length;
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
-  const rows = useMemo(() => {
-    const from = (page - 1) * pageSize;
-    const to = from + pageSize;
-    return filteredRows.slice(from, to);
-  }, [filteredRows, page, pageSize]);
 
   const totals = useMemo(() => {
     return {
-      total: filteredRows.length,
-      estadual: filteredRows.filter((c) => String(c.church_class || "").toLowerCase() === "estadual").length,
-      setorial: filteredRows.filter((c) => String(c.church_class || "").toLowerCase() === "setorial").length,
-      central: filteredRows.filter((c) => String(c.church_class || "").toLowerCase() === "central").length,
-      regional: filteredRows.filter((c) => String(c.church_class || "").toLowerCase() === "regional").length,
-      local: filteredRows.filter((c) => String(c.church_class || "").toLowerCase() === "local").length,
+      total: filteredRowsForCounters.length,
+      estadual: filteredRowsForCounters.filter((c) => String(c.church_class || "").toLowerCase() === "estadual").length,
+      setorial: filteredRowsForCounters.filter((c) => String(c.church_class || "").toLowerCase() === "setorial").length,
+      central: filteredRowsForCounters.filter((c) => String(c.church_class || "").toLowerCase() === "central").length,
+      regional: filteredRowsForCounters.filter((c) => String(c.church_class || "").toLowerCase() === "regional").length,
+      local: filteredRowsForCounters.filter((c) => String(c.church_class || "").toLowerCase() === "local").length,
     };
-  }, [filteredRows]);
+  }, [filteredRowsForCounters]);
 
   const tone = {
     total: { bg: "#F5F3FF", border: "#DDD6FE", accent: "#7C3AED" },
@@ -122,7 +125,7 @@ export default function AdminIgrejasPage() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Todas no escopo</SelectItem>
-                {allRows.map((church) => (
+                {optionsRows.map((church) => (
                   <SelectItem key={church.totvs_id} value={String(church.totvs_id)}>
                     {church.totvs_id} - {church.church_name}
                   </SelectItem>
