@@ -73,10 +73,8 @@ function buildPublicCartaUrl(storagePath: unknown) {
   return `${supabaseUrl}/storage/v1/object/public/cartas/${normalized}`;
 }
 
-function buildCartaUrlByLetterId(letterId: unknown) {
-  const id = String(letterId || "").trim();
-  if (!id) return "";
-  return buildPublicCartaUrl(`documentos/cartas/${id}.pdf`);
+function isUrlPronta(letter: PastorLetter) {
+  return letter.url_pronta === true;
 }
 
 // Comentario: dashboard do obreiro padronizado com o mesmo layout SaaS do sistema.
@@ -297,12 +295,13 @@ export default function UsuarioDashboard() {
   async function openPdf(letter: PastorLetter) {
     if (isCadastroPendente) return toast.error("Cadastro pendente. Procure a secretaria da igreja.");
     if (letter.status !== "LIBERADA" && !hasDirectRelease) return toast.error("Carta bloqueada.");
+    if (!isUrlPronta(letter)) return toast.error("PDF ainda nao liberado para visualizacao.");
+    const storagePath = normalizeStoragePath(letter.storage_path);
+    if (!storagePath) return toast.error("PDF ainda não disponível.");
 
     try {
-      const storagePath = normalizeStoragePath(letter.storage_path);
       const publicUrl = buildPublicCartaUrl(storagePath);
-      const inferredUrl = buildCartaUrlByLetterId(letter.id);
-      const url = publicUrl || inferredUrl || await getSignedPdfUrl(letter.id);
+      const url = publicUrl || await getSignedPdfUrl(letter.id);
       if (!url) throw new Error("signed-url-empty");
       window.open(url, "_blank");
     } catch {
@@ -313,11 +312,12 @@ export default function UsuarioDashboard() {
   async function shareLetter(letter: PastorLetter) {
     if (isCadastroPendente) return toast.error("Cadastro pendente. Compartilhamento bloqueado.");
     if (letter.status !== "LIBERADA" && !hasDirectRelease) return toast.error("Carta bloqueada.");
+    if (!isUrlPronta(letter)) return toast.error("PDF ainda nao liberado para compartilhamento.");
+    const storagePath = normalizeStoragePath(letter.storage_path);
+    if (!storagePath) return toast.error("PDF ainda não disponível.");
     try {
-      const storagePath = normalizeStoragePath(letter.storage_path);
       const publicUrl = buildPublicCartaUrl(storagePath);
-      const inferredUrl = buildCartaUrlByLetterId(letter.id);
-      const url = publicUrl || inferredUrl || await getSignedPdfUrl(letter.id);
+      const url = publicUrl || await getSignedPdfUrl(letter.id);
       if (!url) throw new Error("share-url-empty");
       window.open(`https://wa.me/?text=${encodeURIComponent(`Carta de pregacao: ${url}`)}`, "_blank");
     } catch {
@@ -496,7 +496,10 @@ export default function UsuarioDashboard() {
 
             <div className="space-y-3 md:hidden">
               {filteredLetters.map((letter) => {
-                const canOpen = letter.status === "LIBERADA" || (hasDirectRelease && !["BLOQUEADO", "AGUARDANDO_LIBERACAO"].includes(letter.status));
+                const hasPdfUrl = isUrlPronta(letter) && Boolean(normalizeStoragePath(letter.storage_path));
+                const canOpen =
+                  hasPdfUrl &&
+                  (letter.status === "LIBERADA" || (hasDirectRelease && !["BLOQUEADO", "AGUARDANDO_LIBERACAO"].includes(letter.status)));
                 const canRequest = !hasDirectRelease && (letter.status === "AUTORIZADO" || letter.status === "AGUARDANDO_LIBERACAO");
                 return (
                   <Card key={letter.id} className="border border-slate-200">
@@ -542,7 +545,10 @@ export default function UsuarioDashboard() {
                   <span>Acoes</span>
                 </div>
                 {filteredLetters.map((letter) => {
-                  const canOpen = letter.status === "LIBERADA" || (hasDirectRelease && !["BLOQUEADO", "AGUARDANDO_LIBERACAO"].includes(letter.status));
+                  const hasPdfUrl = isUrlPronta(letter) && Boolean(normalizeStoragePath(letter.storage_path));
+                  const canOpen =
+                    hasPdfUrl &&
+                    (letter.status === "LIBERADA" || (hasDirectRelease && !["BLOQUEADO", "AGUARDANDO_LIBERACAO"].includes(letter.status)));
                   const canRequest = !hasDirectRelease && (letter.status === "AUTORIZADO" || letter.status === "AGUARDANDO_LIBERACAO");
                   return (
                     <div key={letter.id} className="grid grid-cols-[120px_120px_180px_180px_120px_1fr] items-center border-b px-4 py-3 text-sm">

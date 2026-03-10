@@ -14,7 +14,7 @@ import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useQuery } from "@tanstack/react-query";
 import { fetchChurches } from "@/services/churchService";
-import { createLetterByPastor, getPastorByTotvsPublic } from "@/services/saasService";
+import { createLetterByPastor, getPastorByTotvsPublic, setLetterStatus } from "@/services/saasService";
 import { format, parse } from "date-fns";
 import { useUser } from "@/context/UserContext";
 import { getIgrejaByTotvs } from "@/services/userService";
@@ -36,6 +36,7 @@ type LegacyUsuarioExtra = {
 };
 
 type CreateLetterResult = {
+  letter?: { id?: string };
   n8n?: { ok?: boolean };
 };
 
@@ -307,6 +308,17 @@ const Index = () => {
         phone: (values.telefone || "").replace(/\D/g, ""),
         email: usuarioEmail || (usuario as LegacyUsuarioExtra | null)?.email || null,
       })) as CreateLetterResult;
+
+      const directReleaseEnabled = Boolean((usuario as LegacyUsuarioExtra & { can_create_released_letter?: boolean } | null)?.can_create_released_letter);
+      const isObreiro = String(usuario?.role || "").toLowerCase() === "obreiro";
+      const createdLetterId = String(result?.letter?.id || "");
+      if (isObreiro && directReleaseEnabled && createdLetterId) {
+        try {
+          await setLetterStatus(createdLetterId, "LIBERADA");
+        } catch {
+          // Comentario: nao bloqueia o fluxo da carta quando falhar liberacao automatica.
+        }
+      }
 
       if (result?.n8n?.ok === false) {
         toast.warning("Carta criada, mas houve falha ao enviar para geração do PDF.");

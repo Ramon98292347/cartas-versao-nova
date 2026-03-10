@@ -127,30 +127,44 @@ Deno.serve(async (req) => {
     if (cErr) return json({ ok: false, error: "db_error_church", details: cErr.message }, 500);
     if (!church) return json({ ok: false, error: "church_not_found" }, 404);
 
-    let q = sb
-      .from("letters")
-      .select(
-        "id, preacher_name, minister_role, preach_date, church_origin, church_destination, status, storage_path, created_at",
-        { count: "exact" }
-      )
-      .eq("church_totvs_id", effectiveTotvs)
-      .neq("status", "EXCLUIDA");
+    function buildLettersQuery(includeUrlPronta: boolean) {
+      const selectFields = includeUrlPronta
+        ? "id, preacher_name, minister_role, preach_date, church_origin, church_destination, status, storage_path, url_pronta, created_at"
+        : "id, preacher_name, minister_role, preach_date, church_origin, church_destination, status, storage_path, created_at";
 
-    const preacherName = String(user.full_name || "").trim();
-    if (preacherName) {
-      const safeName = preacherName.replace(/[%,"']/g, "").trim();
-      q = q.or(`preacher_user_id.eq.${user_id},and(preacher_user_id.is.null,preacher_name.ilike.%${safeName}%)`);
-    } else {
-      q = q.eq("preacher_user_id", user_id);
+      let q = sb
+        .from("letters")
+        .select(selectFields, { count: "exact" })
+        .eq("church_totvs_id", effectiveTotvs)
+        .neq("status", "EXCLUIDA");
+
+      const preacherName = String(user.full_name || "").trim();
+      if (preacherName) {
+        const safeName = preacherName.replace(/[%,"']/g, "").trim();
+        q = q.or(`preacher_user_id.eq.${user_id},and(preacher_user_id.is.null,preacher_name.ilike.%${safeName}%)`);
+      } else {
+        q = q.eq("preacher_user_id", user_id);
+      }
+
+      if (dateStart) q = q.gte("created_at", startOfDayISO(dateStart));
+      if (dateEnd) q = q.lte("created_at", endOfDayISO(dateEnd));
+
+      return q.order("created_at", { ascending: false }).range(from, to);
     }
 
-    if (dateStart) q = q.gte("created_at", startOfDayISO(dateStart));
-    if (dateEnd) q = q.lte("created_at", endOfDayISO(dateEnd));
+    let lettersResult = await buildLettersQuery(true);
+    let fallbackWithoutUrlPronta = false;
+    if (lettersResult.error && String(lettersResult.error.message || "").toLowerCase().includes("url_pronta")) {
+      lettersResult = await buildLettersQuery(false);
+      fallbackWithoutUrlPronta = true;
+    }
 
-    q = q.order("created_at", { ascending: false }).range(from, to);
-
-    const { data: letters, error: lErr, count } = await q;
+    const { data: lettersRaw, error: lErr, count } = lettersResult;
     if (lErr) return json({ ok: false, error: "db_error_letters", details: lErr.message }, 500);
+
+    const letters = fallbackWithoutUrlPronta && Array.isArray(lettersRaw)
+      ? lettersRaw.map((row: Record<string, unknown>) => ({ ...row, url_pronta: false }))
+      : lettersRaw;
 
     return json(
       {

@@ -517,7 +517,7 @@ export function ObreirosTab({ activeTotvsId }: { activeTotvsId: string }) {
                 <span>Cargo</span>
                 <span>Tipo</span>
                 <span>Status</span>
-                <span>Cadastro</span>
+                <span>Carta direta</span>
                 <span>Ver</span>
                 <span>Acoes</span>
               </div>
@@ -540,8 +540,8 @@ export function ObreirosTab({ activeTotvsId }: { activeTotvsId: string }) {
                   <span className={`inline-flex w-fit rounded-full px-2 py-1 text-xs ${w.is_active === false ? "bg-rose-100 text-rose-700" : "bg-emerald-100 text-emerald-700"}`}>
                     {w.is_active === false ? "Inativo" : "Ativo"}
                   </span>
-                  <span className={`inline-flex w-fit rounded-full px-2 py-1 text-xs ${w.registration_status === "PENDENTE" ? "bg-amber-100 text-amber-700" : "bg-blue-100 text-blue-700"}`}>
-                    {w.registration_status === "PENDENTE" ? "Pendente" : "Liberado"}
+                  <span className={`inline-flex w-fit rounded-full px-2 py-1 text-xs ${w.can_create_released_letter ? "bg-blue-100 text-blue-700" : "bg-rose-100 text-rose-700"}`}>
+                    {w.can_create_released_letter ? "Liberado" : "Bloqueado"}
                   </span>
                   <div><Button size="sm" variant="outline" onClick={() => openView(w)}>Visualizar</Button></div>
                   <div>{renderWorkerActions(w)}</div>
@@ -568,7 +568,7 @@ export function ObreirosTab({ activeTotvsId }: { activeTotvsId: string }) {
                       <p className="text-slate-600">Telefone: {w.phone || "-"}</p>
                       <p className="text-slate-600">Cargo: {w.minister_role || "-"}</p>
                       <p className="text-slate-600">
-                        Cadastro: {w.registration_status === "PENDENTE" ? "Pendente" : "Liberado"}
+                        Carta direta: {w.can_create_released_letter ? "Liberado" : "Bloqueado"}
                       </p>
                     </div>
                   </div>

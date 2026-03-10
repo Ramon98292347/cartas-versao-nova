@@ -24,6 +24,7 @@ export type Usuario = {
   central_totvs?: string | null;
   central_nome?: string | null;
   registration_status?: "APROVADO" | "PENDENTE" | null;
+  can_create_released_letter?: boolean | null;
 };
 
 export type AppSession = {

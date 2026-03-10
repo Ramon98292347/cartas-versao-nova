@@ -64,6 +64,7 @@ export type PastorLetter = {
   minister_role: string | null;
   status: string;
   storage_path: string | null;
+  url_pronta?: boolean | null;
   phone?: string | null;
   block_reason?: string | null;
   preacher_user_id?: string | null;
@@ -591,6 +592,7 @@ function mapLetterLike(raw: Record<string, unknown> | null | undefined): PastorL
     minister_role: raw?.minister_role || null,
     status: String(raw?.status || "AUTORIZADO"),
     storage_path: raw?.storage_path || null,
+    url_pronta: typeof raw?.url_pronta === "boolean" ? raw.url_pronta : null,
     phone: raw?.phone ? String(raw.phone) : null,
     block_reason: raw?.block_reason || null,
     preacher_user_id: raw?.preacher_user_id || null,

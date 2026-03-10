@@ -17,8 +17,10 @@ type ErrorLike = {
 };
 
 const CODE_MAP: Record<string, string> = {
-  invalid_login: "CPF ou senha inválidos.",
-  invalid_credentials: "CPF ou senha inválidos.",
+  invalid_login: "CPF ou senha errada. Tente novamente ou clique em Esquecer senha.",
+  "invalid-credentials": "CPF ou senha errada. Tente novamente ou clique em Esquecer senha.",
+  invalid_credentials: "CPF ou senha errada. Tente novamente ou clique em Esquecer senha.",
+  unauthorized: "CPF ou senha errada. Tente novamente ou clique em Esquecer senha.",
   missing_jwt_secret: "Erro no servidor: USER_SESSION_JWT_SECRET não configurado.",
   forbidden_wrong_church: "Você não pode alterar membros de outra igreja.",
   target_is_not_obreiro: "Ação permitida apenas para membros.",
@@ -39,7 +41,7 @@ const CODE_MAP: Record<string, string> = {
 };
 
 const DEFAULT_MAP: Record<ErrorContext, string> = {
-  auth: "Falha ao autenticar.",
+  auth: "CPF ou senha errada. Tente novamente ou clique em Esquecer senha.",
   workers: "Falha ao processar membro.",
   churches: "Falha ao processar igreja.",
   announcements: "Falha ao processar divulgação.",

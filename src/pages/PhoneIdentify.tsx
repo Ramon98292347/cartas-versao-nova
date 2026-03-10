@@ -149,6 +149,7 @@ export default function PhoneIdentify() {
         address_json: result.user.address_json || null,
         ministerial: result.user.minister_role || null,
         registration_status: registrationStatus,
+        can_create_released_letter: Boolean(result.user.can_create_released_letter),
         data_separacao: null,
         totvs: fixedSession.totvs_id || null,
         default_totvs_id: fixedSession.totvs_id || null,
