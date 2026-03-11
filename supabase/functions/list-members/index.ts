@@ -203,16 +203,12 @@ Deno.serve(async (req) => {
     const { data: users, error: usersErr } = await q;
     if (usersErr) return json({ ok: false, error: "db_error_users", details: usersErr.message }, 500);
 
-    let filterScope: Set<string> | null = null;
-    if (churchTotvsFilter) {
-      filterScope = computeScope(churchTotvsFilter, churchRows);
-    }
-
     const filtered = (users || []).filter((u: Record<string, unknown>) => {
       const defaultTotvs = String(u.default_totvs_id || "").trim();
       if (!defaultTotvs) return false;
       if (!scope.has(defaultTotvs)) return false;
-      if (filterScope && !filterScope.has(defaultTotvs)) return false;
+      // Comentario: quando seleciona uma igreja, traz somente membros dessa igreja (sem filhas).
+      if (churchTotvsFilter && defaultTotvs !== churchTotvsFilter) return false;
       return true;
     });
 

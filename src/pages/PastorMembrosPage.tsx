@@ -942,8 +942,8 @@ export default function PastorMembrosPage() {
         <CardContent className="p-4">
           <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
             <div>
-              <p className="text-sm font-semibold text-slate-900">Filtrar por igreja e filhas</p>
-              <p className="text-xs text-slate-500">Role mãe pode selecionar uma igreja para ver membros dela e das filhas.</p>
+              <p className="text-sm font-semibold text-slate-900">Filtrar por igreja</p>
+              <p className="text-xs text-slate-500">Mostra somente os membros da igreja selecionada.</p>
             </div>
             <div className="w-full lg:w-[360px]">
               <Select
