@@ -51,6 +51,7 @@ export function CartasTab({
   phonesByName,
   viewerRole,
   viewerUserId,
+  allowScopeView,
 }: {
   letters: PastorLetter[];
   scopeTotvsIds: string[];
@@ -58,6 +59,7 @@ export function CartasTab({
   phonesByName: Record<string, string>;
   viewerRole: "admin" | "pastor";
   viewerUserId: string;
+  allowScopeView: boolean;
 }) {
   const queryClient = useQueryClient();
 
@@ -163,7 +165,7 @@ export function CartasTab({
 
   function canViewOrShare(letter: PastorLetter) {
     // Comentario: para pastor, abrir/compartilhar apenas carta dele (preacher_user_id).
-    if (viewerRole === "pastor") {
+    if (viewerRole === "pastor" && !allowScopeView) {
       const ownerId = String(letter.preacher_user_id || "").trim();
       if (!ownerId || ownerId !== String(viewerUserId || "").trim()) return false;
     }

@@ -64,6 +64,7 @@ export default function CartasDashboardPage() {
     if (fromChurches.length) return fromChurches;
     return scopeTotvsIds;
   }, [churchesInScope, scopeTotvsIds]);
+  const allowScopeView = roleMode === "admin" || effectiveScopeTotvsIds.length > 1;
 
   const { data: metrics, isLoading: loadingMetrics, isFetching: fetchingMetrics } = useQuery({
     queryKey: ["cartas-dashboard-metrics", effectiveScopeTotvsIds.join("|")],
@@ -211,6 +212,7 @@ export default function CartasDashboardPage() {
           phonesByName={phonesByName}
           viewerRole={roleMode as "admin" | "pastor"}
           viewerUserId={String(usuario?.id || "")}
+          allowScopeView={allowScopeView}
         />
       </div>
     </ManagementShell>

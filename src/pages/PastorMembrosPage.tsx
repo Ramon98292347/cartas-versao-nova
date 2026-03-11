@@ -654,6 +654,7 @@ export default function PastorMembrosPage() {
   const [fichaTemplate, setFichaTemplate] = useState<FichaTemplate>("padrao");
   const [membersPage, setMembersPage] = useState(1);
   const [membersPageSize, setMembersPageSize] = useState(50);
+  const [filterTotvs, setFilterTotvs] = useState("all");
   const [savingDraft, setSavingDraft] = useState(false);
   const [sending, setSending] = useState(false);
   const [cepLookupLoading, setCepLookupLoading] = useState(false);
@@ -662,8 +663,14 @@ export default function PastorMembrosPage() {
   const fichaMembroHtml = useMemo(() => buildFichaMembroHtml(form), [form]);
 
   const { data, isLoading: loadingMembers, isFetching: fetchingMembers, refetch: refetchMembers } = useQuery({
-    queryKey: ["pastor-members-page", membersPage, membersPageSize],
-    queryFn: () => listMembers({ page: membersPage, page_size: membersPageSize, roles: ["pastor", "obreiro"] }),
+    queryKey: ["pastor-members-page", membersPage, membersPageSize, filterTotvs],
+    queryFn: () =>
+      listMembers({
+        page: membersPage,
+        page_size: membersPageSize,
+        roles: ["pastor", "obreiro"],
+        church_totvs_id: filterTotvs === "all" ? undefined : filterTotvs,
+      }),
     staleTime: 30_000,
   });
 
@@ -695,6 +702,24 @@ export default function PastorMembrosPage() {
       cep: activeChurch?.cep || "",
     });
   }, [activeChurch]);
+  const churchFilterOptions = useMemo(() => {
+    if (!activeTotvsId || churchesInScope.length === 0) return [];
+    const children = new Map<string, string[]>();
+    for (const church of churchesInScope) {
+      const parent = String(church.parent_totvs_id || "");
+      if (!children.has(parent)) children.set(parent, []);
+      children.get(parent)!.push(String(church.totvs_id));
+    }
+    const scope = new Set<string>();
+    const queue = [activeTotvsId];
+    while (queue.length) {
+      const cur = queue.shift()!;
+      if (scope.has(cur)) continue;
+      scope.add(cur);
+      for (const child of children.get(cur) || []) queue.push(child);
+    }
+    return churchesInScope.filter((church) => scope.has(String(church.totvs_id)));
+  }, [churchesInScope, activeTotvsId]);
   const rodapeAuto = useMemo(() => churchFooter || form.ficha_rodape || "", [churchFooter, form.ficha_rodape]);
   const selectedMember = useMemo(
     () => workers.find((member) => String(member.id) === selectedMemberId) || null,
@@ -808,11 +833,17 @@ export default function PastorMembrosPage() {
     if (membersPage >= membersTotalPages) return;
     const nextPage = membersPage + 1;
     void queryClient.prefetchQuery({
-      queryKey: ["pastor-members-page", nextPage, membersPageSize],
-      queryFn: () => listMembers({ page: nextPage, page_size: membersPageSize, roles: ["pastor", "obreiro"] }),
+      queryKey: ["pastor-members-page", nextPage, membersPageSize, filterTotvs],
+      queryFn: () =>
+        listMembers({
+          page: nextPage,
+          page_size: membersPageSize,
+          roles: ["pastor", "obreiro"],
+          church_totvs_id: filterTotvs === "all" ? undefined : filterTotvs,
+        }),
       staleTime: 30_000,
     });
-  }, [membersPage, membersPageSize, membersTotalPages, queryClient]);
+  }, [membersPage, membersPageSize, membersTotalPages, filterTotvs, queryClient]);
 
   async function saveDraft() {
     if (!selectedMemberId) {
@@ -906,6 +937,38 @@ export default function PastorMembrosPage() {
         <MiniCard title="Obreiro" value={counters.obreiro} subtitle="obreiros" tone={memberTone.obreiro} />
         <MiniCard title="Membros ativos" value={counters.batizados} subtitle="ministerio membro" tone={memberTone.batizados} />
       </section>
+
+      <Card className="mb-4 rounded-2xl border border-slate-200 bg-white shadow-sm">
+        <CardContent className="p-4">
+          <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
+            <div>
+              <p className="text-sm font-semibold text-slate-900">Filtrar por igreja e filhas</p>
+              <p className="text-xs text-slate-500">Role mãe pode selecionar uma igreja para ver membros dela e das filhas.</p>
+            </div>
+            <div className="w-full lg:w-[360px]">
+              <Select
+                value={filterTotvs}
+                onValueChange={(value) => {
+                  setFilterTotvs(value);
+                  setMembersPage(1);
+                }}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecione a igreja" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todas as igrejas do escopo</SelectItem>
+                  {churchFilterOptions.map((church) => (
+                    <SelectItem key={String(church.totvs_id)} value={String(church.totvs_id)}>
+                      {church.totvs_id} - {church.church_name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       <Card className="mb-4 rounded-2xl border border-slate-200 bg-white shadow-sm">
         <CardContent className="flex flex-col gap-3 p-4 lg:flex-row lg:items-center lg:justify-between">

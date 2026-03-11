@@ -193,8 +193,6 @@ Deno.serve(async (req) => {
       .in("role", roles)
       .order("full_name", { ascending: true });
 
-    if (churchTotvsFilter) q = q.eq("default_totvs_id", churchTotvsFilter);
-
     if (typeof body.is_active === "boolean") q = q.eq("is_active", body.is_active);
     if (body.minister_role) q = q.eq("minister_role", body.minister_role);
     if (body.search) {
@@ -205,10 +203,17 @@ Deno.serve(async (req) => {
     const { data: users, error: usersErr } = await q;
     if (usersErr) return json({ ok: false, error: "db_error_users", details: usersErr.message }, 500);
 
+    let filterScope: Set<string> | null = null;
+    if (churchTotvsFilter) {
+      filterScope = computeScope(churchTotvsFilter, churchRows);
+    }
+
     const filtered = (users || []).filter((u: Record<string, unknown>) => {
       const defaultTotvs = String(u.default_totvs_id || "").trim();
       if (!defaultTotvs) return false;
-      return scope.has(defaultTotvs);
+      if (!scope.has(defaultTotvs)) return false;
+      if (filterScope && !filterScope.has(defaultTotvs)) return false;
+      return true;
     });
 
     const mapped = filtered.map((u: Record<string, unknown>) => {

@@ -56,25 +56,27 @@ Deno.serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "",
     );
 
-    // Comentario: marca lidas as notificacoes da igreja ativa e as notificacoes individuais do usuario.
-    const nowIso = new Date().toISOString();
+    // Comentario: "Limpar notificacoes" remove do sininho.
+    // Regra: deleta todas as notificacoes da igreja ativa + individuais do usuario.
+    const [{ data: churchRows, error: churchErr }, { data: userRows, error: userErr }] = await Promise.all([
+      sb.from("notifications").select("id").eq("church_totvs_id", session.active_totvs_id),
+      sb.from("notifications").select("id").eq("user_id", session.user_id),
+    ]);
 
-    const { error: churchErr } = await sb
-      .from("notifications")
-      // Comentario: marca como lida tanto por is_read quanto por read_at.
-      .update({ is_read: true, read_at: nowIso })
-      .eq("church_totvs_id", session.active_totvs_id)
-      .or("is_read.eq.false,read_at.is.null");
-    if (churchErr) return json({ ok: false, error: "db_error_update_church", details: churchErr.message }, 500);
+    if (churchErr) return json({ ok: false, error: "db_error_list_church", details: churchErr.message }, 500);
+    if (userErr) return json({ ok: false, error: "db_error_list_user", details: userErr.message }, 500);
 
-    const { error: userErr } = await sb
-      .from("notifications")
-      .update({ is_read: true, read_at: nowIso })
-      .eq("user_id", session.user_id)
-      .or("is_read.eq.false,read_at.is.null");
-    if (userErr) return json({ ok: false, error: "db_error_update_user", details: userErr.message }, 500);
+    const ids = new Set<string>();
+    for (const r of churchRows || []) ids.add(String((r as Record<string, unknown>).id || ""));
+    for (const r of userRows || []) ids.add(String((r as Record<string, unknown>).id || ""));
+    const idList = [...ids].filter(Boolean);
 
-    return json({ ok: true }, 200);
+    if (idList.length === 0) return json({ ok: true, deleted: 0 }, 200);
+
+    const { error: delErr } = await sb.from("notifications").delete().in("id", idList);
+    if (delErr) return json({ ok: false, error: "db_error_delete", details: delErr.message }, 500);
+
+    return json({ ok: true, deleted: idList.length }, 200);
   } catch (err) {
     return json({ ok: false, error: "exception", details: String(err) }, 500);
   }
