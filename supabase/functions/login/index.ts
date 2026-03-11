@@ -154,8 +154,35 @@ Deno.serve(async (req) => {
       if (!ok) return json({ ok: false, error: "invalid-credentials" }, 401);
     }
 
-    const access = normalizeTotvsAccess(user.totvs_access, userRole);
-    if (access.length === 0) return json({ ok: false, error: "no_totvs_access" }, 403);
+    let access = normalizeTotvsAccess(user.totvs_access, userRole);
+
+    // Comentario: fallback para bases antigas/importadas sem totvs_access,
+    // usando default_totvs_id para nao bloquear primeiro login.
+    if (access.length === 0) {
+      const defaultTotvsFallback = String(user.default_totvs_id || "").trim();
+      if (defaultTotvsFallback) {
+        access = [{ totvs_id: defaultTotvsFallback, role: userRole }];
+        await sb
+          .from("users")
+          .update({ totvs_access: access })
+          .eq("id", user.id);
+      }
+    }
+
+    if (access.length === 0 && userRole === "admin") {
+      const { data: allForAdmin, error: allForAdminErr } = await sb
+        .from("churches")
+        .select("totvs_id")
+        .order("totvs_id", { ascending: true });
+      if (allForAdminErr) return json({ ok: false, error: "db_error_admin_access", details: allForAdminErr.message }, 500);
+      const ids = (allForAdmin || []).map((c) => String(c.totvs_id || "")).filter(Boolean);
+      access = ids.map((id) => ({ totvs_id: id, role: "admin" }));
+      if (ids.length > 0) {
+        await sb.from("users").update({ totvs_access: access }).eq("id", user.id);
+      }
+    }
+
+    if (access.length === 0) return json({ ok: false, error: "no_totvs_access", message: "Usuario sem acesso de igreja." }, 403);
     const totvsIds = access.map((a) => a.totvs_id);
 
     const { data: churchesMeta, error: mErr } = await sb
@@ -187,6 +214,8 @@ Deno.serve(async (req) => {
       else if (pastorAccess.length === 1) activeTotvs = pastorAccess[0];
       else if (defaultAllowed) activeTotvs = defaultAllowed;
       else if (churchesForUI.length === 1) activeTotvs = churchesForUI[0].totvs_id;
+    } else if (userRole === "admin") {
+      activeTotvs = defaultAllowed || (churchesForUI.length > 0 ? churchesForUI[0].totvs_id : "");
     } else {
       activeTotvs = defaultAllowed || (churchesForUI.length === 1 ? churchesForUI[0].totvs_id : "");
     }
@@ -204,7 +233,8 @@ Deno.serve(async (req) => {
     const { data: allChurches, error: aErr } = await sb.from("churches").select("totvs_id, parent_totvs_id");
     if (aErr) return json({ ok: false, error: "db_error_scope", details: aErr.message }, 500);
     const all = (allChurches || []) as ChurchRow[];
-    const scope_totvs_ids = computeScope(activeTotvs, all);
+    const scope_totvs_ids =
+      userRole === "admin" ? all.map((c) => String(c.totvs_id || "")).filter(Boolean) : computeScope(activeTotvs, all);
     const root_totvs_id = computeRootTotvs(activeTotvs, all);
     const activeMeta = metaByTotvs.get(activeTotvs);
 
