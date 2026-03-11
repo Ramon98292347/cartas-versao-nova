@@ -62,6 +62,7 @@ const Ctx = createContext<UserState | undefined>(undefined);
 
 const LS_USER = "ipda_user";
 const LS_TOKEN = "ipda_token";
+const LS_RLS_TOKEN = "ipda_rls_token";
 const LS_SESSION = "ipda_session";
 const LS_PENDING_CPF = "ipda_pending_cpf";
 const LS_CHURCHES = "ipda_pending_churches";
@@ -140,6 +141,7 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
 
     localStorage.removeItem(LS_USER);
     localStorage.removeItem(LS_TOKEN);
+    localStorage.removeItem(LS_RLS_TOKEN);
     localStorage.removeItem(LS_SESSION);
     localStorage.removeItem(LS_PENDING_CPF);
     localStorage.removeItem(LS_CHURCHES);
@@ -223,6 +225,7 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
   function clearAuth() {
     setUsuario(undefined);
     setToken(undefined);
+    localStorage.removeItem(LS_RLS_TOKEN);
     setSession(undefined);
     setPendingCpf(undefined);
     setAvailableChurches([]);

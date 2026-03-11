@@ -7,6 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { toast } from "sonner";
 import { selectChurchSession } from "@/services/saasService";
 import { useUser } from "@/context/UserContext";
+import { setRlsToken, setToken as setStoredToken } from "@/lib/api";
 
 function routeByRole(role: "admin" | "pastor" | "obreiro") {
   if (role === "admin") return "/admin/dashboard";
@@ -50,6 +51,8 @@ export default function SelectChurch() {
         ...data.session,
         root_totvs_id: data.session.root_totvs_id || data.session.totvs_id,
       };
+      setStoredToken(data.token);
+      setRlsToken(data.rls_token || null);
       setToken(data.token);
       setSession(fixedSession);
       if (fixedSession.totvs_id) localStorage.setItem("ipda_last_totvs", fixedSession.totvs_id);

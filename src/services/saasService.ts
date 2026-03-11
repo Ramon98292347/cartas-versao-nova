@@ -35,6 +35,7 @@ export type LoginResult =
   | {
       mode: "authenticated";
       token: string;
+      rls_token?: string;
       user: AuthSessionData;
       session: AppSession;
     }
@@ -632,6 +633,7 @@ export async function loginWithCpfPassword(cpfInput: string, password: string): 
     return {
       mode: "authenticated",
       token: String(directToken),
+      rls_token: data?.rls_token ? String(data.rls_token) : undefined,
       user: mapUserLike(directUser),
       session: mapSessionLike(directSession),
     };
@@ -650,7 +652,7 @@ export async function loginWithCpfPassword(cpfInput: string, password: string): 
   throw new Error("invalid-login-response");
 }
 
-export async function selectChurchSession(cpfInput: string, totvsId: string): Promise<{ token: string; user: AuthSessionData; session: AppSession }> {
+export async function selectChurchSession(cpfInput: string, totvsId: string): Promise<{ token: string; rls_token?: string; user: AuthSessionData; session: AppSession }> {
   const cpf = normalizeCpf(cpfInput);
   if (cpf.length !== 11) throw new Error("cpf-invalid");
   if (!totvsId) throw new Error("totvs-required");
@@ -658,6 +660,7 @@ export async function selectChurchSession(cpfInput: string, totvsId: string): Pr
   const data = await api.selectChurch({ cpf, totvs_id: totvsId });
   return {
     token: String(data?.token || data?.jwt || ""),
+    rls_token: data?.rls_token ? String(data.rls_token) : undefined,
     user: mapUserLike(data?.user || data?.usuario || {}),
     session: mapSessionLike(data?.session || { totvs_id: totvsId }),
   };

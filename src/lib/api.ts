@@ -19,6 +19,7 @@ const SUPABASE_ANON_KEY = (import.meta.env.VITE_SUPABASE_ANON_KEY || import.meta
 const FUNCTIONS_BASE = `${SUPABASE_URL?.replace(/\/$/, "")}/functions/v1`;
 
 const TOKEN_KEY = "ipda_token";
+const RLS_TOKEN_KEY = "ipda_rls_token";
 const SESSION_KEY = "ipda_session";
 const USER_KEY = "ipda_user";
 const AUTH_CLEARED_EVENT = "ipda-auth-cleared";
@@ -52,8 +53,29 @@ export function setToken(token: string) {
   localStorage.setItem(TOKEN_KEY, normalizeToken(token));
 }
 
+export function getRlsToken(): string | null {
+  const raw = localStorage.getItem(RLS_TOKEN_KEY);
+  if (!raw) return null;
+  const token = normalizeToken(raw);
+  if (!token || token.split(".").length !== 3) return null;
+  return token;
+}
+
+export function setRlsToken(token?: string | null) {
+  const normalized = normalizeToken(String(token || ""));
+  if (!normalized || normalized.split(".").length !== 3) {
+    localStorage.removeItem(RLS_TOKEN_KEY);
+    return;
+  }
+  localStorage.setItem(RLS_TOKEN_KEY, normalized);
+}
+
 export function clearToken() {
   localStorage.removeItem(TOKEN_KEY);
+}
+
+export function clearRlsToken() {
+  localStorage.removeItem(RLS_TOKEN_KEY);
 }
 
 export function getSession(): Session | null {
@@ -94,6 +116,7 @@ export function clearUser() {
 
 export function logout() {
   clearToken();
+  clearRlsToken();
   clearSession();
   clearUser();
   if (typeof window !== "undefined") {

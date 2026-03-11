@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { useUser } from "@/context/UserContext";
-import { setToken as setStoredToken } from "@/lib/api";
+import { clearRlsToken, setRlsToken, setToken as setStoredToken } from "@/lib/api";
 import {
   forgotPasswordRequest,
   getMyRegistrationStatus,
@@ -121,6 +121,7 @@ export default function PhoneIdentify() {
         setPendingCpf(result.cpf);
         setAvailableChurches(result.churches);
         setToken(undefined);
+        clearRlsToken();
         setSession(undefined);
         setUsuario(undefined);
         nav("/select-church");
@@ -134,6 +135,7 @@ export default function PhoneIdentify() {
 
       // Comentario: persiste o token imediatamente para chamadas de API no mesmo fluxo.
       setStoredToken(result.token);
+      setRlsToken(result.rls_token || null);
       setToken(result.token);
       setSession(fixedSession);
       if (fixedSession.totvs_id) localStorage.setItem("ipda_last_totvs", fixedSession.totvs_id);
