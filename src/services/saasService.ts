@@ -1513,21 +1513,22 @@ export async function listAnnouncements(limit = 10): Promise<AnnouncementItem[]>
       .order("starts_at", { ascending: false, nullsFirst: false })
       .limit(safeLimit);
 
-    if (!error) {
-      const rows = Array.isArray(rowsRaw) ? rowsRaw : [];
-      return rows.map((item: Record<string, unknown>) => ({
-        id: String(item?.id || ""),
-        title: String(item?.title || "Aviso"),
-        type: (item?.type || "text") as "text" | "image" | "video",
-        body_text: item?.body_text || null,
-        media_url: toAnnouncementMediaUrl(item?.media_url),
-        link_url: item?.link_url || null,
-        position: typeof item?.position === "number" ? item.position : null,
-        starts_at: item?.starts_at || null,
-        ends_at: item?.ends_at || null,
-        is_active: typeof item?.is_active === "boolean" ? item.is_active : true,
-      }));
+    if (error) {
+      throw new Error(error.message || "Erro ao listar divulgações.");
     }
+    const rows = Array.isArray(rowsRaw) ? rowsRaw : [];
+    return rows.map((item: Record<string, unknown>) => ({
+      id: String(item?.id || ""),
+      title: String(item?.title || "Aviso"),
+      type: (item?.type || "text") as "text" | "image" | "video",
+      body_text: item?.body_text || null,
+      media_url: toAnnouncementMediaUrl(item?.media_url),
+      link_url: item?.link_url || null,
+      position: typeof item?.position === "number" ? item.position : null,
+      starts_at: item?.starts_at || null,
+      ends_at: item?.ends_at || null,
+      is_active: typeof item?.is_active === "boolean" ? item.is_active : true,
+    }));
   }
 
   if (!isMockMode()) {
