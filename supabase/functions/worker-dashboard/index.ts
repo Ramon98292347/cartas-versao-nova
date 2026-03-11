@@ -129,22 +129,23 @@ Deno.serve(async (req) => {
 
     function buildLettersQuery(includeUrlPronta: boolean) {
       const selectFields = includeUrlPronta
-        ? "id, preacher_name, minister_role, preach_date, church_origin, church_destination, status, storage_path, url_pronta, created_at"
+        ? "id, preacher_name, minister_role, preach_date, church_origin, church_destination, status, storage_path, url_pronta, url_carta, created_at"
         : "id, preacher_name, minister_role, preach_date, church_origin, church_destination, status, storage_path, created_at";
 
       let q = sb
         .from("letters")
         .select(selectFields, { count: "exact" })
-        .eq("church_totvs_id", effectiveTotvs)
         .neq("status", "EXCLUIDA");
 
-      const preacherName = String(user.full_name || "").trim();
-      if (preacherName) {
-        const safeName = preacherName.replace(/[%,"']/g, "").trim();
-        q = q.or(`preacher_user_id.eq.${user_id},and(preacher_user_id.is.null,preacher_name.ilike.%${safeName}%)`);
-      } else {
-        q = q.eq("preacher_user_id", user_id);
+      // Comentario: para obreiro, o historico e pessoal (do proprio pregador),
+      // independente da igreja ativa/default no token.
+      if (session.role !== "obreiro") {
+        q = q.eq("church_totvs_id", effectiveTotvs);
       }
+
+      // Comentario: regra fechada para obreiro.
+      // Sempre filtra pelo ID do usuario logado na coluna preacher_user_id.
+      q = q.eq("preacher_user_id", user_id);
 
       if (dateStart) q = q.gte("created_at", startOfDayISO(dateStart));
       if (dateEnd) q = q.lte("created_at", endOfDayISO(dateEnd));
@@ -154,7 +155,13 @@ Deno.serve(async (req) => {
 
     let lettersResult = await buildLettersQuery(true);
     let fallbackWithoutUrlPronta = false;
-    if (lettersResult.error && String(lettersResult.error.message || "").toLowerCase().includes("url_pronta")) {
+    if (
+      lettersResult.error &&
+      (
+        String(lettersResult.error.message || "").toLowerCase().includes("url_pronta") ||
+        String(lettersResult.error.message || "").toLowerCase().includes("url_carta")
+      )
+    ) {
       lettersResult = await buildLettersQuery(false);
       fallbackWithoutUrlPronta = true;
     }
@@ -163,7 +170,7 @@ Deno.serve(async (req) => {
     if (lErr) return json({ ok: false, error: "db_error_letters", details: lErr.message }, 500);
 
     const letters = fallbackWithoutUrlPronta && Array.isArray(lettersRaw)
-      ? lettersRaw.map((row: Record<string, unknown>) => ({ ...row, url_pronta: false }))
+      ? lettersRaw.map((row: Record<string, unknown>) => ({ ...row, url_pronta: false, url_carta: null }))
       : lettersRaw;
 
     return json(

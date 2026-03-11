@@ -58,25 +58,6 @@ function getAddressField(addressJson: unknown, key: string) {
   return String(address[key] || "");
 }
 
-function normalizeStoragePath(storagePath: unknown) {
-  const raw = String(storagePath || "").trim();
-  if (!raw || raw === "true" || raw === "false" || raw === "null" || raw === "undefined") return "";
-  if (raw.startsWith("http://") || raw.startsWith("https://")) return raw;
-  return raw.replace(/^\/+/, "");
-}
-
-function buildPublicCartaUrl(storagePath: unknown) {
-  const supabaseUrl = String(import.meta.env.VITE_SUPABASE_URL || "").replace(/\/$/, "");
-  const normalized = normalizeStoragePath(storagePath);
-  if (!normalized) return "";
-  if (normalized.startsWith("http://") || normalized.startsWith("https://")) return normalized;
-  return `${supabaseUrl}/storage/v1/object/public/cartas/${normalized}`;
-}
-
-function isUrlPronta(letter: PastorLetter) {
-  return letter.url_pronta === true;
-}
-
 // Comentario: dashboard do obreiro padronizado com o mesmo layout SaaS do sistema.
 export default function UsuarioDashboard() {
   const nav = useNavigate();
@@ -143,8 +124,8 @@ export default function UsuarioDashboard() {
   }, [isObreiro, statusFilter]);
 
   const { data, isLoading } = useQuery({
-    queryKey: ["worker-dashboard", userId, dateStart, dateEnd],
-    queryFn: () => workerDashboard(dateStart || undefined, dateEnd || undefined, 1, 80),
+    queryKey: ["worker-dashboard", userId],
+    queryFn: () => workerDashboard(undefined, undefined, 1, 200),
     enabled: Boolean(userId),
   });
 
@@ -292,36 +273,38 @@ export default function UsuarioDashboard() {
     };
   }, [filteredLetters]);
 
-  async function openPdf(letter: PastorLetter) {
+async function openPdf(letter: PastorLetter) {
     if (isCadastroPendente) return toast.error("Cadastro pendente. Procure a secretaria da igreja.");
     if (letter.status !== "LIBERADA" && !hasDirectRelease) return toast.error("Carta bloqueada.");
-    if (!isUrlPronta(letter)) return toast.error("PDF ainda nao liberado para visualizacao.");
-    const storagePath = normalizeStoragePath(letter.storage_path);
-    if (!storagePath) return toast.error("PDF ainda não disponível.");
+    const directUrl = String(letter.url_carta || "").trim();
+    if (directUrl.startsWith("http://") || directUrl.startsWith("https://")) {
+      window.open(directUrl, "_blank");
+      return;
+    }
 
     try {
-      const publicUrl = buildPublicCartaUrl(storagePath);
-      const url = publicUrl || await getSignedPdfUrl(letter.id);
+      const url = await getSignedPdfUrl(letter.id);
       if (!url) throw new Error("signed-url-empty");
       window.open(url, "_blank");
     } catch {
-      toast.error("Falha ao abrir PDF.");
+      toast.error("PDF ainda nao liberado. Use o botao Pedir liberacao.");
     }
   }
 
   async function shareLetter(letter: PastorLetter) {
     if (isCadastroPendente) return toast.error("Cadastro pendente. Compartilhamento bloqueado.");
     if (letter.status !== "LIBERADA" && !hasDirectRelease) return toast.error("Carta bloqueada.");
-    if (!isUrlPronta(letter)) return toast.error("PDF ainda nao liberado para compartilhamento.");
-    const storagePath = normalizeStoragePath(letter.storage_path);
-    if (!storagePath) return toast.error("PDF ainda não disponível.");
+    const directUrl = String(letter.url_carta || "").trim();
+    if (directUrl.startsWith("http://") || directUrl.startsWith("https://")) {
+      window.open(`https://wa.me/?text=${encodeURIComponent(`Carta de pregacao: ${directUrl}`)}`, "_blank");
+      return;
+    }
     try {
-      const publicUrl = buildPublicCartaUrl(storagePath);
-      const url = publicUrl || await getSignedPdfUrl(letter.id);
+      const url = await getSignedPdfUrl(letter.id);
       if (!url) throw new Error("share-url-empty");
       window.open(`https://wa.me/?text=${encodeURIComponent(`Carta de pregacao: ${url}`)}`, "_blank");
     } catch {
-      toast.error("Falha ao compartilhar.");
+      toast.error("PDF ainda nao liberado para compartilhamento.");
     }
   }
 
@@ -345,7 +328,7 @@ export default function UsuarioDashboard() {
   }
 
   async function baixarPrimeiraLiberada() {
-    const candidate = letters.find((l) => l.status === "LIBERADA" && Boolean(normalizeStoragePath(l.storage_path)));
+    const candidate = letters.find((l) => l.status === "LIBERADA");
     if (!candidate) return toast.error("Nenhuma carta liberada para baixar.");
     await openPdf(candidate);
   }
@@ -496,9 +479,7 @@ export default function UsuarioDashboard() {
 
             <div className="space-y-3 md:hidden">
               {filteredLetters.map((letter) => {
-                const hasPdfUrl = isUrlPronta(letter) && Boolean(normalizeStoragePath(letter.storage_path));
                 const canOpen =
-                  hasPdfUrl &&
                   (letter.status === "LIBERADA" || (hasDirectRelease && !["BLOQUEADO", "AGUARDANDO_LIBERACAO"].includes(letter.status)));
                 const canRequest = !hasDirectRelease && (letter.status === "AUTORIZADO" || letter.status === "AGUARDANDO_LIBERACAO");
                 return (
@@ -545,9 +526,7 @@ export default function UsuarioDashboard() {
                   <span>Acoes</span>
                 </div>
                 {filteredLetters.map((letter) => {
-                  const hasPdfUrl = isUrlPronta(letter) && Boolean(normalizeStoragePath(letter.storage_path));
                   const canOpen =
-                    hasPdfUrl &&
                     (letter.status === "LIBERADA" || (hasDirectRelease && !["BLOQUEADO", "AGUARDANDO_LIBERACAO"].includes(letter.status)));
                   const canRequest = !hasDirectRelease && (letter.status === "AUTORIZADO" || letter.status === "AGUARDANDO_LIBERACAO");
                   return (

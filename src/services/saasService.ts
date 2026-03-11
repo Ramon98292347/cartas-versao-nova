@@ -67,6 +67,7 @@ export type PastorLetter = {
   minister_role: string | null;
   status: string;
   storage_path: string | null;
+  url_carta?: string | null;
   url_pronta?: boolean | null;
   phone?: string | null;
   block_reason?: string | null;
@@ -607,6 +608,7 @@ function mapLetterLike(raw: Record<string, unknown> | null | undefined): PastorL
     minister_role: raw?.minister_role || null,
     status: String(raw?.status || "AUTORIZADO"),
     storage_path: raw?.storage_path || null,
+    url_carta: raw?.url_carta ? String(raw.url_carta) : null,
     url_pronta: typeof raw?.url_pronta === "boolean" ? raw.url_pronta : null,
     phone: raw?.phone ? String(raw.phone) : null,
     block_reason: raw?.block_reason || null,
@@ -697,6 +699,7 @@ export async function listPastorLetters(_activeTotvsId: string, filters: PastorF
       page: filters.page || 1,
       page_size: filters.pageSize || 50,
     };
+    if (_activeTotvsId) payload.church_totvs_id = _activeTotvsId;
     if (filters.period === "today") payload.quick = "today";
     if (filters.period === "7") payload.quick = "7d";
     if (filters.period === "30") payload.quick = "30d";
@@ -1413,17 +1416,65 @@ export async function getPastorByTotvsPublic(churchTotvsId: string): Promise<Pas
   const totvs = String(churchTotvsId || "").trim();
   if (!totvs || !supabase) return null;
 
-  const { data, error } = await supabase
-    .from("users")
-    .select("full_name,phone,email,avatar_url,minister_role,signature_url")
-    .eq("role", "pastor")
-    .eq("default_totvs_id", totvs)
-    .eq("is_active", true)
-    .order("updated_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
+  // Comentario: regra de hierarquia para cartas:
+  // - prioriza o pastor da igreja mae;
+  // - se nao existir, sobe para avo;
+  // - se nao achar nenhum acima, usa o pastor da propria igreja.
+  let pastorId = "";
+  try {
+    const { data: churches } = await supabase
+      .from("churches")
+      .select("totvs_id,parent_totvs_id,pastor_user_id");
 
-  if (error || !data) return null;
+    const byId = new Map<string, Record<string, unknown>>();
+    (churches || []).forEach((row) => byId.set(String((row as Record<string, unknown>).totvs_id || ""), row as Record<string, unknown>));
+
+    const currentRow = byId.get(totvs);
+    let current = String(currentRow?.parent_totvs_id || "").trim();
+    const seen = new Set<string>();
+    while (current && !seen.has(current)) {
+      seen.add(current);
+      const row = byId.get(current);
+      const candidate = String(row?.pastor_user_id || "").trim();
+      if (candidate) {
+        pastorId = candidate;
+        break;
+      }
+      current = String(row?.parent_totvs_id || "").trim();
+    }
+
+    if (!pastorId) {
+      pastorId = String(currentRow?.pastor_user_id || "").trim();
+    }
+  } catch {
+    // segue fallback
+  }
+
+  let data: Record<string, unknown> | null = null;
+  if (pastorId) {
+    const { data: byIdData } = await supabase
+      .from("users")
+      .select("full_name,phone,email,avatar_url,minister_role,signature_url")
+      .eq("id", pastorId)
+      .eq("is_active", true)
+      .maybeSingle();
+    data = (byIdData as Record<string, unknown> | null) || null;
+  }
+
+  if (!data) {
+    const { data: byTotvsData, error } = await supabase
+      .from("users")
+      .select("full_name,phone,email,avatar_url,minister_role,signature_url")
+      .eq("role", "pastor")
+      .eq("default_totvs_id", totvs)
+      .eq("is_active", true)
+      .order("updated_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (error || !byTotvsData) return null;
+    data = byTotvsData as Record<string, unknown>;
+  }
+
   return {
     full_name: String((data as Record<string, unknown>).full_name || ""),
     phone: (data as Record<string, unknown>).phone || null,

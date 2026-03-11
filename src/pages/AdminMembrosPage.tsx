@@ -60,7 +60,8 @@ export default function AdminMembrosPage() {
         roles: ["pastor", "obreiro"],
         church_totvs_id: selectedChurchTotvs || undefined,
         page: 1,
-        page_size: 400,
+        // Comentario: para KPI usamos metrics do backend; nao precisa trazer lista grande.
+        page_size: 1,
       }),
     enabled: Boolean(selectedChurchTotvs),
   });
@@ -71,8 +72,20 @@ export default function AdminMembrosPage() {
     (selectedChurchTotvs && loadingMembers && !membersRes) ||
     (fetchingMembers && !membersRes && Boolean(selectedChurchTotvs));
 
-  const workers = membersRes?.workers || [];
   const counters = useMemo(() => {
+    const metrics = membersRes?.metrics;
+    if (metrics) {
+      return {
+        total: Number(membersRes?.total || metrics.total || 0),
+        pastor: Number(metrics.pastor || 0),
+        presbitero: Number(metrics.presbitero || 0),
+        diacono: Number(metrics.diacono || 0),
+        obreiro: Number(metrics.obreiro || 0),
+        membrosAtivos: Number(metrics.membro || 0),
+      };
+    }
+
+    const workers = membersRes?.workers || [];
     return {
       total: workers.length,
       pastor: workers.filter((w) => w.role === "pastor").length,
@@ -81,7 +94,7 @@ export default function AdminMembrosPage() {
       obreiro: workers.filter((w) => String(w.minister_role || "").toLowerCase() === "obreiro").length,
       membrosAtivos: workers.filter((w) => String(w.minister_role || "").toLowerCase() === "membro" && w.is_active !== false).length,
     };
-  }, [workers]);
+  }, [membersRes]);
 
   const memberTone = {
     total: { bg: "#FFFFFF", border: "#E5E7EB", accent: "#2563EB" },

@@ -162,15 +162,24 @@ Deno.serve(async (req) => {
 
     const sb = createClient(Deno.env.get("SUPABASE_URL") || "", Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "");
 
-    const scopeRootTotvs = await resolveScopeRootTotvs(sb, session);
-
     const { data: churches, error: churchesErr } = await sb.from("churches").select("totvs_id,parent_totvs_id,class");
     if (churchesErr) return json({ ok: false, error: "db_error_churches", details: churchesErr.message }, 500);
     const churchRows = (churches || []) as ChurchRow[];
-    // Comentario: escopo sempre calculado da igreja efetiva do pastor (churches.pastor_user_id).
-    const scope = computeScope(scopeRootTotvs, churchRows);
-    if (churchTotvsFilter && !scope.has(churchTotvsFilter)) {
-      return json({ ok: false, error: "forbidden_church_out_of_scope" }, 403);
+    let scopeRootTotvs = session.active_totvs_id;
+    let scope: Set<string>;
+    if (session.role === "admin") {
+      // Comentario: admin enxerga membros de todas as igrejas.
+      scope = new Set(churchRows.map((c) => String(c.totvs_id)).filter(Boolean));
+      if (churchTotvsFilter && !scope.has(churchTotvsFilter)) {
+        return json({ ok: false, error: "church_not_found" }, 404);
+      }
+    } else {
+      scopeRootTotvs = await resolveScopeRootTotvs(sb, session);
+      // Comentario: escopo sempre calculado da igreja efetiva do pastor (churches.pastor_user_id).
+      scope = computeScope(scopeRootTotvs, churchRows);
+      if (churchTotvsFilter && !scope.has(churchTotvsFilter)) {
+        return json({ ok: false, error: "forbidden_church_out_of_scope" }, 403);
+      }
     }
     const sessionChurchClass = normalizeChurchClass(churchRows.find((c) => c.totvs_id === scopeRootTotvs)?.class);
     const churchMap = new Map(churchRows.map((c) => [String(c.totvs_id), c]));

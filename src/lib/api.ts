@@ -164,7 +164,9 @@ export async function post<T = unknown>(
       String(data.detail || data.message || "") ||
       (typeof data === "string" ? data : "Erro na requisição");
 
-    if (res.status === 401 || code === "unauthorized" || code === "invalid_token_payload" || code === "missing_token") {
+    // Comentario: evita derrubar sessao por 401 de endpoint especifico.
+    // Faz logout apenas quando o backend indicar token realmente invalido/ausente.
+    if (code === "invalid_token_payload" || code === "missing_token") {
       logout();
     }
 

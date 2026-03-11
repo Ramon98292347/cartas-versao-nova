@@ -7,7 +7,7 @@ import { CartasTab } from "@/components/admin/CartasTab";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useUser } from "@/context/UserContext";
-import { getPastorMetrics, listMembers, listPastorLetters } from "@/services/saasService";
+import { getPastorMetrics, listChurchesInScope, listMembers, listPastorLetters } from "@/services/saasService";
 import { PageLoading } from "@/components/shared/PageLoading";
 
 function KpiCard({
@@ -53,17 +53,29 @@ export default function CartasDashboardPage() {
     return [];
   }, [session?.scope_totvs_ids, usuario?.totvs_access, activeTotvsId]);
 
+  const { data: churchesInScope = [] } = useQuery({
+    queryKey: ["cartas-dashboard-scope", activeTotvsId],
+    queryFn: () => listChurchesInScope(1, 1000, activeTotvsId || undefined),
+    enabled: Boolean(activeTotvsId),
+  });
+
+  const effectiveScopeTotvsIds = useMemo(() => {
+    const fromChurches = churchesInScope.map((c) => String(c.totvs_id || "")).filter(Boolean);
+    if (fromChurches.length) return fromChurches;
+    return scopeTotvsIds;
+  }, [churchesInScope, scopeTotvsIds]);
+
   const { data: metrics, isLoading: loadingMetrics, isFetching: fetchingMetrics } = useQuery({
-    queryKey: ["cartas-dashboard-metrics"],
+    queryKey: ["cartas-dashboard-metrics", effectiveScopeTotvsIds.join("|")],
     queryFn: () => getPastorMetrics(),
-    enabled: scopeTotvsIds.length > 0,
+    enabled: effectiveScopeTotvsIds.length > 0,
   });
 
   const { data: letters = [], isLoading: loadingLetters, isFetching: fetchingLetters } = useQuery({
-    queryKey: ["cartas-dashboard-letters", scopeTotvsIds.join("|")],
+    queryKey: ["cartas-dashboard-letters", effectiveScopeTotvsIds.join("|")],
     queryFn: async () => {
       const data = await Promise.all(
-        scopeTotvsIds.map((totvs) =>
+        effectiveScopeTotvsIds.map((totvs) =>
           listPastorLetters(totvs, {
             period: "custom",
           }),
@@ -73,17 +85,17 @@ export default function CartasDashboardPage() {
       data.flat().forEach((item) => map.set(item.id, item));
       return Array.from(map.values());
     },
-    enabled: scopeTotvsIds.length > 0,
+    enabled: effectiveScopeTotvsIds.length > 0,
   });
 
   const { data: membrosRes, isLoading: loadingMembers, isFetching: fetchingMembers } = useQuery({
-    queryKey: ["cartas-dashboard-members", scopeTotvsIds.join("|")],
+    queryKey: ["cartas-dashboard-members", effectiveScopeTotvsIds.join("|")],
     queryFn: () => listMembers({ page: 1, page_size: 300, roles: ["pastor", "obreiro"] }),
-    enabled: scopeTotvsIds.length > 0,
+    enabled: effectiveScopeTotvsIds.length > 0,
   });
 
   const loadingPage =
-    !scopeTotvsIds.length ||
+    !effectiveScopeTotvsIds.length ||
     loadingMetrics ||
     loadingLetters ||
     loadingMembers ||
@@ -183,7 +195,7 @@ export default function CartasDashboardPage() {
       </section>
 
       <div className="mt-5">
-        <CartasTab letters={letters} scopeTotvsIds={scopeTotvsIds} phonesByUserId={phonesByUserId} phonesByName={phonesByName} />
+        <CartasTab letters={letters} scopeTotvsIds={effectiveScopeTotvsIds} phonesByUserId={phonesByUserId} phonesByName={phonesByName} />
       </div>
     </ManagementShell>
   );

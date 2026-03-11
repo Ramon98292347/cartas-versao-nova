@@ -1,4 +1,4 @@
-import { getToken as getAuthToken, logout } from "@/lib/api";
+﻿import { getToken as getAuthToken, logout } from "@/lib/api";
 
 type ApiErrorData = {
   ok?: boolean;
@@ -22,13 +22,12 @@ export class ApiError extends Error {
 }
 
 export function getFriendlyErrorMessage(err: unknown): string {
-  // Comentario: compatibilidade com erros de fetch e erros tipados da API.
   const isTypedError = err instanceof ApiError;
   const message = String((err as { message?: string } | null)?.message || "");
 
   if (!isTypedError) {
     if (message.toLowerCase().includes("failed to fetch")) {
-      return "Falha de conexão. Verifique sua internet e tente novamente.";
+      return "Falha de conexao. Verifique sua internet e tente novamente.";
     }
     return message || "Ocorreu um erro inesperado.";
   }
@@ -40,21 +39,27 @@ export function getFriendlyErrorMessage(err: unknown): string {
   const maxDate = String(data.max_date || "");
   const period = String(data.preach_period || "");
 
-  if (status === 401) return "Sessão expirada. Faça login novamente.";
+  if (status === 401) return "Sessao expirada. Faca login novamente.";
 
   if (status === 403) {
-    if (code === "weekly_limit_reached") return "Limite semanal atingido: máximo de 5 cartas nos últimos 7 dias.";
-    if (code === "forbidden") return "Você não tem permissão para executar esta ação.";
-    if (code === "unauthorized") return "Sessão expirada. Faça login novamente.";
-    return detail || "Acesso negado.";
+    if (code === "weekly_limit_reached") return "Limite semanal atingido: maximo de 5 cartas nos ultimos 7 dias.";
+    if (code === "setorial_cannot_issue_to_estadual") {
+      return "Voce nao pode tirar carta para uma classe acima de voce. Procure o pastor da igreja mae.";
+    }
+    if (code === "central_cannot_issue_to_estadual_or_setorial") {
+      return "Voce nao pode tirar carta para classes acima de voce (Estadual/Setorial). Procure o pastor da igreja mae.";
+    }
+    if (code === "forbidden") return "Voce nao tem permissao para executar esta acao.";
+    if (code === "unauthorized") return "Sessao expirada. Faca login novamente.";
+    return detail || "Voce nao pode tirar carta para uma classe acima de voce.";
   }
 
   if (status === 409) {
     if (code.includes("duplicate_letter")) {
       const p = period ? ` (${period})` : "";
-      return `Já existe uma carta para este pregador nesta data e horário${p}. Altere o horário ou a data.`;
+      return `Ja existe uma carta para este pregador nesta data e horario${p}. Altere o horario ou a data.`;
     }
-    return detail || "Conflito: já existe um registro com estes dados.";
+    return detail || "Conflito: ja existe um registro com estes dados.";
   }
 
   if (status === 400) {
@@ -64,23 +69,23 @@ export function getFriendlyErrorMessage(err: unknown): string {
       case "missing_minister_role":
         return "Selecione o cargo ministerial.";
       case "missing_preach_date":
-        return "Informe a data da pregação.";
+        return "Informe a data da pregacao.";
       case "invalid_preach_date_format":
-        return "Data inválida. Use o formato correto.";
+        return "Data invalida. Use o formato correto.";
       case "preach_date_in_past":
-        return "Não é permitido criar carta com data no passado.";
+        return "Nao e permitido criar carta com data no passado.";
       case "preach_date_out_of_current_month":
-        return `A data deve estar dentro do mês vigente. Máximo: ${maxDate || "fim do mês"}.`;
+        return `A data deve estar dentro do mes vigente. Maximo: ${maxDate || "fim do mes"}.`;
       case "missing_church_origin":
         return "Informe a igreja de origem.";
       case "missing_church_destination":
         return "Informe a igreja de destino.";
       case "invalid_preach_period":
-        return "Selecione o horário da pregação: Manhã, Tarde ou Noite.";
+        return "Selecione o horario da pregacao: Manha, Tarde ou Noite.";
       case "insert_failed":
-        return "Não foi possível salvar a carta. Verifique os dados e tente novamente.";
+        return "Nao foi possivel salvar a carta. Verifique os dados e tente novamente.";
       default:
-        return detail || "Dados inválidos. Verifique e tente novamente.";
+        return detail || "Dados invalidos. Verifique e tente novamente.";
     }
   }
 
@@ -119,7 +124,9 @@ export async function apiFetch<T>(
   const data = (await res.json().catch(() => ({}))) as ApiErrorData;
   if (!res.ok || data?.ok === false) {
     const code = String(data?.error || "");
-    if (res.status === 401 || code === "unauthorized" || code === "invalid_token_payload" || code === "missing_token") {
+    // Comentario: evita deslogar automaticamente por 401 de regra de negocio.
+    // Mantemos logout automatico apenas para token explicitamente invalido/ausente.
+    if (code === "invalid_token_payload" || code === "missing_token") {
       logout();
     }
     throw new ApiError(String(data?.error || `http_${res.status}`), res.status, data);

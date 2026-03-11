@@ -28,3 +28,6 @@ dist-ssr
 
 # Playwright artifacts
 test-results/
+
+# Supabase temp
+supabase/.temp/

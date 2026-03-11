@@ -113,16 +113,29 @@ Deno.serve(async (req) => {
 
     if (aErr) return json({ ok: false, error: "db_error_scope", details: aErr.message }, 500);
 
-    const scopeRootTotvs = await resolveScopeRootTotvs(sb, session);
-    const baseScope = computeScope(scopeRootTotvs, (all || []) as ChurchRow[]);
+    const allRows = (all || []) as ChurchRow[];
     const requestedRoot = String(body.root_totvs_id || "").trim();
-    if (requestedRoot && !baseScope.has(requestedRoot)) {
-      return json({ ok: false, error: "forbidden_church_out_of_scope" }, 403);
+
+    let scopeList: string[] = [];
+    if (session.role === "admin") {
+      // Comentario: admin enxerga todas as igrejas; root_totvs_id vira filtro opcional.
+      if (requestedRoot) {
+        const hasRoot = allRows.some((c) => String(c.totvs_id) === requestedRoot);
+        if (!hasRoot) return json({ ok: false, error: "church_not_found" }, 404);
+        scopeList = [...computeScope(requestedRoot, allRows)];
+      } else {
+        scopeList = allRows.map((c) => String(c.totvs_id)).filter(Boolean);
+      }
+    } else {
+      const scopeRootTotvs = await resolveScopeRootTotvs(sb, session);
+      const baseScope = computeScope(scopeRootTotvs, allRows);
+      if (requestedRoot && !baseScope.has(requestedRoot)) {
+        return json({ ok: false, error: "forbidden_church_out_of_scope" }, 403);
+      }
+      const effectiveRoot = requestedRoot || scopeRootTotvs;
+      scopeList = [...computeScope(effectiveRoot, allRows)];
     }
 
-    const effectiveRoot = requestedRoot || scopeRootTotvs;
-    const scope = computeScope(effectiveRoot, (all || []) as ChurchRow[]);
-    const scopeList = [...scope];
     const scopeTotal = scopeList.length;
 
     // 2) Busca igrejas do escopo + pastor (join)

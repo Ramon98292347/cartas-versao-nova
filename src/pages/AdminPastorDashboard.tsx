@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { FileText, Bell, LogOut, CalendarDays, LineChart, Users, Megaphone, Download } from "lucide-react";
 import { useUser } from "@/context/UserContext";
-import { getPastorMetrics, listAdminChurchSummary, listChurchesInScopePaged, listMembers, listNotifications, listPastorLetters, markAllNotificationsRead, markNotificationRead } from "@/services/saasService";
+import { getPastorMetrics, listAdminChurchSummary, listChurchesInScope, listChurchesInScopePaged, listMembers, listNotifications, listPastorLetters, markAllNotificationsRead, markNotificationRead } from "@/services/saasService";
 import { CartasTab } from "@/components/admin/CartasTab";
 import { AdminChurchesTab } from "@/components/admin/AdminChurchesTab";
 import { StatCards } from "@/components/shared/StatCards";
@@ -33,6 +33,18 @@ export default function AdminPastorDashboard() {
     return [];
   }, [session?.scope_totvs_ids, usuario?.totvs_access, activeTotvsId]);
 
+  const { data: fullScopeChurches = [] } = useQuery({
+    queryKey: ["pastor-full-scope", activeTotvsId],
+    queryFn: () => listChurchesInScope(1, 1000, activeTotvsId || undefined),
+    enabled: Boolean(activeTotvsId),
+  });
+
+  const effectiveScopeTotvsIds = useMemo(() => {
+    const fromChurches = fullScopeChurches.map((c) => String(c.totvs_id || "")).filter(Boolean);
+    if (fromChurches.length) return fromChurches;
+    return scopeTotvsIds;
+  }, [fullScopeChurches, scopeTotvsIds]);
+
   const { data: metrics, isFetching: loadingMetrics } = useQuery({
     queryKey: ["pastor-metrics"],
     queryFn: () => getPastorMetrics(),
@@ -40,11 +52,11 @@ export default function AdminPastorDashboard() {
   });
 
   const { data: letters = [] } = useQuery({
-    queryKey: ["pastor-letters", scopeTotvsIds.join("|")],
+    queryKey: ["pastor-letters", effectiveScopeTotvsIds.join("|")],
     queryFn: async () => {
-      if (!scopeTotvsIds.length) return [];
+      if (!effectiveScopeTotvsIds.length) return [];
       const data = await Promise.all(
-        scopeTotvsIds.map((totvs) =>
+        effectiveScopeTotvsIds.map((totvs) =>
           listPastorLetters(totvs, {
             period: "custom",
           }),
@@ -54,16 +66,16 @@ export default function AdminPastorDashboard() {
       data.flat().forEach((item) => map.set(item.id, item));
       return Array.from(map.values());
     },
-    enabled: scopeTotvsIds.length > 0,
+    enabled: effectiveScopeTotvsIds.length > 0,
   });
 
   const { data: obreiros = [] } = useQuery({
-    queryKey: ["pastor-obreiros", scopeTotvsIds.join("|")],
+    queryKey: ["pastor-obreiros", effectiveScopeTotvsIds.join("|")],
     queryFn: async () => {
       const res = await listMembers({ page: 1, page_size: 200, roles: ["pastor", "obreiro"] });
       return res.workers;
     },
-    enabled: scopeTotvsIds.length > 0,
+    enabled: effectiveScopeTotvsIds.length > 0,
   });
   const phonesByUserId = useMemo(() => {
     const map: Record<string, string> = {};
@@ -85,9 +97,9 @@ export default function AdminPastorDashboard() {
   }, [obreiros]);
 
   const { data: churchRows = [] } = useQuery({
-    queryKey: ["admin-church-summary", scopeTotvsIds.join("|")],
-    queryFn: () => listAdminChurchSummary(scopeTotvsIds),
-    enabled: canManageChurches && scopeTotvsIds.length > 0,
+    queryKey: ["admin-church-summary", effectiveScopeTotvsIds.join("|")],
+    queryFn: () => listAdminChurchSummary(effectiveScopeTotvsIds),
+    enabled: canManageChurches && effectiveScopeTotvsIds.length > 0,
   });
 
   const { data: churchesPaged } = useQuery({

@@ -59,6 +59,7 @@ function toBrDate(iso?: string | null) {
   return `${d}/${m}/${y}`;
 }
 
+
 const Index = () => {
   const { usuario, telefone, session } = useUser();
   const nav = useNavigate();
@@ -461,7 +462,12 @@ const Index = () => {
                         setValue("destinoId", undefined as unknown as number, { shouldValidate: true });
                       }
                     }}
-                    onFocus={(e) => { if (disableByPhone) { toast.info("Digite seu telefone"); e.currentTarget.blur(); } }}
+                    onFocus={(e) => {
+                      if (disableByPhone) {
+                        toast.info("Digite seu telefone");
+                        e.currentTarget.blur();
+                      }
+                    }}
                     placeholder="Digite a igreja manualmente"
                     disabled={disableByPhone || Boolean(igrejaDestino)}
                     className="h-11 rounded-xl border-slate-300 bg-slate-50 transition-colors focus:border-blue-500 focus:ring-blue-500"

@@ -153,7 +153,7 @@ export function ObreirosTab({
   const [ministerRole, setMinisterRole] = useState("all");
   const [activeFilter, setActiveFilter] = useState<"all" | "active" | "inactive">("all");
   const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(200);
+  const [pageSize, setPageSize] = useState(50);
 
   const [openModal, setOpenModal] = useState(false);
   const [saving, setSaving] = useState(false);
