@@ -178,9 +178,25 @@ export default function CartasDashboardPage() {
     return { total, today, last7 };
   }, [letters]);
 
-  const totalCartas = Number(metrics?.totalCartas || 0) > 0 ? Number(metrics?.totalCartas || 0) : lettersStats.total;
-  const cartasHoje = Number(metrics?.cartasHoje || 0) > 0 ? Number(metrics?.cartasHoje || 0) : lettersStats.today;
-  const ultimos7Dias = Number(metrics?.ultimos7Dias || 0) > 0 ? Number(metrics?.ultimos7Dias || 0) : lettersStats.last7;
+  const useChurchFilteredKpi = roleMode === "admin" && selectedChurchTotvs !== "all";
+  const totalCartas = useChurchFilteredKpi
+    ? lettersStats.total
+    : Number(metrics?.totalCartas || 0) > 0
+      ? Number(metrics?.totalCartas || 0)
+      : lettersStats.total;
+  const cartasHoje = useChurchFilteredKpi
+    ? lettersStats.today
+    : Number(metrics?.cartasHoje || 0) > 0
+      ? Number(metrics?.cartasHoje || 0)
+      : lettersStats.today;
+  const ultimos7Dias = useChurchFilteredKpi
+    ? lettersStats.last7
+    : Number(metrics?.ultimos7Dias || 0) > 0
+      ? Number(metrics?.ultimos7Dias || 0)
+      : lettersStats.last7;
+  const totalMembros = useChurchFilteredKpi
+    ? Number(membrosRes?.total || 0)
+    : Number(metrics?.totalObreiros || 0);
 
   if (loadingPage) {
     return (
@@ -228,7 +244,7 @@ export default function CartasDashboardPage() {
         <KpiCard label="Total de cartas" value={totalCartas} icon={FileText} tone={tone.total} />
         <KpiCard label="Cartas hoje" value={cartasHoje} icon={CalendarDays} tone={tone.hoje} />
         <KpiCard label="Ultimos 7 dias" value={ultimos7Dias} icon={LineChart} tone={tone.seteDias} />
-        <KpiCard label="Total de membros" value={Number(metrics?.totalObreiros || 0)} icon={Users} tone={tone.membros} />
+        <KpiCard label="Total de membros" value={totalMembros} icon={Users} tone={tone.membros} />
       </section>
 
       <div className="mt-5">
