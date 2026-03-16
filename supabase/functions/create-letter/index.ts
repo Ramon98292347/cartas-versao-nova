@@ -320,11 +320,12 @@ Deno.serve(async (req) => {
 
     const allowedOrigins = resolveAllowedOriginTotvs(session, activeChurch, churches);
     if (!allowedOrigins.has(church_totvs_id)) {
+      // Removido: campo allowed_origins que expunha a hierarquia de igrejas do usuario.
+      // Um atacante podia usar esse erro para mapear quais igrejas pertencem ao escopo.
       return json({
         ok: false,
         error: "origin_out_of_allowed",
-        detail: "Origem invalida para sua classe. Use sua igreja permitida na hierarquia.",
-        allowed_origins: [...allowedOrigins],
+        detail: "Origem invalida para sua hierarquia. Use sua igreja ou a igreja mae permitida.",
       }, 403);
     }
 

@@ -146,6 +146,10 @@ async function parseJsonSafe(res: Response): Promise<Record<string, unknown>> {
   }
 }
 
+// Tempo máximo de espera por uma chamada de Edge Function: 30 segundos.
+// Sem isso, se o Supabase travar, a tela fica em loading indefinidamente.
+const API_TIMEOUT_MS = 30_000;
+
 export async function post<T = unknown>(
   fnName: string,
   body: Record<string, unknown> = {},
@@ -173,11 +177,37 @@ export async function post<T = unknown>(
     headers.Authorization = `Bearer ${token}`;
   }
 
-  const res = await fetch(url, {
-    method: "POST",
-    headers,
-    body: JSON.stringify(body ?? {}),
-  });
+  // AbortController permite cancelar o fetch depois do prazo máximo.
+  // Se a Edge Function não responder em 30s, o request é abortado e
+  // o catch da chamada recebe um erro com mensagem amigável.
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), API_TIMEOUT_MS);
+
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(body ?? {}),
+      signal: controller.signal,
+    });
+  } catch (err) {
+    // AbortError = timeout estourou; outros erros = sem rede
+    if (err instanceof Error && err.name === "AbortError") {
+      throw new ApiError(
+        "O servidor demorou demais para responder. Verifique sua conexão e tente novamente.",
+        408,
+        "request_timeout",
+      );
+    }
+    throw new ApiError(
+      "Sem conexão com a internet. Verifique sua rede e tente novamente.",
+      0,
+      "network_error",
+    );
+  } finally {
+    clearTimeout(timeoutId);
+  }
 
   const data = await parseJsonSafe(res);
 

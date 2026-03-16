@@ -20,6 +20,38 @@ function onlyDigits(s: string) {
   return String(s || "").replace(/\D+/g, "");
 }
 
+// ──────────────────────────────────────────────────────────────
+// Rate limiting por IP — proteção contra força bruta no login.
+//
+// Máximo de RATE_LIMIT_MAX tentativas por IP em RATE_LIMIT_WINDOW_MS.
+// Depois desse limite, o IP recebe 429 e deve aguardar a janela resetar.
+// O mapa fica em memória: é "melhor esforço" (zera no cold start),
+// mas dificulta muito ataques sem precisar de Redis ou banco externo.
+// ──────────────────────────────────────────────────────────────
+const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
+const RATE_LIMIT_MAX = 10;
+const RATE_LIMIT_WINDOW_MS = 15 * 60 * 1000; // 15 minutos
+
+function checkRateLimit(ip: string): boolean {
+  const now = Date.now();
+  const entry = rateLimitMap.get(ip);
+  if (!entry || now > entry.resetAt) {
+    rateLimitMap.set(ip, { count: 1, resetAt: now + RATE_LIMIT_WINDOW_MS });
+    return true;
+  }
+  if (entry.count >= RATE_LIMIT_MAX) return false;
+  entry.count += 1;
+  return true;
+}
+
+// Limpeza periódica para evitar crescimento indefinido do mapa em memória.
+setInterval(() => {
+  const now = Date.now();
+  for (const [ip, entry] of rateLimitMap.entries()) {
+    if (now > entry.resetAt) rateLimitMap.delete(ip);
+  }
+}, 30 * 60 * 1000);
+
 type TotvsAccessItem = string | { totvs_id?: string; role?: string };
 type ChurchRow = { totvs_id: string; parent_totvs_id: string | null };
 type Body = { cpf?: string; password?: string };
@@ -123,6 +155,20 @@ async function signRlsToken(payload: { sub: string; app_role: string; active_tot
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { status: 200, headers: corsHeaders() });
   if (req.method !== "POST") return json({ ok: false, error: "method_not_allowed" }, 405);
+
+  // Extrai o IP do cliente e verifica o rate limit antes de qualquer acesso ao banco.
+  // x-forwarded-for pode conter múltiplos IPs (proxies) — pegamos o primeiro.
+  const clientIp =
+    req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
+    req.headers.get("x-real-ip") ||
+    "unknown";
+
+  if (!checkRateLimit(clientIp)) {
+    return json(
+      { ok: false, error: "rate_limit_exceeded", message: "Muitas tentativas de login. Aguarde 15 minutos e tente novamente." },
+      429,
+    );
+  }
 
   try {
     const body = (await req.json().catch(() => ({}))) as Body;
