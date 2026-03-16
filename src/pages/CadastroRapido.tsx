@@ -266,12 +266,13 @@ export default function CadastroRapido() {
                   <div className="w-full md:flex-1">
                     <Input
                       type="file"
-                      accept="image/*"
+                      accept=".jpg,.jpeg,.png,.webp,.gif,.bmp,.tiff,.avif,image/*"
                       onChange={(e) => {
                         const file = e.target.files?.[0] || null;
                         setAvatarFile(file);
                       }}
                     />
+                    <p className="mt-1 text-xs text-slate-500">Formatos aceitos: JPG, PNG, WEBP e outros.</p>
                     {avatarFile ? <p className="mt-1 text-xs text-slate-600">Arquivo: {avatarFile.name}</p> : null}
                   </div>
 
