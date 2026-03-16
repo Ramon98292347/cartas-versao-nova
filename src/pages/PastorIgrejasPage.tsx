@@ -5,6 +5,7 @@ import { ManagementShell } from "@/components/layout/ManagementShell";
 import { AdminChurchesTab } from "@/components/admin/AdminChurchesTab";
 import { listChurchesInScope, listChurchesInScopePaged } from "@/services/saasService";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Input } from "@/components/ui/input";
 import { PageLoading } from "@/components/shared/PageLoading";
 
 function KpiCard({
@@ -34,6 +35,8 @@ function KpiCard({
 export default function PastorIgrejasPage() {
   const queryClient = useQueryClient();
   const [filterTotvs, setFilterTotvs] = useState("all");
+  const [filterNome, setFilterNome] = useState("");
+  const [filterClasse, setFilterClasse] = useState("all");
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
 
@@ -75,7 +78,30 @@ export default function PastorIgrejasPage() {
     return optionsRows.filter((church) => scope.has(String(church.totvs_id)));
   }, [optionsRows, filterTotvs]);
 
-  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const hasClientFilter = filterNome.trim().length >= 2 || filterClasse !== "all";
+
+  const clientFilteredRows = useMemo(() => {
+    if (!hasClientFilter) return null;
+    let result = filteredRowsForCounters;
+    if (filterNome.trim().length >= 2) {
+      const q = filterNome.trim().toLowerCase();
+      result = result.filter(
+        (c) =>
+          String(c.church_name || "").toLowerCase().includes(q) ||
+          String(c.totvs_id || "").includes(filterNome.trim()),
+      );
+    }
+    if (filterClasse !== "all") {
+      result = result.filter((c) => String(c.church_class || "").toLowerCase() === filterClasse);
+    }
+    return result;
+  }, [filteredRowsForCounters, filterNome, filterClasse, hasClientFilter]);
+
+  const effectiveTotal = hasClientFilter ? (clientFilteredRows?.length ?? 0) : total;
+  const totalPages = Math.max(1, Math.ceil(effectiveTotal / pageSize));
+  const effectiveRows = hasClientFilter
+    ? (clientFilteredRows ?? []).slice((page - 1) * pageSize, page * pageSize)
+    : rows;
 
   useEffect(() => {
     if (page >= totalPages) return;
@@ -148,9 +174,33 @@ export default function PastorIgrejasPage() {
           <KpiCard title="Local" value={totals.local} subtitle="classe local" gradient={gradients.local} />
         </section>
 
+        <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+          <p className="mb-3 text-sm font-semibold text-slate-700">Filtrar igrejas</p>
+          <div className="grid gap-3 sm:grid-cols-3">
+            <Input
+              value={filterNome}
+              onChange={(e) => { setFilterNome(e.target.value); setPage(1); }}
+              placeholder="Nome ou TOTVS..."
+            />
+            <Select value={filterClasse} onValueChange={(v) => { setFilterClasse(v); setPage(1); }}>
+              <SelectTrigger>
+                <SelectValue placeholder="Classe" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todas as classes</SelectItem>
+                <SelectItem value="estadual">Estadual</SelectItem>
+                <SelectItem value="setorial">Setorial</SelectItem>
+                <SelectItem value="central">Central</SelectItem>
+                <SelectItem value="regional">Regional</SelectItem>
+                <SelectItem value="local">Local</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </section>
+
         <AdminChurchesTab
           roleMode="pastor"
-          rows={rows}
+          rows={effectiveRows}
           page={page}
           pageSize={pageSize}
           totalPages={totalPages}

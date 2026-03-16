@@ -20,6 +20,10 @@ const FUNCTIONS_BASE = `${SUPABASE_URL?.replace(/\/$/, "")}/functions/v1`;
 
 const TOKEN_KEY = "ipda_token";
 const RLS_TOKEN_KEY = "ipda_rls_token";
+
+// Flag de sessao: quando o rls_token recebe 401, marca como quebrado para que
+// todas as queries concorrentes ja caiam no fallback sem disparar mais requests invalidos.
+let rlsTokenBroken = false;
 const SESSION_KEY = "ipda_session";
 const USER_KEY = "ipda_user";
 const AUTH_CLEARED_EVENT = "ipda-auth-cleared";
@@ -54,14 +58,25 @@ export function setToken(token: string) {
 }
 
 export function getRlsToken(): string | null {
+  if (rlsTokenBroken) return null;
   const raw = localStorage.getItem(RLS_TOKEN_KEY);
   if (!raw) return null;
   const token = normalizeToken(raw);
   if (!token || token.split(".").length !== 3) return null;
+  try {
+    const payload = JSON.parse(atob(token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/")));
+    if (payload?.exp && Date.now() / 1000 >= payload.exp) {
+      localStorage.removeItem(RLS_TOKEN_KEY);
+      return null;
+    }
+  } catch {
+    // token malformado, deixa passar — receberá 401 e será limpo
+  }
   return token;
 }
 
 export function setRlsToken(token?: string | null) {
+  rlsTokenBroken = false; // novo token: reseta o flag
   const normalized = normalizeToken(String(token || ""));
   if (!normalized || normalized.split(".").length !== 3) {
     localStorage.removeItem(RLS_TOKEN_KEY);
@@ -75,6 +90,7 @@ export function clearToken() {
 }
 
 export function clearRlsToken() {
+  rlsTokenBroken = true; // marca imediatamente para parar queries concorrentes
   localStorage.removeItem(RLS_TOKEN_KEY);
 }
 

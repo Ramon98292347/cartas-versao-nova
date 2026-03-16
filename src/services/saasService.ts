@@ -1659,10 +1659,10 @@ export async function listAnnouncements(limit = 10): Promise<AnnouncementItem[]>
 }
 
 export async function listBirthdaysToday(limit = 10): Promise<BirthdayItem[]> {
-  if (!isMockMode() && supabase && getRlsToken()) {
+  if (!isMockMode() && supabaseAnon) {
     const session = getSession();
     const scope = Array.isArray(session?.scope_totvs_ids) ? session.scope_totvs_ids.filter(Boolean) : [];
-    let query = supabase
+    let query = supabaseAnon
       .from("users")
       .select("id, full_name, phone, email, birth_date, avatar_url")
       .not("birth_date", "is", null)

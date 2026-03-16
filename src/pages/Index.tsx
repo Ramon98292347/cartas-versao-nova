@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ChurchSearch, Church } from "@/components/ChurchSearch";
 import { LetterPreview } from "@/components/LetterPreview";
-import { FileText, RotateCcw, Send, Calendar as CalendarIcon, Loader2 } from "lucide-react";
+import { FileText, RotateCcw, Send, Calendar as CalendarIcon, Loader2, Search } from "lucide-react";
 import { toast } from "sonner";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
@@ -70,6 +70,7 @@ const Index = () => {
   const [isPregacaoCalOpen, setIsPregacaoCalOpen] = useState(false);
   const [savingLetter, setSavingLetter] = useState(false);
   const [pregadorBusca, setPregadorBusca] = useState("");
+  const [destinoSearch, setDestinoSearch] = useState("");
 
   const activeTotvsForPastor = String(session?.totvs_id || (usuario as LegacyUsuarioExtra | null)?.totvs || (usuario as LegacyUsuarioExtra | null)?.default_totvs_id || "");
   const telefoneUsuarioLogado =
@@ -261,6 +262,18 @@ const Index = () => {
     ];
   }, [preachersInScope, telefoneUsuarioLogado, usuario]);
 
+  const filteredDestinoOptions = useMemo(() => {
+    const q = destinoSearch.trim().toLowerCase();
+    if (q.length < 2) return [];
+    return allowedDestinationChurches
+      .filter((c) => {
+        const name = String(c.nome || "").toLowerCase();
+        const totvs = String(c.codigoTotvs || "").toLowerCase();
+        return name.includes(q) || totvs.includes(q);
+      })
+      .slice(0, 12);
+  }, [destinoSearch, allowedDestinationChurches]);
+
   const filteredPreacherOptions = useMemo(() => {
     const q = pregadorBusca.trim().toLowerCase();
     if (!q) return preacherOptions;
@@ -404,7 +417,7 @@ const Index = () => {
       : (usuario?.igreja_nome ?? "");
 
     const destinoManual = destinoOutros.trim();
-    if (!igrejaDestino && !(allowDestinoOutros && destinoManual.length >= 3)) {
+    if (!igrejaDestino && destinoManual.length < 3) {
       toast.error("Selecione a igreja de destino ou informe em Outros.");
       return;
     }
@@ -470,6 +483,7 @@ const Index = () => {
     });
     setSelectedPreacherUserId(String(usuario?.id || ""));
     setDestinoOutros("");
+    setDestinoSearch("");
     setPreachPeriod("");
   };
 
@@ -574,43 +588,101 @@ const Index = () => {
                 />
                 {errors.origemId && <p className="text-xs text-destructive">Selecione a igreja de origem</p>}
 
-                <ChurchSearch
-                  label="Igreja que vai pregar (destino)"
-                  placeholder="Buscar por nome ou código TOTVS"
-                  churches={allowedDestinationChurches}
-                  minChars={3}
-                  onSelect={(c) => {
-                    setIgrejaDestino(c);
-                    setValue("destinoId", c.id, { shouldValidate: true });
-                    setDestinoOutros("");
-                    setValue("destinoOutros", "", { shouldValidate: false });
-                  }}
-                  value={igrejaDestino ? `${igrejaDestino.codigoTotvs} - ${igrejaDestino.nome}` : ""}
-                  disabled={disableByPhone || (allowDestinoOutros && Boolean(destinoOutros.trim()))}
-                  onDisabledClickMessage="Digite seu telefone"
-                  inputId="church-destino"
-                />
-                {allowDestinoOutros ? (
-                  <div className="space-y-2">
-                    <Label htmlFor="destinoOutros" className="text-sm font-medium text-slate-800">Outros (se não estiver no banco)</Label>
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium text-slate-800">Igreja que vai pregar (destino)</Label>
+                  <Select
+                    value={igrejaDestino ? `${igrejaDestino.codigoTotvs} - ${igrejaDestino.nome}` : ""}
+                    onValueChange={(value) => {
+                      const found = allowedDestinationChurches.find(
+                        (c) => `${c.codigoTotvs} - ${c.nome}` === value,
+                      );
+                      if (found) {
+                        setIgrejaDestino(found);
+                        setValue("destinoId", found.id, { shouldValidate: true });
+                        setDestinoOutros("");
+                        setValue("destinoOutros", "", { shouldValidate: false });
+                        setDestinoSearch(`${found.codigoTotvs} - ${found.nome}`);
+                      }
+                    }}
+                    disabled={Boolean(destinoOutros.trim())}
+                  >
+                    <SelectTrigger className="h-11 rounded-xl border-slate-300 bg-slate-50">
+                      <SelectValue placeholder="Selecione uma igreja sugerida" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {allowedDestinationChurches.map((c) => {
+                        const val = `${c.codigoTotvs} - ${c.nome}`;
+                        return (
+                          <SelectItem key={c.codigoTotvs || String(c.id)} value={val}>
+                            {val}
+                          </SelectItem>
+                        );
+                      })}
+                    </SelectContent>
+                  </Select>
+                  <div className="relative">
+                    <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
                     <Input
-                      id="destinoOutros"
-                      type="text"
-                      value={destinoOutros}
+                      value={destinoSearch}
                       onChange={(e) => {
-                        setDestinoOutros(e.target.value);
-                        setValue("destinoOutros", e.target.value, { shouldValidate: false });
-                        if (e.target.value.trim()) {
+                        setDestinoSearch(e.target.value);
+                        if (!e.target.value.trim()) {
                           setIgrejaDestino(undefined);
                           setValue("destinoId", undefined as unknown as number, { shouldValidate: false });
                         }
                       }}
-                      placeholder="Ex.: 99999 - Igreja não cadastrada"
-                      disabled={Boolean(igrejaDestino)}
-                      className="h-11 rounded-xl border-slate-300 bg-slate-50 transition-colors focus:border-blue-500 focus:ring-blue-500"
+                      placeholder="Digite o TOTVS ou nome da igreja destino"
+                      disabled={Boolean(destinoOutros.trim())}
+                      className="h-11 pl-10 rounded-xl border-slate-300 bg-slate-50 transition-colors focus:border-blue-500 focus:ring-blue-500"
                     />
                   </div>
-                ) : null}
+                  {filteredDestinoOptions.length > 0 && (
+                    <div className="max-h-56 overflow-y-auto rounded-md border border-slate-200 bg-white shadow-sm">
+                      {filteredDestinoOptions.map((c) => (
+                        <button
+                          key={c.codigoTotvs || String(c.id)}
+                          type="button"
+                          className="flex w-full items-start gap-3 border-b border-slate-100 px-3 py-2 text-left text-sm last:border-b-0 hover:bg-slate-50"
+                          onClick={() => {
+                            setIgrejaDestino(c);
+                            setValue("destinoId", c.id, { shouldValidate: true });
+                            setDestinoOutros("");
+                            setValue("destinoOutros", "", { shouldValidate: false });
+                            setDestinoSearch(`${c.codigoTotvs} - ${c.nome}`);
+                          }}
+                        >
+                          <span className="font-medium text-slate-900">{c.codigoTotvs} - {c.nome}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  <p className="text-xs text-muted-foreground">
+                    Se escolher uma igreja do escopo no seletor, a origem volta para a igreja do seu papel logado. Se digitar um destino fora do escopo, a origem sobe para a igreja mãe.
+                  </p>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="destinoOutros" className="text-sm font-medium text-slate-800">Outros (se não encontrar na lista)</Label>
+                  <Input
+                    id="destinoOutros"
+                    type="text"
+                    value={destinoOutros}
+                    onChange={(e) => {
+                      setDestinoOutros(e.target.value);
+                      setValue("destinoOutros", e.target.value, { shouldValidate: false });
+                      if (e.target.value.trim()) {
+                        setIgrejaDestino(undefined);
+                        setValue("destinoId", undefined as unknown as number, { shouldValidate: false });
+                        setDestinoSearch("");
+                      }
+                    }}
+                    placeholder="Ex.: 99999 - Igreja não cadastrada"
+                    disabled={Boolean(igrejaDestino) || Boolean(destinoSearch.trim())}
+                    className="h-11 rounded-xl border-slate-300 bg-slate-50 transition-colors focus:border-blue-500 focus:ring-blue-500"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Modelo: <span className="font-medium">9901 - PIUMA-NITEROI</span>. Use este campo apenas se a igreja não estiver na lista acima.
+                  </p>
+                </div>
                 {errors.destinoId && <p className="text-xs text-destructive">Selecione a igreja de destino.</p>}
 
                 <div className="grid md:grid-cols-2 gap-4">
