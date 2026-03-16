@@ -95,7 +95,7 @@ async function signAppToken(payload: { sub: string; app_role: string; active_tot
 }
 
 async function signRlsToken(payload: { sub: string; app_role: string; active_totvs_id: string; scope_totvs_ids: string[]; root_totvs_id: string }) {
-  const secret = Deno.env.get("SUPABASE_JWT_SECRET") || "";
+  const secret = Deno.env.get("APP_RLS_JWT_SECRET") || "";
   if (!secret) return null;
   const now = Math.floor(Date.now() / 1000);
   return await new SignJWT({
