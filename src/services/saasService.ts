@@ -1515,12 +1515,13 @@ export async function listNotifications(page = 1, pageSize = 20, unreadOnly = fa
   const rootTotvs = currentSession?.root_totvs_id || currentSession?.totvs_id;
   const currentUser = getUser();
   const userId = String(currentUser?.id || "").trim();
-  const rlsToken = getRlsToken();
 
-  if (supabase && rlsToken) {
+  // Comentario: usa supabaseAnon porque a politica RLS de notifications e anon SELECT.
+  // O cliente supabase injeta JWT customizado que o RLS nao reconhece, causando 401.
+  if (supabaseAnon && (rootTotvs || userId)) {
     const from = (page - 1) * pageSize;
     const to = from + pageSize - 1;
-    let query = supabase.from("notifications").select("id, title, message, is_read, read_at, created_at, type", { count: "exact" });
+    let query = supabaseAnon.from("notifications").select("id, title, message, is_read, read_at, created_at, type", { count: "exact" });
 
     if (rootTotvs && userId) {
       query = query.or(`church_totvs_id.eq.${rootTotvs},user_id.eq.${userId}`);
@@ -1539,7 +1540,7 @@ export async function listNotifications(page = 1, pageSize = 20, unreadOnly = fa
     const rows = Array.isArray(rowsRaw) ? rowsRaw : [];
 
     let unreadCount = 0;
-    let unreadQuery = supabase.from("notifications").select("id", { count: "exact", head: true }).eq("is_read", false);
+    let unreadQuery = supabaseAnon.from("notifications").select("id", { count: "exact", head: true }).eq("is_read", false);
     if (rootTotvs && userId) {
       unreadQuery = unreadQuery.or(`church_totvs_id.eq.${rootTotvs},user_id.eq.${userId}`);
     } else if (rootTotvs) {
@@ -1572,9 +1573,10 @@ export async function markNotificationRead(id: string) {
   const currentUser = getUser();
   const userId = String(currentUser?.id || "").trim();
 
-  if (supabase && getRlsToken()) {
+  // Comentario: usa supabaseAnon — politica UPDATE de notifications permite anon.
+  if (supabaseAnon) {
     const nowIso = new Date().toISOString();
-    let query = supabase.from("notifications").update({ is_read: true, read_at: nowIso }).eq("id", id);
+    let query = supabaseAnon.from("notifications").update({ is_read: true, read_at: nowIso }).eq("id", id);
 
     if (rootTotvs && userId) {
       query = query.or(`church_totvs_id.eq.${rootTotvs},user_id.eq.${userId}`);
@@ -1597,9 +1599,10 @@ export async function markAllNotificationsRead() {
   const currentUser = getUser();
   const userId = String(currentUser?.id || "").trim();
 
-  if (supabase && getRlsToken()) {
+  // Comentario: usa supabaseAnon — politica UPDATE de notifications permite anon.
+  if (supabaseAnon) {
     const nowIso = new Date().toISOString();
-    let query = supabase.from("notifications").update({ is_read: true, read_at: nowIso }).eq("is_read", false);
+    let query = supabaseAnon.from("notifications").update({ is_read: true, read_at: nowIso }).eq("is_read", false);
 
     if (rootTotvs && userId) {
       query = query.or(`church_totvs_id.eq.${rootTotvs},user_id.eq.${userId}`);
