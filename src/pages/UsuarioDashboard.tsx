@@ -28,6 +28,7 @@ import {
 import { post } from "@/lib/api";
 import { Bell, BellOff, Building2, CalendarDays, Download, Eye, FileText, IdCard, Loader2, MoreHorizontal, Phone, RefreshCw, Search, Share2, Trash2, Unlock, UserCircle2 } from "lucide-react";
 import { ImageCaptureInput } from "@/components/shared/ImageCaptureInput";
+import { AvatarCapture } from "@/components/shared/AvatarCapture";
 import { usePushNotifications } from "@/hooks/usePushNotifications";
 
 type DestinationOption = {
@@ -1058,34 +1059,18 @@ async function openPdf(letter: PastorLetter) {
               <Label>Cargo</Label>
               <Input value={profile?.minister_role || ""} disabled />
             </div>
-            <div className="grid gap-3 md:grid-cols-[160px_1fr]">
+            <div className="space-y-2">
               <div className="space-y-1">
                 <Label>Foto 3x4</Label>
-                <div className="h-44 w-32 overflow-hidden rounded-lg border border-slate-200 bg-white">
-                  <img
-                    src={
-                      avatarFile
-                        ? URL.createObjectURL(avatarFile)
-                        : profileForm.avatar_url || profile?.avatar_url || "/placeholder.svg"
-                    }
-                    alt="Pre-visualizacao avatar"
-                    className="h-full w-full object-cover object-[center_top]"
-                  />
-                </div>
+                {/* AvatarCapture: inclui câmera/galeria, remoção de fundo por IA e preview 3x4 */}
+                <AvatarCapture
+                  onFileReady={(file) => setAvatarFile(file)}
+                  disabled={savingProfile}
+                />
               </div>
-              <div className="space-y-2">
-                <div className="space-y-1">
-                  <Label>Selecionar foto</Label>
-                  <ImageCaptureInput
-                    accept="image/*"
-                    capture="user"
-                    onChange={(file) => setAvatarFile(file)}
-                  />
-                </div>
-                <div className="space-y-1">
-                  <Label>URL da foto</Label>
-                  <Input value={profileForm.avatar_url} onChange={(e) => setProfileForm((p) => ({ ...p, avatar_url: e.target.value }))} />
-                </div>
+              <div className="space-y-1">
+                <Label>URL da foto</Label>
+                <Input value={profileForm.avatar_url} onChange={(e) => setProfileForm((p) => ({ ...p, avatar_url: e.target.value }))} />
               </div>
             </div>
             {isPastor ? (

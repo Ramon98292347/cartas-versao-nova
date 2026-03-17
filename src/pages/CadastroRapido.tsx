@@ -2,7 +2,7 @@
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { ArrowLeft, Eye, EyeOff, Loader2, Search, UserPlus } from "lucide-react";
-import { ImageCaptureInput } from "@/components/shared/ImageCaptureInput";
+import { AvatarCapture } from "@/components/shared/AvatarCapture";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -72,7 +72,6 @@ export default function CadastroRapido() {
   const [igrejaSearch, setIgrejaSearch] = useState("");
   const [showIgrejaSug, setShowIgrejaSug] = useState(false);
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
-  const [avatarPreviewUrl, setAvatarPreviewUrl] = useState("");
   const [cep, setCep] = useState("");
   const [addressStreet, setAddressStreet] = useState("");
   const [addressNumber, setAddressNumber] = useState("");
@@ -82,16 +81,6 @@ export default function CadastroRapido() {
   const [addressState, setAddressState] = useState("");
   const [cepLookupLoading, setCepLookupLoading] = useState(false);
   const [lastCepLookup, setLastCepLookup] = useState("");
-
-  useEffect(() => {
-    if (!avatarFile) {
-      setAvatarPreviewUrl("");
-      return;
-    }
-    const objectUrl = URL.createObjectURL(avatarFile);
-    setAvatarPreviewUrl(objectUrl);
-    return () => URL.revokeObjectURL(objectUrl);
-  }, [avatarFile]);
 
   // Comentario: faz upload do avatar usando o CPF como nome do arquivo.
   // Path: avatars/users/{cpf}.{ext} — igual ao padrao do formulario de edicao de perfil.
@@ -272,31 +261,12 @@ export default function CadastroRapido() {
           <CardContent className="space-y-4">
             <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-2 md:col-span-2">
-                <Label>Foto para avatar (opcional)</Label>
-                <div className="flex flex-col gap-3 md:flex-row md:items-start">
-                  <div className="w-full md:flex-1">
-                    <ImageCaptureInput
-                      accept="image/*"
-                      capture="user"
-                      onChange={(file) => setAvatarFile(file)}
-                    />
-                    <p className="mt-1 text-xs text-slate-500">Tire uma foto 3x4 ou escolha da galeria.</p>
-                    {avatarFile ? <p className="mt-1 text-xs text-slate-600">Arquivo: {avatarFile.name}</p> : null}
-                  </div>
-
-                  <div className="flex flex-col items-center">
-                    <div className="h-[160px] w-[120px] overflow-hidden rounded-md border border-slate-300 bg-white">
-                      {avatarPreviewUrl ? (
-                        <img src={avatarPreviewUrl} alt="Pre-visualizacao 3x4" className="h-full w-full object-cover" />
-                      ) : (
-                        <div className="flex h-full w-full items-center justify-center text-center text-xs text-slate-500">
-                          Pre-visualizacao 3x4
-                        </div>
-                      )}
-                    </div>
-                    <span className="mt-1 text-[11px] text-slate-500">Tamanho 3x4</span>
-                  </div>
-                </div>
+                <Label>Foto 3x4 (opcional)</Label>
+                {/* AvatarCapture: inclui botões de câmera/galeria, remoção de fundo por IA e preview 3x4 */}
+                <AvatarCapture
+                  onFileReady={(file) => setAvatarFile(file)}
+                  disabled={loading}
+                />
               </div>
 
               <div className="space-y-2 md:col-span-2">

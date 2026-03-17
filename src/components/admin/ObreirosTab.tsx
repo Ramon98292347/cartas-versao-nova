@@ -8,7 +8,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { Search, PlusCircle, Upload, MoreHorizontal, User } from "lucide-react";
+import { Search, PlusCircle, MoreHorizontal, User } from "lucide-react";
+import { AvatarCapture } from "@/components/shared/AvatarCapture";
 import { toast } from "sonner";
 import { useUser } from "@/context/UserContext";
 import {
@@ -759,46 +760,20 @@ export function ObreirosTab({
                 <Input type="date" value={form.ordination_date} onChange={(e) => setForm((p) => ({ ...p, ordination_date: e.target.value }))} />
               </div>
               <div className="space-y-1 md:col-span-2">
-                <Label>Foto</Label>
-                <div className="flex flex-wrap items-center gap-2">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => document.getElementById("avatar-upload-input")?.click()}
-                  >
-                    <Upload className="mr-2 h-4 w-4" /> Adicionar foto
-                  </Button>
-                  <input
-                    id="avatar-upload-input"
-                    type="file"
-                    accept="image/*"
-                    className="hidden"
-                    onChange={async (e) => {
-                      const inputEl = e.currentTarget;
-                      const file = e.target.files?.[0];
-                      if (!file) return;
-                      if (!file.type.startsWith("image/")) {
-                        toast.error("Selecione um arquivo de imagem.");
-                        if (inputEl) inputEl.value = "";
-                        return;
-                      }
-                      setPendingAvatarFile(file);
-                      setForm((p) => ({ ...p, avatar_url: "" }));
-                      toast.success("Foto selecionada. Clique em Salvar para cadastrar.");
-                      if (inputEl) inputEl.value = "";
-                    }}
-                  />
-                  {pendingAvatarFile ? (
-                    <span className="text-xs text-emerald-700">Arquivo pronto: {pendingAvatarFile.name}</span>
-                  ) : null}
-                  {form.avatar_url ? (
-                    <a href={form.avatar_url} target="_blank" rel="noreferrer" className="text-xs text-blue-600 underline">
-                      Ver foto atual
-                    </a>
-                  ) : (
-                    <span className="text-xs text-slate-500">Nenhuma foto enviada.</span>
-                  )}
-                </div>
+                <Label>Foto 3x4</Label>
+                {/* AvatarCapture: inclui câmera/galeria, remoção de fundo por IA e preview 3x4 */}
+                <AvatarCapture
+                  onFileReady={(file) => {
+                    setPendingAvatarFile(file);
+                    if (file) setForm((p) => ({ ...p, avatar_url: "" }));
+                  }}
+                  disabled={saving}
+                />
+                {!pendingAvatarFile && form.avatar_url ? (
+                  <a href={form.avatar_url} target="_blank" rel="noreferrer" className="text-xs text-blue-600 underline">
+                    Ver foto atual
+                  </a>
+                ) : null}
               </div>
             </div>
 
