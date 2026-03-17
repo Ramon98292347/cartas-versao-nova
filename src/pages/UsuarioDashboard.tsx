@@ -25,7 +25,9 @@ import {
   type PastorLetter,
 } from "@/services/saasService";
 import { post } from "@/lib/api";
-import { Building2, CalendarDays, Download, Eye, FileText, IdCard, Loader2, MoreHorizontal, Phone, RefreshCw, Search, Share2, Unlock, UserCircle2 } from "lucide-react";
+import { Bell, BellOff, Building2, CalendarDays, Download, Eye, FileText, IdCard, Loader2, MoreHorizontal, Phone, RefreshCw, Search, Share2, Unlock, UserCircle2 } from "lucide-react";
+import { ImageCaptureInput } from "@/components/shared/ImageCaptureInput";
+import { usePushNotifications } from "@/hooks/usePushNotifications";
 
 type DestinationOption = {
   totvs_id: string;
@@ -87,6 +89,7 @@ export default function UsuarioDashboard() {
   const nav = useNavigate();
   const queryClient = useQueryClient();
   const { usuario, session, setUsuario, setTelefone } = useUser();
+  const { supported: pushSupported, subscribed: pushSubscribed, loading: pushLoading, subscribe: subscribePush, unsubscribe: unsubscribePush } = usePushNotifications(session?.id);
 
   const [dateStart, setDateStart] = useState("");
   const [dateEnd, setDateEnd] = useState("");
@@ -590,6 +593,18 @@ async function openPdf(letter: PastorLetter) {
                 <DropdownMenuItem onClick={() => setOpenCadastroModal(true)}>
                   <Eye className="mr-2 h-4 w-4" /> Visualizar cadastro
                 </DropdownMenuItem>
+                {pushSupported ? (
+                  <DropdownMenuItem
+                    disabled={pushLoading}
+                    onClick={() => (pushSubscribed ? unsubscribePush() : subscribePush())}
+                  >
+                    {pushSubscribed ? (
+                      <><BellOff className="mr-2 h-4 w-4" /> Desativar notificacoes</>
+                    ) : (
+                      <><Bell className="mr-2 h-4 w-4" /> Ativar notificacoes</>
+                    )}
+                  </DropdownMenuItem>
+                ) : null}
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
@@ -999,7 +1014,7 @@ async function openPdf(letter: PastorLetter) {
             <div className="grid gap-3 md:grid-cols-[160px_1fr]">
               <div className="space-y-1">
                 <Label>Foto 3x4</Label>
-                <div className="h-44 w-32 overflow-hidden rounded-lg border border-slate-200 bg-slate-100">
+                <div className="h-44 w-32 overflow-hidden rounded-lg border border-slate-200 bg-white">
                   <img
                     src={
                       avatarFile
@@ -1014,10 +1029,10 @@ async function openPdf(letter: PastorLetter) {
               <div className="space-y-2">
                 <div className="space-y-1">
                   <Label>Selecionar foto</Label>
-                  <Input
-                    type="file"
+                  <ImageCaptureInput
                     accept="image/*"
-                    onChange={(e) => setAvatarFile(e.target.files?.[0] || null)}
+                    capture="user"
+                    onChange={(file) => setAvatarFile(file)}
                   />
                 </div>
                 <div className="space-y-1">
@@ -1035,7 +1050,14 @@ async function openPdf(letter: PastorLetter) {
                   <div className="grid gap-3 md:grid-cols-2">
                     <div className="space-y-1">
                       <Label>Assinatura</Label>
-                      <Input type="file" accept="image/*" onChange={(e) => setSignatureFile(e.target.files?.[0] || null)} />
+                      <ImageCaptureInput
+                        accept="image/*"
+                        capture="environment"
+                        allowWhiteBg
+                        defaultRatio={0}
+                        editorTitle="Editar assinatura"
+                        onChange={(file) => setSignatureFile(file)}
+                      />
                       {profile?.signature_url ? (
                         <a href={profile.signature_url} target="_blank" rel="noreferrer" className="text-xs text-blue-600 underline">
                           Ver assinatura atual
@@ -1044,7 +1066,14 @@ async function openPdf(letter: PastorLetter) {
                     </div>
                     <div className="space-y-1">
                       <Label>Carimbo do pastor</Label>
-                      <Input type="file" accept="image/*" onChange={(e) => setStampPastorFile(e.target.files?.[0] || null)} />
+                      <ImageCaptureInput
+                        accept="image/*"
+                        capture="environment"
+                        allowWhiteBg
+                        defaultRatio={1}
+                        editorTitle="Editar carimbo"
+                        onChange={(file) => setStampPastorFile(file)}
+                      />
                       {profile?.stamp_pastor_url ? (
                         <a href={profile.stamp_pastor_url} target="_blank" rel="noreferrer" className="text-xs text-blue-600 underline">
                           Ver carimbo do pastor

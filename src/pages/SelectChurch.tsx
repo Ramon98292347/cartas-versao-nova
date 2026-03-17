@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
@@ -17,6 +18,7 @@ function routeByRole(role: "admin" | "pastor" | "obreiro") {
 
 export default function SelectChurch() {
   const nav = useNavigate();
+  const queryClient = useQueryClient();
   const {
     pendingCpf,
     availableChurches,
@@ -51,6 +53,7 @@ export default function SelectChurch() {
         ...data.session,
         root_totvs_id: data.session.root_totvs_id || data.session.totvs_id,
       };
+      queryClient.clear();
       setStoredToken(data.token);
       setRlsToken(data.rls_token || null);
       setToken(data.token);

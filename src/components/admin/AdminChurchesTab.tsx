@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Church, LayoutGrid, List, MoreHorizontal } from "lucide-react";
+import { ImageCaptureInput } from "@/components/shared/ImageCaptureInput";
 import { ModalTrocarPastor } from "@/components/admin/ModalTrocarPastor";
 import { ChurchDocsDialog } from "@/components/admin/ChurchDocsDialog";
 import { useUser } from "@/context/UserContext";
@@ -88,32 +89,27 @@ function viewValue(value: unknown) {
   return safe || "\u2014";
 }
 
-function getChurchImage(church: ChurchInScopeItem): string | null {
-  return String(church.image_url || "").trim() || null;
+const DEFAULT_CHURCH_IMAGE =
+  "https://idipilrcaqittmnapmbq.supabase.co/storage/v1/object/public/banner/logo/imagem-geral/imagem-igreja-geral.png";
+
+function getChurchImage(church: ChurchInScopeItem): string {
+  return String(church.image_url || "").trim() || DEFAULT_CHURCH_IMAGE;
 }
 
 function ChurchAvatar({ church, compact = false }: { church: ChurchInScopeItem; compact?: boolean }) {
   const imageUrl = getChurchImage(church);
   const cls = compact ? "h-12 w-16" : "h-[220px] w-full max-w-[220px]";
 
-  if (imageUrl) {
-    return (
-      <img
-        src={imageUrl}
-        alt={`Imagem da igreja ${church.church_name}`}
-        className={
-          compact
-            ? `${cls} rounded-xl border border-slate-200 object-cover object-center`
-            : `${cls} rounded-xl border border-slate-200 bg-slate-50 object-contain object-center`
-        }
-      />
-    );
-  }
-
   return (
-    <div className={`flex ${cls} items-center justify-center rounded-xl border border-slate-200 bg-slate-50`}>
-      <Church className="h-8 w-8 text-slate-400" />
-    </div>
+    <img
+      src={imageUrl}
+      alt={`Imagem da igreja ${church.church_name}`}
+      className={
+        compact
+          ? `${cls} rounded-xl border border-slate-200 object-cover object-center`
+          : `${cls} rounded-xl border border-slate-200 bg-white object-contain object-center`
+      }
+    />
   );
 }
 
@@ -801,11 +797,10 @@ export function AdminChurchesTab({
               <div className="space-y-1 md:col-span-2">
                 <Label>Imagem da igreja (arquivo)</Label>
                 <div className="flex flex-col gap-3 md:flex-row md:items-center">
-                  <Input
-                    type="file"
+                  <ImageCaptureInput
                     accept="image/*"
-                    onChange={(e) => {
-                      const file = e.target.files?.[0] || null;
+                    capture="environment"
+                    onChange={(file) => {
                       setNewImageFile(file);
                       setNewImagePreview(file ? URL.createObjectURL(file) : "");
                     }}
@@ -829,10 +824,13 @@ export function AdminChurchesTab({
               </div>
               <div className="space-y-1 md:col-span-2">
                 <Label>Carimbo da igreja (arquivo)</Label>
-                <Input
-                  type="file"
+                <ImageCaptureInput
                   accept="image/*"
-                  onChange={(e) => setNewStampFile(e.target.files?.[0] || null)}
+                  capture="environment"
+                  allowWhiteBg
+                  defaultRatio={1}
+                  editorTitle="Editar carimbo da igreja"
+                  onChange={(file) => setNewStampFile(file)}
                 />
                 <p className="text-xs text-slate-500">O carimbo sera salvo junto com o cadastro da igreja.</p>
               </div>
@@ -959,11 +957,10 @@ export function AdminChurchesTab({
               <div className="space-y-1 md:col-span-2">
                 <Label>Imagem da igreja (arquivo)</Label>
                 <div className="flex flex-col gap-3 md:flex-row md:items-center">
-                  <Input
-                    type="file"
+                  <ImageCaptureInput
                     accept="image/*"
-                    onChange={(e) => {
-                      const file = e.target.files?.[0] || null;
+                    capture="environment"
+                    onChange={(file) => {
                       setEditImageFile(file);
                       setEditImagePreview(file ? URL.createObjectURL(file) : "");
                     }}
@@ -987,11 +984,14 @@ export function AdminChurchesTab({
               </div>
               <div className="space-y-1 md:col-span-2">
                 <Label>Carimbo da igreja</Label>
-                <Input
-                  type="file"
+                <ImageCaptureInput
                   accept="image/*"
+                  capture="environment"
+                  allowWhiteBg
+                  defaultRatio={1}
+                  editorTitle="Editar carimbo da igreja"
                   disabled={Boolean(editForm.stamp_church_url)}
-                  onChange={(e) => setEditStampFile(e.target.files?.[0] || null)}
+                  onChange={(file) => setEditStampFile(file)}
                 />
                 {editForm.stamp_church_url ? (
                   <p className="text-xs text-emerald-700">Carimbo ja cadastrado. Caso precise trocar, fale com a secretaria.</p>
@@ -1131,18 +1131,12 @@ export function AdminChurchesTab({
             <Card className="border border-slate-200 shadow-sm">
               <CardContent className="space-y-6 p-5">
                 <div className="flex flex-col gap-4 md:flex-row md:items-center">
-                  <div className="h-36 w-36 shrink-0 overflow-hidden rounded-2xl border border-slate-200 bg-slate-100">
-                    {getChurchImage(viewChurch) ? (
-                      <img
-                        src={getChurchImage(viewChurch) || ""}
-                        alt={`Foto da igreja ${viewChurch.church_name}`}
-                        className="h-full w-full object-cover"
-                      />
-                    ) : (
-                      <div className="flex h-full w-full items-center justify-center">
-                        <Church className="h-16 w-16 text-slate-400" />
-                      </div>
-                    )}
+                  <div className="h-36 w-36 shrink-0 overflow-hidden rounded-2xl border border-slate-200 bg-white">
+                    <img
+                      src={getChurchImage(viewChurch)}
+                      alt={`Foto da igreja ${viewChurch.church_name}`}
+                      className="h-full w-full object-contain"
+                    />
                   </div>
 
                   <div className="space-y-3">

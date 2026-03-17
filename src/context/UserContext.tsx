@@ -1,4 +1,5 @@
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
 export type Usuario = {
@@ -122,6 +123,7 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
     }
   });
   const [telefone, setTelefone] = useState<string | undefined>(undefined);
+  const queryClient = useQueryClient();
 
   useEffect(() => {
     if (!token) return;
@@ -197,6 +199,7 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
   }, [availableChurches]);
 
   function clearAuth() {
+    queryClient.clear();
     setUsuario(undefined);
     setToken(undefined);
     localStorage.removeItem(LS_RLS_TOKEN);

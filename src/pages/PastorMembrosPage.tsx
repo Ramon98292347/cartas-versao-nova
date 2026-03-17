@@ -599,7 +599,7 @@ function buildFichaMembroHtml(form: MemberDocForm) {
 @page{size:A4;margin:15mm} body{margin:0;font-family:Montserrat,Arial,sans-serif;color:#111}
 .page{width:210mm;height:297mm;box-sizing:border-box}
 .header{display:flex;align-items:center;justify-content:center;gap:12mm;margin-top:2mm}
-.header-photo{width:25mm;height:32mm;border:.35mm solid rgba(0,0,0,.25);border-radius:2mm;overflow:hidden;background:rgba(0,0,0,.04)}
+.header-photo{width:25mm;height:32mm;border:.35mm solid rgba(0,0,0,.25);border-radius:2mm;overflow:hidden;background:#ffffff}
 .header-photo img{width:100%;height:100%;object-fit:cover}
 .logo{height:45mm;width:auto;display:block}
 .title{text-align:center;margin:10mm 0 8mm 0;line-height:1.15}
@@ -999,7 +999,7 @@ export default function PastorMembrosPage() {
             {workers.map((member) => (
               <Card key={member.id} className="border border-slate-200">
                 <CardContent className="space-y-3 p-4">
-                  <div className="mx-auto w-full max-w-[220px] overflow-hidden rounded-xl border border-slate-200 bg-slate-50">
+                  <div className="mx-auto w-full max-w-[220px] overflow-hidden rounded-xl border border-slate-200 bg-white">
                     <MemberPhoto src={member.avatar_url || null} alt={`Foto de ${member.full_name}`} />
                   </div>
                   <div className="min-w-0 space-y-1">

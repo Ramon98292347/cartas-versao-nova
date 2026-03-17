@@ -6,18 +6,16 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ChurchSearch, Church } from "@/components/ChurchSearch";
 import { LetterPreview } from "@/components/LetterPreview";
-import { FileText, RotateCcw, Send, Calendar as CalendarIcon, Loader2, Search } from "lucide-react";
+import { FileText, RotateCcw, Send, Loader2, Search } from "lucide-react";
 import { toast } from "sonner";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useQuery } from "@tanstack/react-query";
-import { createLetterByPastor, getPastorByTotvsPublic, listChurchesInScope, listMembers, setLetterStatus, type UserListItem } from "@/services/saasService";
+import { createLetterByPastor, getPastorByTotvsPublic, listChurchesInScope, listMembers, searchChurchesPublic, setLetterStatus, type UserListItem } from "@/services/saasService";
 import { format, parse } from "date-fns";
 import { useUser } from "@/context/UserContext";
 import { useNavigate, useLocation } from "react-router-dom";
-import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
-import { Calendar } from "@/components/ui/calendar";
 import { getFriendlyErrorMessage } from "@/services/api";
 
 type LegacyUsuarioExtra = {
@@ -67,10 +65,15 @@ const Index = () => {
   const [usuarioMinisterial, setUsuarioMinisterial] = useState<string>("");
   const [usuarioDataSeparacao, setUsuarioDataSeparacao] = useState<string>("");
   const [preachPeriod, setPreachPeriod] = useState<PreachPeriod>("");
-  const [isPregacaoCalOpen, setIsPregacaoCalOpen] = useState(false);
   const [savingLetter, setSavingLetter] = useState(false);
   const [pregadorBusca, setPregadorBusca] = useState("");
   const [destinoSearch, setDestinoSearch] = useState("");
+  // Debounce da busca do campo Outros: so dispara apos 300ms sem digitar
+  const [outrosDebounced, setOutrosDebounced] = useState("");
+  useEffect(() => {
+    const timer = setTimeout(() => setOutrosDebounced(destinoOutros), 300);
+    return () => clearTimeout(timer);
+  }, [destinoOutros]);
 
   const activeTotvsForPastor = String(session?.totvs_id || (usuario as LegacyUsuarioExtra | null)?.totvs || (usuario as LegacyUsuarioExtra | null)?.default_totvs_id || "");
   const telefoneUsuarioLogado =
@@ -122,28 +125,84 @@ const Index = () => {
     },
   });
 
-  // Comentario: carrega TODAS as igrejas do sistema sem restringir por escopo aqui.
-  // O filtro de escopo e feito pelo memo allowedDestinationChurches abaixo,
-  // que inclui a igreja de origem + seus descencentes + todos os irmaos em cada nivel da hierarquia.
-  const { data: churches = [] } = useQuery({
-    queryKey: ["churches-letter-form"],
-    queryFn: async () => {
-      const rows = await listChurchesInScope(1, 1000);
-      return rows.map((c, idx) => ({
-        id: Number(c.totvs_id) || idx + 1,
-        codigoTotvs: String(c.totvs_id || ""),
-        nome: String(c.church_name || ""),
-        cidade: String(c.address_city || ""),
-        uf: String(c.address_state || ""),
-        carimboIgreja: String(c.stamp_church_url || ""),
-        carimboPastor: "",
-        classificacao: String(c.church_class || ""),
-        parentTotvsId: String(c.parent_totvs_id || "") || undefined,
-      })) as Church[];
-    },
+  // Funcao auxiliar: converte registro da API para o tipo Church do formulario
+  const apiToChurch = (c: { totvs_id?: string | null; church_name?: string | null; address_city?: string | null; address_state?: string | null; stamp_church_url?: string | null; church_class?: string | null; parent_totvs_id?: string | null }, idx: number): Church => ({
+    id: Number(c.totvs_id) || idx + 1,
+    codigoTotvs: String(c.totvs_id || ""),
+    nome: String(c.church_name || ""),
+    cidade: String(c.address_city || ""),
+    uf: String(c.address_state || ""),
+    carimboIgreja: String(c.stamp_church_url || ""),
+    carimboPastor: "",
+    classificacao: String(c.church_class || ""),
+    parentTotvsId: String(c.parent_totvs_id || "") || undefined,
+  });
+
+  // Escopo proprio: guardamos os dados brutos para ter acesso ao pastor_user_id de cada igreja
+  const { data: rawOwnChurches = [] } = useQuery({
+    queryKey: ["churches-letter-form-own", activeTotvsForPastor],
+    queryFn: () => listChurchesInScope(1, 1000, activeTotvsForPastor || undefined),
     enabled: role === "admin" || Boolean(activeTotvsForPastor),
     staleTime: 60_000,
   });
+  // Converte para o tipo Church usado nos selects do formulario
+  const churches = useMemo(() => rawOwnChurches.map(apiToChurch), [rawOwnChurches]);
+
+  // Igreja propria do usuario logado (para calcular o pai)
+  const activeChurch = useMemo(
+    () => churches.find((c) => c.codigoTotvs === activeTotvsForPastor) || (churches[0] ?? null),
+    [churches, activeTotvsForPastor],
+  );
+  const parentTotvsId = String(activeChurch?.parentTotvsId || "").trim();
+
+  // Escopo da mae: guardamos os dados brutos para ter acesso ao pastor_user_id
+  const { data: rawParentChurches = [] } = useQuery({
+    queryKey: ["churches-letter-form-parent", parentTotvsId],
+    queryFn: () => listChurchesInScope(1, 1000, parentTotvsId || undefined),
+    enabled: (role === "admin" || Boolean(activeTotvsForPastor)) && Boolean(parentTotvsId),
+    staleTime: 60_000,
+  });
+  const parentScopeChurches = useMemo(() => rawParentChurches.map(apiToChurch), [rawParentChurches]);
+
+  // Mapa totvs_id -> pastor_user_id montado a partir dos dados brutos ja carregados
+  const pastorUserIdByTotvs = useMemo(() => {
+    const map: Record<string, string> = {};
+    [...rawOwnChurches, ...rawParentChurches].forEach((c) => {
+      const pid = String(c.pastor_user_id || "").trim();
+      if (pid) map[String(c.totvs_id || "")] = pid;
+    });
+    return map;
+  }, [rawOwnChurches, rawParentChurches]);
+
+  // Busca dinamica no campo Outros usando a edge function search-churches-public
+  const { data: outrosSuggestions = [] } = useQuery({
+    queryKey: ["churches-outros-search", outrosDebounced],
+    queryFn: () => searchChurchesPublic(outrosDebounced, 8),
+    enabled: outrosDebounced.trim().length >= 2,
+    staleTime: 30_000,
+  });
+
+  // Fonte de igrejas para o campo destino: escopo da mae (se carregado) ou escopo proprio
+  const destinationSourceChurches = useMemo(
+    () => (parentScopeChurches.length ? parentScopeChurches : churches),
+    [parentScopeChurches, churches],
+  );
+
+  // Sets para detectar se o destino esta fora do escopo proprio
+  const ownScopeSet = useMemo(
+    () => new Set(churches.map((c) => c.codigoTotvs).filter(Boolean)),
+    [churches],
+  );
+  const parentScopeSet = useMemo(
+    () => new Set(destinationSourceChurches.map((c) => c.codigoTotvs).filter(Boolean)),
+    [destinationSourceChurches],
+  );
+
+  // Igreja mae do usuario logado
+  const parentChurch = useMemo(
+    () => (parentTotvsId ? destinationSourceChurches.find((c) => c.codigoTotvs === parentTotvsId) || null : null),
+    [destinationSourceChurches, parentTotvsId],
+  );
   const { data: preachersInScope = [] } = useQuery({
     queryKey: ["letter-preachers-in-scope", session?.totvs_id, role],
     queryFn: async () => {
@@ -159,96 +218,59 @@ const Index = () => {
     staleTime: 60_000,
   });
   const origemTotvsSelecionada = String(igrejaOrigem?.codigoTotvs || activeTotvsForPastor || "").trim();
+
+  // 1. Tenta achar o pastor_user_id da igreja origem nos dados brutos ja carregados
+  const pastorUserIdDaOrigem = pastorUserIdByTotvs[origemTotvsSelecionada] || "";
+
+  // 2. Busca o pastor em preachersInScope pelo ID (prioridade maxima)
+  const pastorPorId = useMemo(
+    () => (pastorUserIdDaOrigem ? preachersInScope.find((m) => m.id === pastorUserIdDaOrigem) || null : null),
+    [pastorUserIdDaOrigem, preachersInScope],
+  );
+
+  // 3. Fallback: busca por role "pastor" e totvs na lista de membros do escopo
+  const pastorPorTotvs = useMemo(
+    () =>
+      preachersInScope.find(
+        (m) =>
+          String(m.role || "").toLowerCase() === "pastor" &&
+          String(m.default_totvs_id || "") === origemTotvsSelecionada,
+      ) || null,
+    [origemTotvsSelecionada, preachersInScope],
+  );
+
+  // 4. Fallback final: busca via Supabase (caso o pastor nao esteja no escopo carregado)
   const { data: pastorResponsavelData } = useQuery({
     queryKey: ["pastor-responsavel-carta", origemTotvsSelecionada],
     queryFn: () => getPastorByTotvsPublic(origemTotvsSelecionada),
-    enabled: Boolean(origemTotvsSelecionada),
+    // So chama se nao achou nos dados locais
+    enabled: Boolean(origemTotvsSelecionada) && !pastorPorId && !pastorPorTotvs,
   });
-  const pastorResponsavelScope = useMemo(() => {
-    const found = preachersInScope.find((m) =>
-      String(m.role || "").toLowerCase() === "pastor" &&
-      String(m.default_totvs_id || "") === origemTotvsSelecionada,
-    );
-    return found || null;
-  }, [origemTotvsSelecionada, preachersInScope]);
 
-  const pastorResponsavel = String(pastorResponsavelScope?.full_name || pastorResponsavelData?.full_name || "");
-  const telefonePastorResponsavel = String(pastorResponsavelScope?.phone || pastorResponsavelData?.phone || "");
+  const pastorResponsavel = String(
+    pastorPorId?.full_name || pastorPorTotvs?.full_name || pastorResponsavelData?.full_name || "",
+  );
+  const telefonePastorResponsavel = String(
+    pastorPorId?.phone || pastorPorTotvs?.phone || pastorResponsavelData?.phone || "",
+  );
 
+  // Origens permitidas: apenas [propria, mae] — igual ao sistema de cartas
   const allowedOriginChurches = useMemo(() => {
-    if (!activeTotvsForPastor) return churches;
-    const byTotvs = new Map<string, Church>();
-    churches.forEach((c) => {
-      const id = String(c.codigoTotvs || "").trim();
-      if (id) byTotvs.set(id, c);
-    });
-    const active = byTotvs.get(activeTotvsForPastor);
-    if (!active) return churches;
+    const list: Church[] = [];
+    if (activeChurch) list.push(activeChurch);
+    if (parentChurch && parentChurch.codigoTotvs !== activeChurch?.codigoTotvs) list.push(parentChurch);
+    return list.length ? list : churches.slice(0, 3);
+  }, [activeChurch, parentChurch, churches]);
 
-    const allowed = new Set<string>([activeTotvsForPastor]);
-    const parent = String(active.parentTotvsId || "").trim();
-    if (parent) {
-      allowed.add(parent);
-      const grand = String(byTotvs.get(parent)?.parentTotvsId || "").trim();
-      if (grand) allowed.add(grand);
-    }
+  // Destino esta fora do escopo proprio mas dentro do escopo da mae → ajusta origem para a mae
+  const shouldUseParentOrigin = useMemo(() => {
+    if (!igrejaDestino || !parentChurch || !activeChurch) return false;
+    const d = String(igrejaDestino.codigoTotvs || "");
+    return parentScopeSet.has(d) && !ownScopeSet.has(d);
+  }, [igrejaDestino, parentChurch, activeChurch, parentScopeSet, ownScopeSet]);
 
-    const result = churches.filter((c) => allowed.has(String(c.codigoTotvs || "").trim()));
-    return result.length ? result : [active];
-  }, [churches, activeTotvsForPastor]);
-
-  // Comentario: calcula as igrejas permitidas como destino.
-  // Inclui a origem + todos os descencentes + todos os ancestrais
-  // + todos os irmaos em cada nivel da hierarquia (outras igrejas com o mesmo pai).
-  // Isso garante que tanto pastor quanto obreiro vejam o escopo correto.
-  const allowedDestinationChurches = useMemo(() => {
-    if (!igrejaOrigem?.codigoTotvs) return churches;
-    const byTotvs = new Map<string, Church>();
-    const childMap = new Map<string, string[]>();
-
-    churches.forEach((church) => {
-      const totvs = String(church.codigoTotvs || "").trim();
-      if (!totvs) return;
-      byTotvs.set(totvs, church);
-      const parent = String(church.parentTotvsId || "").trim();
-      if (!childMap.has(parent)) childMap.set(parent, []);
-      childMap.get(parent)!.push(totvs);
-    });
-
-    const origin = String(igrejaOrigem.codigoTotvs || "").trim();
-    const allowed = new Set<string>();
-
-    // Adiciona uma igreja e todos os seus descencentes (BFS para baixo)
-    const addSubtree = (root: string) => {
-      const q: string[] = [root];
-      while (q.length > 0) {
-        const cur = q.shift()!;
-        if (allowed.has(cur)) continue;
-        allowed.add(cur);
-        for (const child of childMap.get(cur) || []) q.push(child);
-      }
-    };
-
-    // 1. Adiciona a origem e todos os seus descencentes
-    addSubtree(origin);
-
-    // 2. Sobe na hierarquia: para cada nivel, adiciona o pai e todos os irmaos + seus descencentes
-    let cursor = origin;
-    const guard = new Set<string>();
-    while (cursor && !guard.has(cursor)) {
-      guard.add(cursor);
-      const parent = String(byTotvs.get(cursor)?.parentTotvsId || "").trim();
-      if (!parent) break;
-      allowed.add(parent);
-      // Adiciona todos os irmaos (outros filhos do mesmo pai) + suas arvores
-      for (const sibling of childMap.get(parent) || []) {
-        addSubtree(sibling);
-      }
-      cursor = parent;
-    }
-
-    return churches.filter((c) => allowed.has(String(c.codigoTotvs || "").trim()));
-  }, [churches, igrejaOrigem?.codigoTotvs]);
+  // Para campo Outros: qualquer texto digitado la → origem vai para a mae mais alta
+  const shouldUseParentOriginForOthers = Boolean(destinoOutros.trim() && parentChurch);
 
   const preachersMap = useMemo(() => {
     const map = new Map<string, UserListItem>();
@@ -274,17 +296,30 @@ const Index = () => {
     ];
   }, [preachersInScope, telefoneUsuarioLogado, usuario]);
 
+  // Sugestoes para o campo de busca do destino (escopo da mae)
   const filteredDestinoOptions = useMemo(() => {
-    const q = destinoSearch.trim().toLowerCase();
+    const q = destinoSearch.trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
     if (q.length < 2) return [];
-    return allowedDestinationChurches
-      .filter((c) => {
-        const name = String(c.nome || "").toLowerCase();
-        const totvs = String(c.codigoTotvs || "").toLowerCase();
-        return name.includes(q) || totvs.includes(q);
+    return destinationSourceChurches
+      .filter((c: Church) => {
+        const hay = `${c.codigoTotvs} ${c.nome} ${c.classificacao || ""}`.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+        return hay.includes(q);
       })
       .slice(0, 12);
-  }, [destinoSearch, allowedDestinationChurches]);
+  }, [destinoSearch, destinationSourceChurches]);
+
+  // Sugestoes para o campo Outros — usa o proprio valor digitado para buscar
+  // Converte resultados da edge function para o formato Church usado no JSX
+  const filteredOutrosOptions = useMemo(
+    () =>
+      outrosSuggestions.map((c) => ({
+        id: 0,
+        codigoTotvs: c.totvs_id,
+        nome: c.church_name,
+        classificacao: c.class,
+      } as Church)),
+    [outrosSuggestions],
+  );
 
   const filteredPreacherOptions = useMemo(() => {
     const q = pregadorBusca.trim().toLowerCase();
@@ -403,13 +438,21 @@ const Index = () => {
     setValue("origemId", fallback.id, { shouldValidate: true });
   }, [allowedOriginChurches, igrejaOrigem?.codigoTotvs, setValue]);
 
+  // Ajuste automatico de origem: se destino esta fora do escopo proprio → usa a mae
   useEffect(() => {
-    if (!igrejaDestino) return;
-    const exists = allowedDestinationChurches.some((c) => String(c.codigoTotvs || "") === String(igrejaDestino.codigoTotvs || ""));
-    if (exists) return;
-    setIgrejaDestino(undefined);
-    setValue("destinoId", undefined as unknown as number, { shouldValidate: true });
-  }, [allowedDestinationChurches, igrejaDestino, setValue]);
+    if (shouldUseParentOrigin || shouldUseParentOriginForOthers) {
+      const parent = parentChurch;
+      if (parent && igrejaOrigem?.codigoTotvs !== parent.codigoTotvs) {
+        setIgrejaOrigem(parent);
+        setValue("origemId", parent.id, { shouldValidate: true });
+      }
+    } else if (activeChurch && !allowedOriginChurches.some((c) => c.codigoTotvs === igrejaOrigem?.codigoTotvs)) {
+      // Volta para a propria quando o destino volta ao escopo proprio
+      setIgrejaOrigem(activeChurch);
+      setValue("origemId", activeChurch.id, { shouldValidate: true });
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [shouldUseParentOrigin, shouldUseParentOriginForOthers]);
 
   const onSubmit = async (values: FormData) => {
     if (!preachPeriod) {
@@ -453,6 +496,9 @@ const Index = () => {
         church_destination: destinoText,
         phone: (values.telefone || "").replace(/\D/g, ""),
         email: usuarioEmail || selectedPreacher?.email || (usuario as LegacyUsuarioExtra | null)?.email || null,
+        // Pastor da igreja de origem — sempre é o pastor da igreja selecionada como origem
+        pastor_name: pastorResponsavel || undefined,
+        pastor_phone: telefonePastorResponsavel || undefined,
       })) as CreateLetterResult;
 
       const directReleaseEnabled = Boolean((usuario as LegacyUsuarioExtra & { can_create_released_letter?: boolean } | null)?.can_create_released_letter);
@@ -588,7 +634,7 @@ const Index = () => {
                   label="Igreja que faz a carta (origem)"
                   placeholder="Buscar por nome ou código TOTVS"
                   churches={allowedOriginChurches}
-                  minChars={3}
+                  minChars={1}
                   onSelect={(c) => {
                     setIgrejaOrigem(c);
                     setValue("origemId", c.id, { shouldValidate: true });
@@ -598,15 +644,22 @@ const Index = () => {
                   onDisabledClickMessage="Digite seu telefone"
                   inputId="church-origem"
                 />
+                {/* Aviso quando a origem foi ajustada automaticamente para a mae */}
+                {(shouldUseParentOrigin || shouldUseParentOriginForOthers) && parentChurch && (
+                  <p className="text-xs text-amber-700">
+                    Destino fora do seu escopo. A origem foi ajustada para a mae: {parentChurch.codigoTotvs} - {parentChurch.nome}.
+                  </p>
+                )}
                 {errors.origemId && <p className="text-xs text-destructive">Selecione a igreja de origem</p>}
 
                 <div className="space-y-2">
                   <Label className="text-sm font-medium text-slate-800">Igreja que vai pregar (destino)</Label>
+                  {/* Seletor rapido — traz todas as igrejas do escopo da mae */}
                   <Select
                     value={igrejaDestino ? `${igrejaDestino.codigoTotvs} - ${igrejaDestino.nome}` : ""}
                     onValueChange={(value) => {
-                      const found = allowedDestinationChurches.find(
-                        (c) => `${c.codigoTotvs} - ${c.nome}` === value,
+                      const found = destinationSourceChurches.find(
+                        (c: Church) => `${c.codigoTotvs} - ${c.nome}` === value,
                       );
                       if (found) {
                         setIgrejaDestino(found);
@@ -619,19 +672,20 @@ const Index = () => {
                     disabled={Boolean(destinoOutros.trim())}
                   >
                     <SelectTrigger className="h-11 rounded-xl border-slate-300 bg-slate-50">
-                      <SelectValue placeholder="Selecione uma igreja sugerida" />
+                      <SelectValue placeholder="Selecione uma igreja do seu escopo" />
                     </SelectTrigger>
                     <SelectContent>
-                      {allowedDestinationChurches.map((c) => {
+                      {destinationSourceChurches.map((c: Church) => {
                         const val = `${c.codigoTotvs} - ${c.nome}`;
                         return (
                           <SelectItem key={c.codigoTotvs || String(c.id)} value={val}>
-                            {val}
+                            {val} {c.classificacao ? `(${c.classificacao})` : ""}
                           </SelectItem>
                         );
                       })}
                     </SelectContent>
                   </Select>
+                  {/* Busca por texto no escopo da mae */}
                   <div className="relative">
                     <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
                     <Input
@@ -648,13 +702,13 @@ const Index = () => {
                       className="h-11 pl-10 rounded-xl border-slate-300 bg-slate-50 transition-colors focus:border-blue-500 focus:ring-blue-500"
                     />
                   </div>
-                  {filteredDestinoOptions.length > 0 && (
+                  {filteredDestinoOptions.length > 0 && !destinoOutros.trim() && (
                     <div className="max-h-56 overflow-y-auto rounded-md border border-slate-200 bg-white shadow-sm">
-                      {filteredDestinoOptions.map((c) => (
+                      {filteredDestinoOptions.map((c: Church) => (
                         <button
                           key={c.codigoTotvs || String(c.id)}
                           type="button"
-                          className="flex w-full items-start gap-3 border-b border-slate-100 px-3 py-2 text-left text-sm last:border-b-0 hover:bg-slate-50"
+                          className="flex w-full items-start justify-between gap-3 border-b border-slate-100 px-3 py-2 text-left text-sm last:border-b-0 hover:bg-slate-50"
                           onClick={() => {
                             setIgrejaDestino(c);
                             setValue("destinoId", c.id, { shouldValidate: true });
@@ -664,33 +718,72 @@ const Index = () => {
                           }}
                         >
                           <span className="font-medium text-slate-900">{c.codigoTotvs} - {c.nome}</span>
+                          <span className="shrink-0 text-xs uppercase tracking-wide text-slate-500">{c.classificacao}</span>
                         </button>
                       ))}
                     </div>
                   )}
                   <p className="text-xs text-muted-foreground">
-                    Se escolher uma igreja do escopo no seletor, a origem volta para a igreja do seu papel logado. Se digitar um destino fora do escopo, a origem sobe para a igreja mãe.
+                    Se escolher uma igreja do escopo no seletor, a origem volta para a igreja do seu papel logado. Se digitar um destino fora do escopo, a origem sobe para a igreja mae.
                   </p>
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="destinoOutros" className="text-sm font-medium text-slate-800">Outros (se não encontrar na lista)</Label>
-                  <Input
-                    id="destinoOutros"
-                    type="text"
-                    value={destinoOutros}
-                    onChange={(e) => {
-                      setDestinoOutros(e.target.value);
-                      setValue("destinoOutros", e.target.value, { shouldValidate: false });
-                      if (e.target.value.trim()) {
-                        setIgrejaDestino(undefined);
-                        setValue("destinoId", undefined as unknown as number, { shouldValidate: false });
-                        setDestinoSearch("");
-                      }
-                    }}
-                    placeholder="Ex.: 99999 - Igreja não cadastrada"
-                    disabled={Boolean(igrejaDestino) || Boolean(destinoSearch.trim())}
-                    className="h-11 rounded-xl border-slate-300 bg-slate-50 transition-colors focus:border-blue-500 focus:ring-blue-500"
-                  />
+                  {/* Campo unico: digitar busca automaticamente, ao sair formata o valor */}
+                  <div className="relative">
+                    <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                    <Input
+                      id="destinoOutros"
+                      type="text"
+                      value={destinoOutros}
+                      onChange={(e) => {
+                        setDestinoOutros(e.target.value);
+                        setValue("destinoOutros", e.target.value, { shouldValidate: false });
+                        if (e.target.value.trim()) {
+                          setIgrejaDestino(undefined);
+                          setValue("destinoId", undefined as unknown as number, { shouldValidate: false });
+                          setDestinoSearch("");
+                        }
+                      }}
+                      onBlur={(e) => {
+                        // Formata "9530 campo grande" -> "9530 - CAMPO GRANDE"
+                        const raw = e.target.value.trim();
+                        if (!raw) return;
+                        const match = raw.match(/^(\d{1,10})\s*[-)\s]?\s*(.+)$/);
+                        const formatted = match
+                          ? `${match[1].trim()} - ${match[2].trim().replace(/\s+/g, " ").toUpperCase()}`
+                          : raw.toUpperCase();
+                        setDestinoOutros(formatted);
+                        setValue("destinoOutros", formatted, { shouldValidate: false });
+                      }}
+                      placeholder="Ex.: 9530 campo grande → 9530 - CAMPO GRANDE"
+                      disabled={Boolean(igrejaDestino) || Boolean(destinoSearch.trim())}
+                      className="h-11 pl-10 rounded-xl border-slate-300 bg-slate-50 transition-colors focus:border-blue-500 focus:ring-blue-500"
+                    />
+                  </div>
+                  {/* Sugestoes do campo Outros (busca em todas as igrejas do banco) */}
+                  {filteredOutrosOptions.length > 0 && !igrejaDestino && !destinoSearch.trim() && (
+                    <div className="max-h-48 overflow-y-auto rounded-md border border-slate-200 bg-white shadow-sm">
+                      {filteredOutrosOptions.map((c: Church) => (
+                        <button
+                          key={c.codigoTotvs || String(c.id)}
+                          type="button"
+                          className="flex w-full items-start justify-between gap-3 border-b border-slate-100 px-3 py-2 text-left text-sm last:border-b-0 hover:bg-slate-50"
+                          onClick={() => {
+                            const label = `${c.codigoTotvs} - ${c.nome}`;
+                            setDestinoOutros(label);
+                            setValue("destinoOutros", label, { shouldValidate: false });
+                            setIgrejaDestino(undefined);
+                            setValue("destinoId", undefined as unknown as number, { shouldValidate: false });
+                            setDestinoSearch("");
+                          }}
+                        >
+                          <span className="font-medium text-slate-900">{c.codigoTotvs} - {c.nome}</span>
+                          <span className="shrink-0 text-xs uppercase tracking-wide text-slate-500">{c.classificacao}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
                   <p className="text-xs text-muted-foreground">
                     Modelo: <span className="font-medium">9901 - PIUMA-NITEROI</span>. Use este campo apenas se a igreja não estiver na lista acima.
                   </p>
@@ -702,8 +795,7 @@ const Index = () => {
                     <Label htmlFor="dataPregacao" className="text-sm font-medium text-slate-800">
                       Data da pregação
                     </Label>
-                    <div className="flex gap-2">
-                      {(() => {
+                    {(() => {
                         const { name, ref, onBlur } = register("dataPregacao");
                         return (
                           <Input
@@ -716,61 +808,11 @@ const Index = () => {
                             min={todayIso}
                             onChange={(e) => setValue("dataPregacao", e.target.value, { shouldValidate: true })}
                             onFocus={(e) => { if (disableByPhone) { toast.info("Digite seu telefone"); e.currentTarget.blur(); } }}
-                            className="h-11 flex-1 rounded-xl border-slate-300 bg-slate-50 transition-colors focus:border-blue-500 focus:ring-blue-500"
+                            className="h-11 w-full rounded-xl border-slate-300 bg-slate-50 transition-colors focus:border-blue-500 focus:ring-blue-500"
                             required
                           />
                         );
                       })()}
-                      <Popover
-                        open={isPregacaoCalOpen}
-                        onOpenChange={(open) => {
-                          if (disableByPhone) {
-                            setIsPregacaoCalOpen(false);
-                            return;
-                          }
-                          setIsPregacaoCalOpen(open);
-                        }}
-                      >
-                        <PopoverTrigger asChild>
-                          <Button
-                            type="button"
-                            variant="outline"
-                            className="whitespace-nowrap"
-                            onClick={(e) => {
-                              if (disableByPhone) {
-                                toast.info("Digite seu telefone");
-                                e.preventDefault();
-                                e.stopPropagation();
-                              }
-                            }}
-                          >
-                            <CalendarIcon className="h-4 w-4 mr-2" />
-                            Calendário
-                          </Button>
-                        </PopoverTrigger>
-                        <PopoverContent className="w-auto p-0" align="start">
-                          <Calendar
-                            mode="single"
-                            selected={watch("dataPregacao") ? parse(watch("dataPregacao"), "yyyy-MM-dd", new Date()) : undefined}
-                            onSelect={(d) => {
-                              if (!d) return;
-                              const pickedIso = format(d, "yyyy-MM-dd");
-                              if (pickedIso < todayIso) {
-                                toast.error("Selecione uma data de hoje em diante.");
-                                return;
-                              }
-                              setValue("dataPregacao", pickedIso, { shouldValidate: true });
-                              setIsPregacaoCalOpen(false);
-                            }}
-                            disabled={(date) => {
-                              const current = format(date, "yyyy-MM-dd");
-                              return current < todayIso;
-                            }}
-                            initialFocus
-                          />
-                        </PopoverContent>
-                      </Popover>
-                    </div>
                     {errors.dataPregacao && <p className="text-xs text-destructive">{errors.dataPregacao.message as string}</p>}
                   </div>
 

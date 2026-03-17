@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { ArrowLeft, Eye, EyeOff, Search, UserPlus } from "lucide-react";
+import { ImageCaptureInput } from "@/components/shared/ImageCaptureInput";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -264,20 +265,17 @@ export default function CadastroRapido() {
                 <Label>Foto para avatar (opcional)</Label>
                 <div className="flex flex-col gap-3 md:flex-row md:items-start">
                   <div className="w-full md:flex-1">
-                    <Input
-                      type="file"
-                      accept=".jpg,.jpeg,.png,.webp,.gif,.bmp,.tiff,.avif,image/*"
-                      onChange={(e) => {
-                        const file = e.target.files?.[0] || null;
-                        setAvatarFile(file);
-                      }}
+                    <ImageCaptureInput
+                      accept="image/*"
+                      capture="user"
+                      onChange={(file) => setAvatarFile(file)}
                     />
-                    <p className="mt-1 text-xs text-slate-500">Formatos aceitos: JPG, PNG, WEBP e outros.</p>
+                    <p className="mt-1 text-xs text-slate-500">Tire uma foto 3x4 ou escolha da galeria.</p>
                     {avatarFile ? <p className="mt-1 text-xs text-slate-600">Arquivo: {avatarFile.name}</p> : null}
                   </div>
 
                   <div className="flex flex-col items-center">
-                    <div className="h-[160px] w-[120px] overflow-hidden rounded-md border border-slate-300 bg-slate-50">
+                    <div className="h-[160px] w-[120px] overflow-hidden rounded-md border border-slate-300 bg-white">
                       {avatarPreviewUrl ? (
                         <img src={avatarPreviewUrl} alt="Pre-visualizacao 3x4" className="h-full w-full object-cover" />
                       ) : (

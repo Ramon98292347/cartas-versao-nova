@@ -130,7 +130,7 @@ function AvatarWithFallback({ src, alt, className }: { src?: string | null; alt:
     );
   }
   return (
-    <div className={`${className} flex items-center justify-center border border-slate-200 bg-slate-100 text-slate-400`}>
+    <div className={`${className} flex items-center justify-center border border-slate-200 bg-white text-slate-400`}>
       <User className="h-5 w-5" />
     </div>
   );
@@ -888,7 +888,7 @@ export function ObreirosTab({
             <Card className="border border-slate-200 shadow-sm">
               <CardContent className="space-y-6 p-5">
                 <div className="flex flex-col gap-4 md:flex-row md:items-start">
-                  <div className="h-[140px] w-[140px] shrink-0 overflow-hidden rounded-xl border border-slate-200 bg-slate-100">
+                  <div className="h-[140px] w-[140px] shrink-0 overflow-hidden rounded-xl border border-slate-200 bg-white">
                     <AvatarWithFallback
                       src={selectedWorker.avatar_url || null}
                       alt="Avatar do membro"

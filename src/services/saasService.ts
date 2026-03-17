@@ -402,6 +402,9 @@ export type LetterCreatePayload = {
   preacher_user_id?: string;
   phone?: string;
   email?: string;
+  // Pastor responsável da igreja de origem
+  pastor_name?: string;
+  pastor_phone?: string;
 };
 
 const MOCK_USERS: Array<AuthSessionData & { password: string }> = [
@@ -1139,6 +1142,18 @@ export async function listAdminChurchSummary(scopeTotvsIds: string[]): Promise<A
     g.total_obreiros = obreiros.length;
   });
   return Array.from(groups.values()).sort((a, b) => a.church_name.localeCompare(b.church_name));
+}
+
+// Busca rapida de igrejas por TOTVS ou nome usando a edge function search-churches-public
+export type ChurchSearchResult = { totvs_id: string; church_name: string; class: string };
+export async function searchChurchesPublic(query: string, limit = 8): Promise<ChurchSearchResult[]> {
+  const { post } = await import("@/lib/api");
+  const result = await post<{ ok?: boolean; churches?: ChurchSearchResult[] }>(
+    "search-churches-public",
+    { query, limit },
+    { skipAuth: true },
+  );
+  return result?.churches ?? [];
 }
 
 export async function listChurchesInScope(page = 1, pageSize = 200, rootTotvsId?: string): Promise<ChurchInScopeItem[]> {
@@ -2860,6 +2875,8 @@ export async function createLetterByPastor(payload: LetterCreatePayload) {
       preacher_user_id: payload.preacher_user_id || null,
       phone: payload.phone || null,
       email: payload.email || null,
+      pastor_name: payload.pastor_name || null,
+      pastor_phone: payload.pastor_phone || null,
     });
   }
 

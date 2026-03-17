@@ -7,7 +7,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
 import { setLetterStatus, setWorkerDirectRelease, softDeleteLetter, type PastorLetter } from "@/services/saasService";
-import { ArrowUpRight, Filter, MoreHorizontal, RotateCcw, Search, Share2, Trash2, Lock, Unlock, CheckCheck, Send, Zap } from "lucide-react";
+import { ArrowUpRight, FileText, Filter, MoreHorizontal, RotateCcw, Search, Share2, Trash2, Lock, Unlock, CheckCheck, Send, Zap } from "lucide-react";
+import { PastorLetterDialog, type LetterTarget } from "@/components/admin/PastorLetterDialog";
 
 // URL do webhook n8n — o mesmo usado pelo sistema de cartas (telas-cartas).
 const LETTERS_WEBHOOK_URL = "https://n8n-n8n.ynlng8.easypanel.host/webhook/carta-pregacao";
@@ -61,7 +62,7 @@ export function CartasTab({
   scopeTotvsIds: string[];
   phonesByUserId: Record<string, string>;
   phonesByName: Record<string, string>;
-  viewerRole: "admin" | "pastor";
+  viewerRole: "admin" | "pastor" | "obreiro";
   viewerUserId: string;
   allowScopeView: boolean;
   autoReleaseByUserId?: Record<string, boolean>;
@@ -76,6 +77,9 @@ export function CartasTab({
   const [updatingBlockId, setUpdatingBlockId] = useState<string | null>(null);
   // Rastreia alteracoes locais de liberacao automatica para atualizar a UI sem recarregar
   const [localAutoRelease, setLocalAutoRelease] = useState<Record<string, boolean>>({});
+  // Estado do dialog de criar carta para um obreiro/pastor especifico
+  const [letterDialogOpen, setLetterDialogOpen] = useState(false);
+  const [letterDialogTarget, setLetterDialogTarget] = useState<LetterTarget | null>(null);
   const [filters, setFilters] = useState({
     dateStart: "",
     dateEnd: "",
@@ -339,6 +343,20 @@ export function CartasTab({
   }
 
   function renderActions(letter: PastorLetter) {
+    // Para obreiro: apenas visualizar PDF e excluir
+    if (viewerRole === "obreiro") {
+      return (
+        <div className="flex gap-2">
+          <Button size="sm" variant="outline" disabled={!canViewOrShare(letter)} onClick={() => openPdf(letter)}>
+            <ArrowUpRight className="mr-2 h-4 w-4" /> Ver PDF
+          </Button>
+          <Button size="sm" variant="outline" className="text-rose-600" onClick={() => remove(letter)}>
+            <Trash2 className="mr-2 h-4 w-4" /> Excluir
+          </Button>
+        </div>
+      );
+    }
+
     const isBlocked = letter.status === "BLOQUEADO";
     const isEnviada = letter.status === "ENVIADA";
     const userId = String(letter.preacher_user_id || "").trim();
@@ -370,6 +388,24 @@ export function CartasTab({
             <DropdownMenuItem onClick={() => toggleAutoRelease(letter)}>
               <Zap className={`mr-2 h-4 w-4 ${autoRelease ? "text-yellow-500" : "text-slate-400"}`} />
               Liberacao automatica: {autoRelease ? "ON" : "OFF"}
+            </DropdownMenuItem>
+          )}
+          {/* Botao Carta: abre dialog para criar nova carta para este pregador */}
+          {!isBlocked && (
+            <DropdownMenuItem
+              onClick={() => {
+                setLetterDialogTarget({
+                  userId: String(letter.preacher_user_id || "").trim(),
+                  nome: String(letter.preacher_name || ""),
+                  telefone: String((letter as PastorLetter & { phone?: string }).phone || ""),
+                  ministerRole: String(letter.minister_role || "Obreiro"),
+                  churchTotvsId: String(letter.church_totvs_id || "").trim(),
+                });
+                setLetterDialogOpen(true);
+              }}
+            >
+              <FileText className="mr-2 h-4 w-4 text-blue-600" />
+              Carta
             </DropdownMenuItem>
           )}
           <DropdownMenuItem onClick={() => share(letter)} disabled={!canViewOrShare(letter)}>
@@ -527,6 +563,14 @@ export function CartasTab({
           })}
         </div>
       </section>
+
+      {/* Dialog para criar carta de pregacao para um obreiro/pastor especifico */}
+      <PastorLetterDialog
+        open={letterDialogOpen}
+        onOpenChange={setLetterDialogOpen}
+        letterTarget={letterDialogTarget}
+        onSuccess={() => void refresh()}
+      />
     </>
   );
 }

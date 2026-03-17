@@ -2,6 +2,8 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { jwtVerify } from "https://esm.sh/jose@5.2.4";
 
+const N8N_WEBHOOK_URL = "https://n8n-n8n.ynlng8.easypanel.host/webhook/carta-pregacao";
+
 function corsHeaders() {
   return {
     "Content-Type": "application/json",
@@ -42,7 +44,10 @@ async function verifySessionJWT(req: Request): Promise<SessionClaims | null> {
     });
 
     const user_id = String(payload.sub || "");
-    const role = String(payload.role || "").toLowerCase() as Role;
+    const rawRole = String(payload.role || "").toLowerCase();
+    const appRole = String(payload.app_role || "").toLowerCase();
+    const resolvedRole = rawRole === "authenticated" ? appRole : rawRole;
+    const role = resolvedRole as Role;
     const active_totvs_id = String(payload.active_totvs_id || "");
 
     if (!user_id || !active_totvs_id) return null;
@@ -52,6 +57,30 @@ async function verifySessionJWT(req: Request): Promise<SessionClaims | null> {
   } catch {
     return null;
   }
+}
+
+const PT_MONTHS = ["janeiro","fevereiro","março","abril","maio","junho","julho","agosto","setembro","outubro","novembro","dezembro"];
+
+function formatDMY(s: string): string {
+  const m = String(s || "").match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!m) return s;
+  return `${m[3]}/${m[2]}/${m[1]}`;
+}
+
+function formatExtended(isoStr: string): string {
+  const m = String(isoStr || "").match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!m) return isoStr;
+  return `${parseInt(m[3], 10)} de ${PT_MONTHS[parseInt(m[2], 10) - 1]} de ${m[1]}`;
+}
+
+function churchNameOnly(text: string): string {
+  const idx = text.indexOf(" - ");
+  return idx >= 0 ? text.slice(idx + 3).trim() : text.trim();
+}
+
+function parseTotvsFromText(value: string): string {
+  const m = String(value || "").trim().match(/^(\d{3,})\b/);
+  return m ? m[1] : "";
 }
 
 Deno.serve(async (req) => {
@@ -90,7 +119,7 @@ Deno.serve(async (req) => {
 
     const { data: letter, error: letterErr } = await sb
       .from("letters")
-      .select("id, church_totvs_id, status, storage_path, preacher_name")
+      .select("id, church_totvs_id, status, storage_path, preacher_name, preacher_user_id, minister_role, preach_date, preach_period, church_origin, church_destination, phone, email, signer_user_id, signer_totvs_id, created_at")
       .eq("id", reqRow.letter_id)
       .maybeSingle();
 
@@ -99,17 +128,6 @@ Deno.serve(async (req) => {
 
     if (String(letter.church_totvs_id) !== String(session.active_totvs_id)) {
       return json({ ok: false, error: "forbidden_wrong_church_letter" }, 403);
-    }
-
-    if (!String(letter.storage_path || "").trim()) {
-      return json(
-        {
-          ok: false,
-          error: "cannot_release_without_pdf",
-          detail: "Nao e possivel liberar carta sem PDF pronto.",
-        },
-        409,
-      );
     }
 
     const { data: reqUpdated, error: updReqErr } = await sb
@@ -128,6 +146,7 @@ Deno.serve(async (req) => {
       .single();
     if (updLetterErr) return json({ ok: false, error: "db_error_update_letter", details: updLetterErr.message }, 500);
 
+    // Notificacao para o solicitante
     await sb.from("notifications").insert({
       church_totvs_id: session.active_totvs_id,
       user_id: reqRow.requester_user_id,
@@ -137,7 +156,100 @@ Deno.serve(async (req) => {
       read_at: null,
     });
 
-    return json({ ok: true, request: reqUpdated, letter: letterUpdated }, 200);
+    // Variáveis para registrar o resultado do webhook no response (facilita debug)
+    let n8nFired = false;
+    let n8nStatus = 0;
+    let n8nError: string | null = null;
+
+    // Dispara o webhook N8N para gerar o PDF agora que a carta foi liberada manualmente
+    try {
+      // Extrai os IDs necessários da carta para buscar dados completos
+      const churchTotvs = String(letter.church_totvs_id || "");
+      const signerTotvs = String(letter.signer_totvs_id || "");
+      const signerUserId = String(letter.signer_user_id || "");
+      const preacherUserId = String(letter.preacher_user_id || "");
+      const churchOrigin = String(letter.church_origin || "");
+      const churchDestination = String(letter.church_destination || "");
+
+      // Extrai o número TOTVS da string de destino (ex: "9639 - PEDRA AZUL" → "9639")
+      const destinationTotvs = parseTotvsFromText(churchDestination);
+
+      // Busca em paralelo: igrejas de origem/assinante, dados do pastor, dados do pregador
+      const [churchesRes, signerRes, preacherRes] = await Promise.all([
+        sb.from("churches")
+          .select("totvs_id,church_name,stamp_church_url,address_city,address_state")
+          .in("totvs_id", [churchTotvs, signerTotvs].filter(Boolean)),
+
+        // Busca dados do pastor que assina a carta
+        signerUserId
+          ? sb.from("users").select("id,full_name,phone,signature_url,stamp_pastor_url").eq("id", signerUserId).maybeSingle()
+          : Promise.resolve({ data: null, error: null }),
+
+        // Busca data de separação e status de cadastro do pregador
+        preacherUserId
+          ? sb.from("users").select("id,data_separacao,registration_status").eq("id", preacherUserId).maybeSingle()
+          : Promise.resolve({ data: null, error: null }),
+      ]);
+
+      // Separa as igrejas retornadas: origem e assinante
+      const churchRows = (churchesRes.data || []) as Record<string, unknown>[];
+      const originChurch = churchRows.find((c) => String(c.totvs_id) === churchTotvs) || null;
+      const signerChurch = churchRows.find((c) => String(c.totvs_id) === signerTotvs) || null;
+      const pastorUser = (signerRes.data as Record<string, unknown> | null) || null;
+      const preacherUser = (preacherRes.data as Record<string, unknown> | null) || null;
+
+      const preacherDataSeparacao = String(preacherUser?.data_separacao || "").trim() || null;
+      const preacherRegistrationStatus = String(preacherUser?.registration_status || "").trim() || null;
+
+      // Status do usuário para o webhook: PENDENTE se cadastro pendente, AUTORIZADO nos demais casos
+      const statusUsuario = preacherRegistrationStatus === "PENDENTE" ? "PENDENTE" : "AUTORIZADO";
+
+      // Monta o payload completo para o N8N gerar o PDF
+      const n8nPayload = {
+        letter_id: letter.id,
+        nome: String(letter.preacher_name || ""),
+        telefone: String(letter.phone || ""),
+        igreja_origem: churchOrigin,
+        origem: churchOrigin,
+        igreja_destino: churchDestination,
+        dia_pregacao: formatDMY(String(letter.preach_date || "")),
+        data_emissao: formatExtended(String(letter.created_at || "")),
+        origem_totvs: churchTotvs,
+        destino_totvs: destinationTotvs,
+        origem_nome: originChurch ? String(originChurch.church_name || "") : churchNameOnly(churchOrigin),
+        destino_nome: churchNameOnly(churchDestination),
+        email: String(letter.email || ""),
+        ministerial: String(letter.minister_role || ""),
+        data_separacao: preacherDataSeparacao ? formatDMY(preacherDataSeparacao) : "",
+        pastor_responsavel: String(pastorUser?.full_name || ""),
+        telefone_pastor: String(pastorUser?.phone || ""),
+        assinatura_url: String(pastorUser?.signature_url || ""),
+        carimbo_igreja_url: String(signerChurch?.stamp_church_url || ""),
+        carimbo_pastor_url: String(pastorUser?.stamp_pastor_url || ""),
+        cidade_igreja: String(originChurch?.address_city || ""),
+        uf_igreja: String(originChurch?.address_state || ""),
+        status_usuario: statusUsuario,
+        status_carta: "LIBERADA",
+        client_id: churchTotvs,
+        obreiro_id: preacherUserId,
+      };
+
+      // Envia para o N8N gerar e enviar o PDF ao obreiro
+      const webhookResp = await fetch(N8N_WEBHOOK_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(n8nPayload),
+      });
+
+      n8nFired = true;
+      n8nStatus = webhookResp.status;
+    } catch (e) {
+      // Salva o erro mas NÃO reverte a aprovação — a carta continua liberada
+      n8nError = String(e);
+    }
+
+    // Retorna o resultado incluindo info do webhook para facilitar debug
+    return json({ ok: true, request: reqUpdated, letter: letterUpdated, n8n: { fired: n8nFired, status: n8nStatus, error: n8nError } }, 200);
   } catch (err) {
     return json({ ok: false, error: "exception", details: String(err) }, 500);
   }

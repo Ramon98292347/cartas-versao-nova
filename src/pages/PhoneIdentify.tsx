@@ -1,6 +1,6 @@
 ﻿import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Building2, Eye, EyeOff, KeyRound, Loader2, UserPlus } from "lucide-react";
 
@@ -51,6 +51,7 @@ function routeByRole(role: "admin" | "pastor" | "obreiro") {
 export default function PhoneIdentify() {
   const nav = useNavigate();
   const { setUsuario, setTelefone, setToken, setSession, setPendingCpf, setAvailableChurches } = useUser();
+  const queryClient = useQueryClient();
 
   const [cpf, setCpf] = useState("");
   const [senha, setSenha] = useState("");
@@ -133,6 +134,8 @@ export default function PhoneIdentify() {
         root_totvs_id: result.session.root_totvs_id || result.session.totvs_id,
       };
 
+      // Limpa cache do usuario anterior antes de aplicar nova sessao.
+      queryClient.clear();
       // Comentario: persiste o token imediatamente para chamadas de API no mesmo fluxo.
       setStoredToken(result.token);
       setRlsToken(result.rls_token || null);
