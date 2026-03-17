@@ -1,4 +1,4 @@
-import { getRlsToken, getSession, getUser } from "@/lib/api";
+import { getRlsToken, getSession, getToken, getUser } from "@/lib/api";
 import { api } from "@/lib/endpoints";
 import { supabase, supabaseAnon } from "@/lib/supabase";
 import { apiFetch } from "@/services/api";
@@ -1510,9 +1510,19 @@ export async function listReleaseRequests(status: "PENDENTE" | "APROVADO" | "NEG
   return MOCK_RELEASES.filter((r) => r.status === status);
 }
 
+/**
+ * listNotifications
+ * -----------------
+ * O que faz: Busca as notificacoes do usuario logado (do sininho no topo da tela).
+ * Para que serve: Mostrar avisos e alertas enviados pela administracao para a
+ *   igreja ou para o usuario especifico. Retorna a lista paginada e a contagem
+ *   de nao lidas para exibir o badge vermelho no icone de sino.
+ * Como funciona: Chama a edge function "list-notifications" via JWT de sessao.
+ *   A function consulta notificacoes tanto por church_totvs_id quanto por user_id,
+ *   mescla e devolve tudo junto. Usa a API em vez de Supabase direto para evitar
+ *   erro 401 causado pelo JWT customizado que o RLS nao reconhece.
+ */
 export async function listNotifications(page = 1, pageSize = 20, unreadOnly = false): Promise<{ notifications: AppNotification[]; unread_count: number; total: number }> {
-  // Comentario: usa a edge function list-notifications via api para autenticar com JWT de sessao.
-  // O Supabase direto causava 401 porque o cliente injeta JWT customizado que o RLS nao reconhece.
   if (!isMockMode()) {
     const currentSession = getSession();
     const churchTotvs = currentSession?.root_totvs_id || currentSession?.totvs_id;
@@ -1540,22 +1550,53 @@ export async function listNotifications(page = 1, pageSize = 20, unreadOnly = fa
   return { notifications: [], unread_count: 0, total: 0 };
 }
 
+/**
+ * markNotificationRead
+ * --------------------
+ * O que faz: Marca uma notificacao especifica como lida.
+ * Para que serve: Quando o usuario clica em uma notificacao no sininho,
+ *   ela precisa sumir do badge de nao lidas. Esta funcao atualiza o campo
+ *   is_read no banco para aquela notificacao especifica.
+ * Como funciona: Chama a edge function "mark-notification-read" via JWT de sessao.
+ *   Se a function ainda nao estiver configurada com verify_jwt=false no Supabase,
+ *   o erro e ignorado silenciosamente para nao quebrar a tela.
+ * ATENCAO: Configure a edge function com verify_jwt=false no Supabase para funcionar.
+ */
 export async function markNotificationRead(id: string) {
-  // Comentario: usa a edge function mark-notification-read via api com JWT de sessao.
   if (!isMockMode()) {
     const currentSession = getSession();
     const churchTotvs = currentSession?.root_totvs_id || currentSession?.totvs_id;
-    await api.markNotificationRead({ id, church_totvs_id: churchTotvs || undefined });
+    try {
+      await api.markNotificationRead({ id, church_totvs_id: churchTotvs || undefined });
+    } catch {
+      // Silencioso: marcar como lida e opcional, nao pode quebrar a tela.
+      // CORRECAO NECESSARIA: configurar verify_jwt=false na edge function mark-notification-read.
+    }
   }
   return;
 }
 
+/**
+ * markAllNotificationsRead
+ * ------------------------
+ * O que faz: Marca TODAS as notificacoes do usuario como lidas de uma vez.
+ * Para que serve: Quando o usuario clica em "marcar tudo como lido" no sininho,
+ *   o badge vermelho com o numero de nao lidas deve desaparecer completamente.
+ * Como funciona: Chama a edge function "mark-all-notifications-read" via JWT de sessao.
+ *   Se a function ainda nao estiver configurada com verify_jwt=false no Supabase,
+ *   o erro e ignorado silenciosamente para nao quebrar a tela.
+ * ATENCAO: Configure a edge function com verify_jwt=false no Supabase para funcionar.
+ */
 export async function markAllNotificationsRead() {
-  // Comentario: usa a edge function mark-all-notifications-read via api com JWT de sessao.
   if (!isMockMode()) {
     const currentSession = getSession();
     const churchTotvs = currentSession?.root_totvs_id || currentSession?.totvs_id;
-    await api.markAllNotificationsRead({ church_totvs_id: churchTotvs || undefined });
+    try {
+      await api.markAllNotificationsRead({ church_totvs_id: churchTotvs || undefined });
+    } catch {
+      // Silencioso: marcar como lida e opcional, nao pode quebrar a tela.
+      // CORRECAO NECESSARIA: configurar verify_jwt=false na edge function mark-all-notifications-read.
+    }
   }
   return;
 }
@@ -1703,42 +1744,110 @@ export async function listBirthdaysToday(limit = 10): Promise<BirthdayItem[]> {
     }));
 }
 
+/**
+ * listAnnouncementsPublicByTotvs
+ * ------------------------------
+ * O que faz: Busca as divulgacoes publicas de uma igreja pelo ID totvs,
+ *   sem precisar de login (usada na tela de login para mostrar o carrossel).
+ * Para que serve: Exibir avisos e imagens de divulgacao na tela de login,
+ *   mesmo antes do usuario entrar no sistema.
+ * Como funciona:
+ *   1) Tenta buscar direto no Supabase via cliente anonimo (supabaseAnon).
+ *      Funciona quando a tabela "announcements" tem politica RLS anon SELECT.
+ *   2) Se falhar (ex: sem politica RLS anon), tenta chamar a edge function
+ *      "list-announcements" usando o token de sessao salvo do login anterior.
+ *      Isso funciona quando o usuario ja logou uma vez e voltou a tela de login.
+ * ATENCAO: Para exibir na tela de login sempre (inclusive 1o acesso), adicione
+ *   esta politica RLS na tabela announcements no Supabase:
+ *   CREATE POLICY "anon_select_announcements" ON announcements
+ *   FOR SELECT TO anon USING (is_active = true);
+ */
 export async function listAnnouncementsPublicByTotvs(churchTotvsId: string, limit = 10): Promise<AnnouncementItem[]> {
   const totvs = String(churchTotvsId || "").trim();
-  if (!totvs || !supabaseAnon) return [];
+  if (!totvs) return [];
 
   const nowIso = new Date().toISOString();
-  const { data, error } = await supabaseAnon
-    .from("announcements")
-    .select("id,title,type,body_text,media_url,link_url,position,starts_at,ends_at,is_active,created_at")
-    .eq("church_totvs_id", totvs)
-    .eq("is_active", true)
-    .order("position", { ascending: true })
-    .order("created_at", { ascending: false })
-    .limit(Math.max(1, Math.min(10, limit)));
+  const safeLimit = Math.max(1, Math.min(30, limit));
 
-  if (error) return [];
+  // Tentativa 1: consulta anonima direta (requer politica RLS anon SELECT)
+  if (supabaseAnon) {
+    const { data, error } = await supabaseAnon
+      .from("announcements")
+      .select("id,title,type,body_text,media_url,link_url,position,starts_at,ends_at,is_active,created_at")
+      .eq("church_totvs_id", totvs)
+      .eq("is_active", true)
+      .order("position", { ascending: true })
+      .order("created_at", { ascending: false })
+      .limit(safeLimit);
 
-  return (data || [])
-    .filter((item: Record<string, unknown>) => {
-      const startsOk = !item?.starts_at || String(item.starts_at) <= nowIso;
-      const endsOk = !item?.ends_at || String(item.ends_at) >= nowIso;
-      return startsOk && endsOk;
-    })
-    .map((item: Record<string, unknown>) => ({
-      id: String(item?.id || ""),
-      title: String(item?.title || "Aviso"),
-      type: (item?.type || "text") as "text" | "image" | "video",
-      body_text: item?.body_text || null,
-      media_url: toAnnouncementMediaUrl(item?.media_url),
-      link_url: item?.link_url || null,
-      position: typeof item?.position === "number" ? item.position : null,
-      starts_at: item?.starts_at || null,
-      ends_at: item?.ends_at || null,
-      is_active: typeof item?.is_active === "boolean" ? item.is_active : true,
-    }));
+    if (!error && Array.isArray(data) && data.length > 0) {
+      return data
+        .filter((item: Record<string, unknown>) => {
+          const startsOk = !item?.starts_at || String(item.starts_at) <= nowIso;
+          const endsOk = !item?.ends_at || String(item.ends_at) >= nowIso;
+          return startsOk && endsOk;
+        })
+        .map((item: Record<string, unknown>) => ({
+          id: String(item?.id || ""),
+          title: String(item?.title || "Aviso"),
+          type: (item?.type || "text") as "text" | "image" | "video",
+          body_text: item?.body_text ? String(item.body_text) : null,
+          media_url: toAnnouncementMediaUrl(item?.media_url),
+          link_url: item?.link_url ? String(item.link_url) : null,
+          position: typeof item?.position === "number" ? item.position : null,
+          starts_at: item?.starts_at ? String(item.starts_at) : null,
+          ends_at: item?.ends_at ? String(item.ends_at) : null,
+          is_active: typeof item?.is_active === "boolean" ? item.is_active : true,
+        }));
+    }
+  }
+
+  // Tentativa 2: edge function com token de sessao salvo (funciona para usuarios que ja logaram antes)
+  try {
+    const storedToken = getToken();
+    if (storedToken) {
+      const raw = (await api.listAnnouncements({ limit: safeLimit })) as Record<string, unknown>;
+      const rows = Array.isArray(raw?.announcements)
+        ? (raw.announcements as Record<string, unknown>[])
+        : Array.isArray(raw)
+          ? (raw as Record<string, unknown>[])
+          : [];
+      if (rows.length > 0) {
+        return rows.map((item) => ({
+          id: String(item?.id || ""),
+          title: String(item?.title || "Aviso"),
+          type: (item?.type || "text") as "text" | "image" | "video",
+          body_text: item?.body_text ? String(item.body_text) : null,
+          media_url: toAnnouncementMediaUrl(item?.media_url),
+          link_url: item?.link_url ? String(item.link_url) : null,
+          position: typeof item?.position === "number" ? item.position : null,
+          starts_at: item?.starts_at ? String(item.starts_at) : null,
+          ends_at: item?.ends_at ? String(item.ends_at) : null,
+          is_active: typeof item?.is_active === "boolean" ? item.is_active : true,
+        }));
+      }
+    }
+  } catch {
+    // Silencioso: sem divulgacoes na tela de login nao e critico.
+  }
+
+  return [];
 }
 
+/**
+ * listAnnouncementsPublicByScope
+ * ------------------------------
+ * O que faz: Busca as divulgacoes publicas de um conjunto de igrejas (scope),
+ *   sem precisar de login (usada na tela de login para admins com multiplas igrejas).
+ * Para que serve: Exibir divulgacoes de todas as igrejas do escopo do admin
+ *   no carrossel da tela de login, sem exigir autenticacao.
+ * Como funciona: Consulta direta no Supabase via cliente anonimo usando
+ *   filtro IN para buscar de varias igrejas ao mesmo tempo. Requer politica
+ *   RLS anon SELECT na tabela "announcements" para funcionar.
+ * ATENCAO: Para exibir na tela de login, adicione esta politica RLS no Supabase:
+ *   CREATE POLICY "anon_select_announcements" ON announcements
+ *   FOR SELECT TO anon USING (is_active = true);
+ */
 export async function listAnnouncementsPublicByScope(totvsIds: string[], limit = 10): Promise<AnnouncementItem[]> {
   const scope = Array.from(new Set((totvsIds || []).map((id) => String(id || "").trim()).filter(Boolean)));
   if (!scope.length || !supabaseAnon) return [];
@@ -1765,12 +1874,12 @@ export async function listAnnouncementsPublicByScope(totvsIds: string[], limit =
       id: String(item?.id || ""),
       title: String(item?.title || "Aviso"),
       type: (item?.type || "text") as "text" | "image" | "video",
-      body_text: item?.body_text || null,
+      body_text: item?.body_text ? String(item.body_text) : null,
       media_url: toAnnouncementMediaUrl(item?.media_url),
-      link_url: item?.link_url || null,
+      link_url: item?.link_url ? String(item.link_url) : null,
       position: typeof item?.position === "number" ? item.position : null,
-      starts_at: item?.starts_at || null,
-      ends_at: item?.ends_at || null,
+      starts_at: item?.starts_at ? String(item.starts_at) : null,
+      ends_at: item?.ends_at ? String(item.ends_at) : null,
       is_active: typeof item?.is_active === "boolean" ? item.is_active : true,
     }));
 }
