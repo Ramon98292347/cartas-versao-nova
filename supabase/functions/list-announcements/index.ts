@@ -93,19 +93,19 @@ Deno.serve(async (req) => {
         return json({ ok: false, error: "unauthorized" }, 401);
       }
 
-      // Busca o totvs_id do usuario pelo CPF na tabela users (sem expor dados sensiveis)
+      // Busca o totvs_id do usuario pelo CPF na tabela users (coluna: default_totvs_id)
       const { data: userRow, error: userErr } = await sb
         .from("users")
-        .select("church_totvs_id")
+        .select("default_totvs_id")
         .eq("cpf", cpfRaw)
         .maybeSingle();
 
-      if (userErr || !userRow?.church_totvs_id) {
+      if (userErr || !userRow?.default_totvs_id) {
         // CPF nao encontrado: retorna lista vazia sem expor erro
         return json({ ok: true, active_totvs_id: "", root_totvs_id: "", announcements: [] });
       }
 
-      activeTotvs = String(userRow.church_totvs_id);
+      activeTotvs = String(userRow.default_totvs_id);
     }
 
     const { data: allChurches, error: aErr } = await sb.from("churches").select("totvs_id, parent_totvs_id");

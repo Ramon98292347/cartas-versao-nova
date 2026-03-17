@@ -2061,56 +2061,34 @@ export async function listBirthdaysTodayPublicByScope(totvsIds: string[], limit 
   return birthdays;
 }
 
+/**
+ * getPastorByTotvsPublic
+ * ----------------------
+ * O que faz: Retorna os dados de contato do pastor responsavel por uma igreja,
+ *   buscando pelo totvs_id via edge function (sem Supabase direto para evitar 401).
+ * Para que serve: Exibe informacoes do pastor no dashboard do obreiro,
+ *   pagina de documentos e formulario de carta.
+ * Como funciona: Chama a edge function get-pastor-contact passando o totvs_id.
+ */
 export async function getPastorByTotvsPublic(churchTotvsId: string): Promise<PastorContact | null> {
   const totvs = String(churchTotvsId || "").trim();
-  if (!totvs || !supabase) return null;
+  if (!totvs) return null;
 
-  let pastorId = "";
   try {
-    const { data: church } = await supabase
-      .from("churches")
-      .select("pastor_user_id")
-      .eq("totvs_id", totvs)
-      .maybeSingle();
-
-    pastorId = String((church as Record<string, unknown> | null)?.pastor_user_id || "").trim();
+    const raw = (await api.getPastorContact({ totvs_id: totvs })) as Record<string, unknown>;
+    const p = raw?.pastor as Record<string, unknown> | null | undefined;
+    if (!p) return null;
+    return {
+      full_name: String(p.full_name || ""),
+      phone: p.phone ? String(p.phone) : null,
+      email: p.email ? String(p.email) : null,
+      avatar_url: p.avatar_url ? String(p.avatar_url) : null,
+      minister_role: p.minister_role ? String(p.minister_role) : null,
+      signature_url: p.signature_url ? String(p.signature_url) : null,
+    };
   } catch {
-    // segue fallback
+    return null;
   }
-
-  let data: Record<string, unknown> | null = null;
-  if (pastorId) {
-    const { data: byIdData } = await supabase
-      .from("users")
-      .select("full_name,phone,email,avatar_url,minister_role,signature_url")
-      .eq("id", pastorId)
-      .eq("is_active", true)
-      .maybeSingle();
-    data = (byIdData as Record<string, unknown> | null) || null;
-  }
-
-  if (!data) {
-    const { data: byTotvsData, error } = await supabase
-      .from("users")
-      .select("full_name,phone,email,avatar_url,minister_role,signature_url")
-      .eq("role", "pastor")
-      .eq("default_totvs_id", totvs)
-      .eq("is_active", true)
-      .order("updated_at", { ascending: false })
-      .limit(1)
-      .maybeSingle();
-    if (error || !byTotvsData) return null;
-    data = byTotvsData as Record<string, unknown>;
-  }
-
-  return {
-    full_name: String((data as Record<string, unknown>).full_name || ""),
-    phone: (data as Record<string, unknown>).phone || null,
-    email: (data as Record<string, unknown>).email || null,
-    avatar_url: (data as Record<string, unknown>).avatar_url || null,
-    minister_role: (data as Record<string, unknown>).minister_role || null,
-    signature_url: (data as Record<string, unknown>).signature_url || null,
-  };
 }
 
 export async function forgotPasswordRequest(payload: { cpf?: string; email?: string }) {
