@@ -1731,32 +1731,55 @@ export async function listBirthdaysToday(limit = 10): Promise<BirthdayItem[]> {
     }));
 }
 
-// Usa a edge function list-announcements-public (service_role_key, sem auth, bypass RLS)
-async function callAnnouncementsPublic(body: Record<string, unknown>): Promise<AnnouncementItem[]> {
-  const { post } = await import("@/lib/api");
-  try {
-    const result = await post<{ ok?: boolean; announcements?: unknown[] }>(
-      "list-announcements-public",
-      body,
-      { skipAuth: true },
-    );
-    const rows = Array.isArray(result?.announcements) ? result.announcements : [];
-    return rows.map((item) => mapAnnouncementRow(item as Record<string, unknown>));
-  } catch {
-    return [];
-  }
-}
-
+// Usa supabaseAnon (sem injecao de JWT customizado) para nao causar 401 no RLS
 export async function listAnnouncementsPublicByTotvs(churchTotvsId: string, limit = 10): Promise<AnnouncementItem[]> {
   const totvs = String(churchTotvsId || "").trim();
-  if (!totvs) return [];
-  return callAnnouncementsPublic({ totvs_id: totvs, limit: Math.max(1, Math.min(10, limit)) });
+  if (!totvs || !supabaseAnon) return [];
+
+  const nowIso = new Date().toISOString();
+  const { data, error } = await supabaseAnon
+    .from("announcements")
+    .select("id,title,type,body_text,media_url,link_url,position,starts_at,ends_at,is_active,created_at")
+    .eq("church_totvs_id", totvs)
+    .eq("is_active", true)
+    .order("position", { ascending: true })
+    .order("created_at", { ascending: false })
+    .limit(Math.max(1, Math.min(10, limit)));
+
+  if (error) return [];
+
+  return (data || [])
+    .filter((item: Record<string, unknown>) => {
+      const startsOk = !item?.starts_at || String(item.starts_at) <= nowIso;
+      const endsOk = !item?.ends_at || String(item.ends_at) >= nowIso;
+      return startsOk && endsOk;
+    })
+    .map(mapAnnouncementRow);
 }
 
 export async function listAnnouncementsPublicByScope(totvsIds: string[], limit = 10): Promise<AnnouncementItem[]> {
   const scope = Array.from(new Set((totvsIds || []).map((id) => String(id || "").trim()).filter(Boolean)));
-  if (!scope.length) return [];
-  return callAnnouncementsPublic({ totvs_ids: scope, limit: Math.max(1, Math.min(30, limit)) });
+  if (!scope.length || !supabaseAnon) return [];
+
+  const nowIso = new Date().toISOString();
+  const { data, error } = await supabaseAnon
+    .from("announcements")
+    .select("id,title,type,body_text,media_url,link_url,position,starts_at,ends_at,is_active,created_at")
+    .in("church_totvs_id", scope)
+    .eq("is_active", true)
+    .order("position", { ascending: true })
+    .order("created_at", { ascending: false })
+    .limit(Math.max(1, Math.min(30, limit)));
+
+  if (error) return [];
+
+  return (data || [])
+    .filter((item: Record<string, unknown>) => {
+      const startsOk = !item?.starts_at || String(item.starts_at) <= nowIso;
+      const endsOk = !item?.ends_at || String(item.ends_at) >= nowIso;
+      return startsOk && endsOk;
+    })
+    .map(mapAnnouncementRow);
 }
 
 function getTodayMonthDaySaoPaulo() {
