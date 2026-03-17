@@ -53,7 +53,9 @@ export default function PhoneIdentify() {
   const { setUsuario, setTelefone, setToken, setSession, setPendingCpf, setAvailableChurches } = useUser();
   const queryClient = useQueryClient();
 
-  const [cpf, setCpf] = useState("");
+  // Comentario: le o CPF salvo no cache para pre-preencher o campo no proximo acesso.
+  const cachedCpf = typeof window !== "undefined" ? localStorage.getItem("ipda_last_cpf") || "" : "";
+  const [cpf, setCpf] = useState(cachedCpf);
   const [senha, setSenha] = useState("");
   const [showSenha, setShowSenha] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -123,6 +125,8 @@ export default function PhoneIdentify() {
       const result = await loginWithCpfPassword(cpfRaw, senha);
 
       if (result.mode === "select_church") {
+        // Comentario: salva o CPF mesmo quando ha multiplas igrejas, para pre-preencher no proximo acesso.
+        localStorage.setItem("ipda_last_cpf", cpfRaw);
         setPendingCpf(result.cpf);
         setAvailableChurches(result.churches);
         setToken(undefined);
@@ -148,6 +152,8 @@ export default function PhoneIdentify() {
       if (fixedSession.totvs_id) localStorage.setItem("ipda_last_totvs", fixedSession.totvs_id);
       // Salva a totvs mae (root) para mostrar divulgacoes corretas na proxima abertura da tela de login
       if (fixedSession.root_totvs_id) localStorage.setItem("ipda_root_totvs", fixedSession.root_totvs_id);
+      // Comentario: salva o CPF no cache para pre-preencher o campo e buscar divulgacoes na proxima abertura.
+      localStorage.setItem("ipda_last_cpf", cpfRaw);
       setPendingCpf(undefined);
       setAvailableChurches([]);
 
