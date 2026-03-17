@@ -122,11 +122,13 @@ const Index = () => {
     },
   });
 
+  // Comentario: carrega TODAS as igrejas do sistema sem restringir por escopo aqui.
+  // O filtro de escopo e feito pelo memo allowedDestinationChurches abaixo,
+  // que inclui a igreja de origem + seus descencentes + todos os irmaos em cada nivel da hierarquia.
   const { data: churches = [] } = useQuery({
-    queryKey: ["churches-letter-form", role, activeTotvsForPastor],
+    queryKey: ["churches-letter-form"],
     queryFn: async () => {
-      const root = role === "admin" ? undefined : activeTotvsForPastor || undefined;
-      const rows = await listChurchesInScope(1, 1000, root);
+      const rows = await listChurchesInScope(1, 1000);
       return rows.map((c, idx) => ({
         id: Number(c.totvs_id) || idx + 1,
         codigoTotvs: String(c.totvs_id || ""),
@@ -195,31 +197,42 @@ const Index = () => {
     return result.length ? result : [active];
   }, [churches, activeTotvsForPastor]);
 
+  // Comentario: calcula as igrejas permitidas como destino.
+  // Inclui a origem + todos os descencentes + todos os ancestrais
+  // + todos os irmaos em cada nivel da hierarquia (outras igrejas com o mesmo pai).
+  // Isso garante que tanto pastor quanto obreiro vejam o escopo correto.
   const allowedDestinationChurches = useMemo(() => {
     if (!igrejaOrigem?.codigoTotvs) return churches;
     const byTotvs = new Map<string, Church>();
-    const children = new Map<string, string[]>();
+    const childMap = new Map<string, string[]>();
 
     churches.forEach((church) => {
       const totvs = String(church.codigoTotvs || "").trim();
       if (!totvs) return;
       byTotvs.set(totvs, church);
       const parent = String(church.parentTotvsId || "").trim();
-      if (!children.has(parent)) children.set(parent, []);
-      children.get(parent)!.push(totvs);
+      if (!childMap.has(parent)) childMap.set(parent, []);
+      childMap.get(parent)!.push(totvs);
     });
 
     const origin = String(igrejaOrigem.codigoTotvs || "").trim();
     const allowed = new Set<string>();
 
-    const queue: string[] = [origin];
-    while (queue.length > 0) {
-      const current = queue.shift()!;
-      if (allowed.has(current)) continue;
-      allowed.add(current);
-      for (const child of children.get(current) || []) queue.push(child);
-    }
+    // Adiciona uma igreja e todos os seus descencentes (BFS para baixo)
+    const addSubtree = (root: string) => {
+      const q: string[] = [root];
+      while (q.length > 0) {
+        const cur = q.shift()!;
+        if (allowed.has(cur)) continue;
+        allowed.add(cur);
+        for (const child of childMap.get(cur) || []) q.push(child);
+      }
+    };
 
+    // 1. Adiciona a origem e todos os seus descencentes
+    addSubtree(origin);
+
+    // 2. Sobe na hierarquia: para cada nivel, adiciona o pai e todos os irmaos + seus descencentes
     let cursor = origin;
     const guard = new Set<string>();
     while (cursor && !guard.has(cursor)) {
@@ -227,16 +240,15 @@ const Index = () => {
       const parent = String(byTotvs.get(cursor)?.parentTotvsId || "").trim();
       if (!parent) break;
       allowed.add(parent);
+      // Adiciona todos os irmaos (outros filhos do mesmo pai) + suas arvores
+      for (const sibling of childMap.get(parent) || []) {
+        addSubtree(sibling);
+      }
       cursor = parent;
     }
 
     return churches.filter((c) => allowed.has(String(c.codigoTotvs || "").trim()));
   }, [churches, igrejaOrigem?.codigoTotvs]);
-
-  const allowDestinoOutros = useMemo(() => {
-    const cls = String(igrejaOrigem?.classificacao || "").toLowerCase().trim();
-    return cls === "estadual" || cls === "setorial" || cls === "central";
-  }, [igrejaOrigem?.classificacao]);
 
   const preachersMap = useMemo(() => {
     const map = new Map<string, UserListItem>();

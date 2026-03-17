@@ -7,7 +7,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
 import { setLetterStatus, softDeleteLetter, type PastorLetter } from "@/services/saasService";
-import { ArrowUpRight, Filter, MoreHorizontal, RotateCcw, Search, Share2, Trash2 } from "lucide-react";
+import { ArrowUpRight, Filter, MoreHorizontal, RotateCcw, Search, Share2, Trash2, Lock, Unlock, CheckCheck, Send } from "lucide-react";
+
+// URL do webhook n8n — o mesmo usado pelo sistema de cartas (telas-cartas).
+const LETTERS_WEBHOOK_URL = "https://n8n-n8n.ynlng8.easypanel.host/webhook/carta-pregacao";
 import { FiltersBar } from "@/components/shared/FiltersBar";
 import { getFriendlyError } from "@/lib/error-map";
 import { addAuditLog } from "@/lib/audit";
@@ -67,6 +70,8 @@ export function CartasTab({
   const [scopeMode, setScopeMode] = useState<"active" | "scope">("active");
   const [flashing, setFlashing] = useState<string[]>([]);
   const [updatingReleaseId, setUpdatingReleaseId] = useState<string | null>(null);
+  const [updatingEnvioId, setUpdatingEnvioId] = useState<string | null>(null);
+  const [updatingBlockId, setUpdatingBlockId] = useState<string | null>(null);
   const [filters, setFilters] = useState({
     dateStart: "",
     dateEnd: "",
@@ -126,9 +131,48 @@ export function CartasTab({
     return () => window.clearTimeout(t);
   }, [filtered]);
 
+  // Chama o mesmo webhook n8n do sistema de cartas, enviando os mesmos dados.
+  // Falha silenciosa: nao bloqueia a acao principal.
+  async function callWebhook(letter: PastorLetter, action: string, extra?: Record<string, string>) {
+    try {
+      const pdfUrl = getPublicPdfUrl(letter);
+      const payload: Record<string, string> = {
+        action,
+        tipo_fluxo: "manual",
+        docId: letter.id,
+        pdfUrl,
+        full_name: letter.preacher_name || "-",
+        church_name: letter.church_origin || "-",
+        church_destination: letter.church_destination || "-",
+        preach_date: letter.preach_date || "-",
+        minister_role: letter.minister_role || "-",
+        statusCarta: action === "send_letter" ? "LIBERADA" : action === "set_envio" ? "ENVIADO" : "",
+        source: "ipda-letter-creator",
+        ...(extra || {}),
+      };
+      await fetch(LETTERS_WEBHOOK_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+    } catch {
+      // Ignora falha no webhook para nao bloquear a acao
+    }
+  }
+
   async function refresh() {
-    await queryClient.invalidateQueries({ queryKey: ["pastor-letters"] });
-    await queryClient.invalidateQueries({ queryKey: ["pastor-metrics"] });
+    // Invalida todas as queries de cartas usadas nas diferentes páginas do sistema.
+    // "pastor-letters" → usado em AdminPastorDashboard
+    // "cartas-dashboard-letters" → usado em CartasDashboardPage
+    // "pastor-metrics" / "cartas-dashboard-metrics" → contadores de status
+    // "worker-dashboard" → lista de cartas do obreiro
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ["pastor-letters"] }),
+      queryClient.invalidateQueries({ queryKey: ["cartas-dashboard-letters"] }),
+      queryClient.invalidateQueries({ queryKey: ["pastor-metrics"] }),
+      queryClient.invalidateQueries({ queryKey: ["cartas-dashboard-metrics"] }),
+      queryClient.invalidateQueries({ queryKey: ["worker-dashboard"] }),
+    ]);
   }
 
   function setQuick(periodValue: QuickPeriod | "clear") {
@@ -227,6 +271,8 @@ export function CartasTab({
     try {
       setUpdatingReleaseId(letter.id);
       await setLetterStatus(letter.id, "LIBERADA");
+      // Chama o mesmo webhook do sistema de cartas para gerar PDF e processar a carta
+      await callWebhook(letter, "send_letter");
       toast.success("Carta liberada com sucesso.");
       await refresh();
     } catch (err: unknown) {
@@ -236,7 +282,43 @@ export function CartasTab({
     }
   }
 
+  async function marcarEnvio(letter: PastorLetter) {
+    if (letter.status === "ENVIADA") {
+      toast.message("Carta ja marcada como enviada.");
+      return;
+    }
+    try {
+      setUpdatingEnvioId(letter.id);
+      await setLetterStatus(letter.id, "ENVIADA");
+      await callWebhook(letter, "set_envio");
+      toast.success("Envio marcado com sucesso.");
+      await refresh();
+    } catch (err: unknown) {
+      toast.error(getFriendlyError(err, "letters"));
+    } finally {
+      setUpdatingEnvioId(null);
+    }
+  }
+
+  async function toggleBlock(letter: PastorLetter) {
+    const isBlocked = letter.status === "BLOQUEADO";
+    try {
+      setUpdatingBlockId(letter.id);
+      const nextStatus = isBlocked ? "AGUARDANDO_LIBERACAO" : "BLOQUEADO";
+      await setLetterStatus(letter.id, nextStatus);
+      await callWebhook(letter, isBlocked ? "unblock_user" : "block_user");
+      toast.success(isBlocked ? "Usuario desbloqueado." : "Usuario bloqueado.");
+      await refresh();
+    } catch (err: unknown) {
+      toast.error(getFriendlyError(err, "letters"));
+    } finally {
+      setUpdatingBlockId(null);
+    }
+  }
+
   function renderActions(letter: PastorLetter) {
+    const isBlocked = letter.status === "BLOQUEADO";
+    const isEnviada = letter.status === "ENVIADA";
     return (
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
@@ -246,13 +328,35 @@ export function CartasTab({
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
-          <DropdownMenuItem onClick={() => releaseLetter(letter)} disabled={letter.status === "LIBERADA" || updatingReleaseId === letter.id}>
+          <DropdownMenuItem
+            onClick={() => releaseLetter(letter)}
+            disabled={letter.status === "LIBERADA" || isBlocked || updatingReleaseId === letter.id}
+          >
+            <Send className="mr-2 h-4 w-4 text-emerald-600" />
             Liberar carta
           </DropdownMenuItem>
+          <DropdownMenuItem
+            onClick={() => marcarEnvio(letter)}
+            disabled={isEnviada || isBlocked || updatingEnvioId === letter.id}
+          >
+            <CheckCheck className="mr-2 h-4 w-4 text-sky-600" />
+            Marcar envio
+          </DropdownMenuItem>
           <DropdownMenuItem onClick={() => share(letter)} disabled={!canViewOrShare(letter)}>
+            <Share2 className="mr-2 h-4 w-4 text-blue-600" />
             Compartilhar
           </DropdownMenuItem>
+          <DropdownMenuItem
+            onClick={() => toggleBlock(letter)}
+            disabled={updatingBlockId === letter.id}
+            className={isBlocked ? "text-emerald-700 focus:text-emerald-800" : "text-amber-700 focus:text-amber-800"}
+          >
+            {isBlocked
+              ? <><Unlock className="mr-2 h-4 w-4" />Desbloquear</>
+              : <><Lock className="mr-2 h-4 w-4" />Bloquear</>}
+          </DropdownMenuItem>
           <DropdownMenuItem className="text-rose-600 focus:text-rose-700" onClick={() => remove(letter)}>
+            <Trash2 className="mr-2 h-4 w-4" />
             Excluir
           </DropdownMenuItem>
         </DropdownMenuContent>
