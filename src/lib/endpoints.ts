@@ -96,6 +96,8 @@ export const api = {
   markAllNotificationsRead: (body: { church_totvs_id?: string } = {}) => post("mark-all-notifications-read", body),
 
   listAnnouncements: (body: JsonBody = { limit: 10 }) => post("list-announcements", body),
+  // Busca divulgacoes pelo CPF sem precisar de JWT (usado na tela de login)
+  listAnnouncementsByCpf: (body: { cpf: string; limit?: number }) => post("list-announcements", body, { skipAuth: true }),
   birthdaysToday: () => post("birthdays-today", {}),
   upsertAnnouncement: (body: JsonBody) => post("upsert-announcement", body),
   deleteAnnouncement: (body: { id: string }) => post("delete-announcement", body),

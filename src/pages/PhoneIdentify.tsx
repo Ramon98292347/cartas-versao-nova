@@ -13,6 +13,7 @@ import { clearRlsToken, setRlsToken, setToken as setStoredToken } from "@/lib/ap
 import {
   forgotPasswordRequest,
   getMyRegistrationStatus,
+  listAnnouncementsPublicByCpf,
   listAnnouncementsPublicByScope,
   listAnnouncementsPublicByTotvs,
   listBirthdaysToday,
@@ -96,10 +97,16 @@ export default function PhoneIdentify() {
   const announcementTotvs = cachedRootTotvs || cachedTotvs;
 
   const { data: announcements = [] } = useQuery({
-    queryKey: ["announcements-login", announcementTotvs, announcementScope.join(",")],
-    queryFn: () =>
-      announcementScope.length ? listAnnouncementsPublicByScope(announcementScope, 30) : listAnnouncementsPublicByTotvs(announcementTotvs, 10),
-    enabled: Boolean(announcementTotvs) || announcementScope.length > 0,
+    queryKey: ["announcements-login", cachedCpf, announcementTotvs, announcementScope.join(",")],
+    queryFn: () => {
+      // Prioridade 1: CPF salvo no cache → busca divulgacoes direto pelo CPF via edge function (sem JWT)
+      if (cachedCpf.length === 11) return listAnnouncementsPublicByCpf(cachedCpf, 10);
+      // Prioridade 2: admin com escopo de igrejas
+      if (announcementScope.length) return listAnnouncementsPublicByScope(announcementScope, 30);
+      // Prioridade 3: totvs salvo do ultimo login
+      return listAnnouncementsPublicByTotvs(announcementTotvs, 10);
+    },
+    enabled: cachedCpf.length === 11 || Boolean(announcementTotvs) || announcementScope.length > 0,
   });
 
   const { data: birthdays = [] } = useQuery({

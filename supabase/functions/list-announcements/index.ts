@@ -5,8 +5,11 @@
  *            filtrando por janela de vigência (starts_at/ends_at) e ordenando por prioridade.
  * Para que serve: Exibido no dashboard da aplicação como banners, avisos ou comunicados
  *                 enviados pela administração para todas as igrejas do escopo.
- * Quem pode usar: admin, pastor, obreiro
- * Recebe: { limit?: number } (padrão 10, máximo 10)
+ *                 Também usado na tela de login para mostrar divulgações antes do usuário entrar.
+ * Quem pode usar: admin, pastor, obreiro (com JWT) ou qualquer pessoa com CPF salvo em cache (sem JWT)
+ * Recebe: { limit?: number, cpf?: string }
+ *   - Se JWT válido no header → usa o totvs_id da sessão
+ *   - Se sem JWT mas com cpf no body → busca o totvs_id do usuário pelo CPF na tabela users
  * Retorna: { ok, active_totvs_id, root_totvs_id, announcements }
  * Observações: Comunicados da própria igreja têm prioridade sobre os da raiz.
  *              Dentro do mesmo nível, a ordenação usa o campo "position" e depois created_at desc.
@@ -31,7 +34,8 @@ function json(obj: unknown, status = 200) {
 
 type Role = "admin" | "pastor" | "obreiro";
 type SessionClaims = { user_id: string; role: Role; active_totvs_id: string };
-type Body = { limit?: number };
+// cpf adicionado ao body para suporte a tela de login sem JWT
+type Body = { limit?: number; cpf?: string };
 type ChurchRow = { totvs_id: string; parent_totvs_id: string | null };
 
 async function verifySessionJWT(req: Request): Promise<SessionClaims | null> {
@@ -69,18 +73,44 @@ Deno.serve(async (req) => {
   if (req.method !== "POST") return json({ ok: false, error: "method_not_allowed" }, 405);
 
   try {
-    const session = await verifySessionJWT(req);
-    if (!session) return json({ ok: false, error: "unauthorized" }, 401);
-
     const body = (await req.json().catch(() => ({}))) as Body;
     const limit = Math.max(1, Math.min(10, Number(body.limit || 10)));
 
     const sb = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
 
+    // Tenta autenticar via JWT primeiro (usuario logado no dashboard)
+    const session = await verifySessionJWT(req);
+
+    let activeTotvs = "";
+
+    if (session) {
+      // Caminho autenticado: usa o totvs_id da sessao JWT
+      activeTotvs = session.active_totvs_id;
+    } else {
+      // Caminho publico: aceita CPF no body para mostrar divulgacoes na tela de login
+      const cpfRaw = String(body.cpf || "").replace(/\D/g, "");
+      if (cpfRaw.length !== 11) {
+        return json({ ok: false, error: "unauthorized" }, 401);
+      }
+
+      // Busca o totvs_id do usuario pelo CPF na tabela users (sem expor dados sensiveis)
+      const { data: userRow, error: userErr } = await sb
+        .from("users")
+        .select("church_totvs_id")
+        .eq("cpf", cpfRaw)
+        .maybeSingle();
+
+      if (userErr || !userRow?.church_totvs_id) {
+        // CPF nao encontrado: retorna lista vazia sem expor erro
+        return json({ ok: true, active_totvs_id: "", root_totvs_id: "", announcements: [] });
+      }
+
+      activeTotvs = String(userRow.church_totvs_id);
+    }
+
     const { data: allChurches, error: aErr } = await sb.from("churches").select("totvs_id, parent_totvs_id");
     if (aErr) return json({ ok: false, error: "db_error_churches", details: aErr.message }, 500);
 
-    const activeTotvs = session.active_totvs_id;
     const rootTotvs = computeRootTotvs(activeTotvs, (allChurches || []) as ChurchRow[]);
     const totvsList = rootTotvs === activeTotvs ? [activeTotvs] : [activeTotvs, rootTotvs];
 

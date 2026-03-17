@@ -1890,6 +1890,46 @@ export async function listAnnouncementsPublicByScope(totvsIds: string[], limit =
     }));
 }
 
+/**
+ * listAnnouncementsPublicByCpf
+ * ----------------------------
+ * O que faz: Busca as divulgacoes da igreja do usuario usando apenas o CPF,
+ *   sem precisar de login (JWT). A edge function list-announcements aceita
+ *   CPF no body e encontra o church_totvs_id do usuario na tabela users.
+ * Para que serve: Mostrar divulgacoes na tela de login quando o CPF esta salvo
+ *   no cache (ipda_last_cpf), mesmo antes do usuario fazer login.
+ * Como funciona: Chama list-announcements com skipAuth=true passando o CPF.
+ *   A funcao retorna as divulgacoes da igreja e da raiz (estadual) do usuario.
+ */
+export async function listAnnouncementsPublicByCpf(cpf: string, limit = 10): Promise<AnnouncementItem[]> {
+  const cpfRaw = String(cpf || "").replace(/\D/g, "");
+  if (cpfRaw.length !== 11) return [];
+
+  try {
+    const raw = (await api.listAnnouncementsByCpf({ cpf: cpfRaw, limit })) as Record<string, unknown>;
+    const rows = Array.isArray(raw?.announcements)
+      ? (raw.announcements as Record<string, unknown>[])
+      : Array.isArray(raw)
+        ? (raw as Record<string, unknown>[])
+        : [];
+    return rows.map((item) => ({
+      id: String(item?.id || ""),
+      title: String(item?.title || "Aviso"),
+      type: (item?.type || "text") as "text" | "image" | "video",
+      body_text: item?.body_text ? String(item.body_text) : null,
+      media_url: toAnnouncementMediaUrl(item?.media_url),
+      link_url: item?.link_url ? String(item.link_url) : null,
+      position: typeof item?.position === "number" ? item.position : null,
+      starts_at: item?.starts_at ? String(item.starts_at) : null,
+      ends_at: item?.ends_at ? String(item.ends_at) : null,
+      is_active: typeof item?.is_active === "boolean" ? item.is_active : true,
+    }));
+  } catch {
+    // Silencioso: sem divulgacoes na tela de login nao e critico.
+    return [];
+  }
+}
+
 function getTodayMonthDaySaoPaulo() {
   const parts = new Intl.DateTimeFormat("pt-BR", {
     timeZone: "America/Sao_Paulo",
