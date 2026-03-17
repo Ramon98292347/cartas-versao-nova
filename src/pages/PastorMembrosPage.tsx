@@ -735,10 +735,13 @@ export default function PastorMembrosPage() {
   );
   const churchName = String(session?.church_name || usuario?.church_name || "");
   const docsTabOpen = tab === "carteirinha" || tab === "ficha_membro";
+  // Comentario: usa default_totvs_id do membro selecionado (nao do pastor logado),
+  // pois o registro foi salvo com a igreja do membro na edge function.
+  const memberChurchTotvsId = String(selectedMember?.default_totvs_id || activeTotvsId);
   const { data: docsStatus, refetch: refetchDocsStatus, isFetching: fetchingDocsStatus } = useQuery({
-    queryKey: ["pastor-member-docs-status", selectedMemberId, activeTotvsId],
-    queryFn: () => getMemberDocsStatus({ member_id: selectedMemberId, church_totvs_id: activeTotvsId }),
-    enabled: Boolean(docsTabOpen && selectedMemberId && activeTotvsId),
+    queryKey: ["pastor-member-docs-status", selectedMemberId, memberChurchTotvsId],
+    queryFn: () => getMemberDocsStatus({ member_id: selectedMemberId, church_totvs_id: memberChurchTotvsId }),
+    enabled: Boolean(docsTabOpen && selectedMemberId && memberChurchTotvsId),
   });
   const fichaPronta = Boolean(
     docsStatus?.ficha &&
@@ -1312,18 +1315,20 @@ export default function PastorMembrosPage() {
 
             {tab === "ficha_membro" ? (
               <div className="space-y-3 rounded-xl border border-slate-200 p-4">
-                {/* Botão para gerar/regerar a ficha via edge function + webhook n8n */}
-                <div className="flex flex-wrap items-center gap-2">
-                  <Button
-                    onClick={gerarFichaMembro}
-                    disabled={sending || !selectedMemberId}
-                    className="gap-2"
-                  >
-                    {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />}
-                    {sending ? "Gerando ficha..." : "Gerar Ficha de Membro"}
-                  </Button>
-                  {fetchingDocsStatus ? <span className="text-xs text-slate-500">Verificando status...</span> : null}
-                </div>
+                {/* Botão para gerar a ficha — só aparece quando não há URL pronta */}
+                {!fichaPronta ? (
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Button
+                      onClick={gerarFichaMembro}
+                      disabled={sending || !selectedMemberId}
+                      className="gap-2"
+                    >
+                      {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />}
+                      {sending ? "Gerando ficha..." : "Gerar Ficha de Membro"}
+                    </Button>
+                    {fetchingDocsStatus ? <span className="text-xs text-slate-500">Verificando status...</span> : null}
+                  </div>
+                ) : null}
 
                 {/* Quando a ficha estiver PRONTA exibe caixa verde com botões de visualizar e baixar */}
                 {fichaPronta ? (
