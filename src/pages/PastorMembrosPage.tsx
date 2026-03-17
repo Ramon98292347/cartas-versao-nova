@@ -938,11 +938,15 @@ export default function PastorMembrosPage() {
         telefone: String(selectedMember.phone || "").replace(/\D/g, ""),
       };
 
+      // Comentario: usa a default_totvs_id do membro (não do pastor logado),
+      // pois a edge function valida que member.default_totvs_id === church_totvs_id.
+      const memberChurchTotvs = String(selectedMember.default_totvs_id || activeTotvsId);
+
       // Chama a edge function — ela salva no banco E envia ao webhook do n8n
       await generateMemberDocs({
         document_type: "ficha_membro",
         member_id: selectedMemberId,
-        church_totvs_id: activeTotvsId,
+        church_totvs_id: memberChurchTotvs,
         dados,
       });
 
