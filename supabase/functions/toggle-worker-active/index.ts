@@ -1,3 +1,17 @@
+/**
+ * toggle-worker-active
+ * ====================
+ * O que faz: Ativa ou desativa o acesso de um obreiro/membro ao sistema (campo is_active).
+ *            Usuários inativos não conseguem fazer login.
+ * Para que serve: Usada pelo pastor/admin para suspender temporariamente o acesso de um membro
+ *                 ou reativar após suspensão.
+ * Quem pode usar: admin, pastor (somente membros dentro do próprio escopo hierárquico)
+ * Recebe: { worker_id: string, is_active: boolean }
+ * Retorna: { ok, worker }
+ * Observações: Não é possível desativar a si mesmo.
+ *              Pastor não pode desativar membros de igrejas de nível hierárquico acima do seu.
+ *              A verificação de hierarquia (canManage) usa o rank das classes de igrejas.
+ */
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { jwtVerify } from "https://esm.sh/jose@5.2.4";

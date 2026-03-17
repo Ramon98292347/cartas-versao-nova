@@ -1,3 +1,16 @@
+/**
+ * birthdays-today
+ * ===============
+ * O que faz: Retorna a lista de membros da igreja ativa que fazem aniversário hoje (fuso de São Paulo).
+ *            Persiste notificações de aniversário no banco para evitar duplicatas no mesmo dia.
+ *            Se houver aniversariantes novos, dispara webhook n8n para envio de mensagem de parabéns.
+ * Para que serve: Exibido no dashboard da igreja para que pastores/obreiros vejam os aniversariantes do dia.
+ * Quem pode usar: admin, pastor, obreiro
+ * Recebe: { limit?: number } (padrão 10, máximo 30)
+ * Retorna: { ok, birthdays, message, n8n }
+ * Observações: Usa fuso horário America/Sao_Paulo para calcular o dia atual.
+ *              O webhook só é disparado quando há aniversariantes novos inseridos no dia.
+ */
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { jwtVerify } from "https://esm.sh/jose@5.2.4";

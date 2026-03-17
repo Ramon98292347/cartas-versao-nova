@@ -1,3 +1,18 @@
+/**
+ * list-members
+ * ============
+ * O que faz: Lista os membros (pastores e/ou obreiros) com paginação, filtros e métricas
+ *            por função ministerial. Aplica regras de escopo hierárquico e calcula o campo
+ *            can_manage (se o usuário logado pode editar aquele membro).
+ * Para que serve: Usada na tela de gestão de obreiros (tabela de membros do sistema).
+ * Quem pode usar: admin, pastor
+ * Recebe: { search?, minister_role?, is_active?, roles?, church_totvs_id?, page?, page_size? }
+ * Retorna: { ok, members, total, page, page_size, metrics }
+ *          metrics: { total, pastor, presbitero, diacono, obreiro, membro }
+ *          Cada membro inclui o campo can_manage (boolean).
+ * Observações: O campo can_manage respeita a hierarquia: pastor não pode gerenciar membros
+ *              de igrejas de nível igual ou acima do seu na hierarquia.
+ */
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { jwtVerify } from "https://esm.sh/jose@5.2.4";

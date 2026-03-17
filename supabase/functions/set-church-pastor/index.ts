@@ -1,3 +1,18 @@
+/**
+ * set-church-pastor
+ * =================
+ * O que faz: Atribui um pastor a uma igreja. Atualiza o papel do novo pastor para "pastor"
+ *            no campo totvs_access com acesso à igreja informada. O pastor anterior (se existir)
+ *            tem seu papel rebaixado para "obreiro" naquela igreja, ou mantido como "pastor"
+ *            se ainda tiver acesso de pastor em outra igreja.
+ * Para que serve: Usada pelo admin/pastor para designar ou trocar o pastor responsável de uma igreja.
+ * Quem pode usar: admin, pastor (somente igrejas dentro do próprio escopo e de nível inferior)
+ * Recebe: { church_totvs_id: string, pastor_user_id: string }
+ * Retorna: { ok, church }
+ * Observações: Pastor não pode promover outro pastor a um nível hierárquico igual ou acima
+ *              do seu próprio. Ao ser designado, a default_totvs_id do novo pastor é atualizada
+ *              para a igreja atribuída.
+ */
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { jwtVerify } from "https://esm.sh/jose@5.2.4";

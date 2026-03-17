@@ -1,3 +1,18 @@
+/**
+ * upsert-church-contrato
+ * ======================
+ * O que faz: Salva (cria ou atualiza) os dados do contrato de uma igreja na tabela
+ *            church_contratos. O status é definido como "FINALIZADO" ao salvar.
+ *            O body inteiro é armazenado no campo payload (JSON livre).
+ * Para que serve: Usada pelo formulário de contrato no front-end para salvar o rascunho
+ *                 ou a versão final dos dados antes de gerar o PDF.
+ * Quem pode usar: admin, pastor
+ * Recebe: { church_totvs_id: string, ...demais campos do formulário de contrato }
+ *         (todos os campos do body são salvos no campo payload)
+ * Retorna: { ok, contrato }
+ * Observações: Upsert por church_totvs_id (uma única linha por igreja).
+ *              Após salvar, use generate-church-contrato-pdf para gerar o PDF via n8n.
+ */
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { jwtVerify } from "https://esm.sh/jose@5.2.4";

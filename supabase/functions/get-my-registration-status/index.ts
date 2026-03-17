@@ -1,4 +1,18 @@
-﻿import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+﻿/**
+ * get-my-registration-status
+ * ==========================
+ * O que faz: Retorna o status de cadastro do usuário logado na igreja ativa (PENDENTE ou APROVADO).
+ *            Pastores e admins são sempre considerados APROVADOS.
+ *            Para obreiros, consulta o campo registration_status dentro do array totvs_access.
+ * Para que serve: Usada pelo front-end logo após o login para verificar se o obreiro já foi
+ *                 aprovado pelo pastor, e bloquear recursos (cartas, documentos) se ainda PENDENTE.
+ * Quem pode usar: admin, pastor, obreiro
+ * Recebe: (nenhum campo no body)
+ * Retorna: { ok, registration_status, is_pending, blocked_resources }
+ * Observações: blocked_resources é uma lista de recursos bloqueados quando PENDENTE
+ *              (ex: ["cartas", "documentos"]).
+ */
+import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { jwtVerify } from "https://esm.sh/jose@5.2.4";
 

@@ -1,3 +1,18 @@
+/**
+ * list-churches-in-scope
+ * ======================
+ * O que faz: Lista as igrejas visíveis ao usuário logado com paginação, trazendo dados do pastor
+ *            de cada igreja (via join) e a contagem de obreiros ativos por igreja.
+ * Para que serve: Usada na tela de gerenciamento de igrejas para o admin/pastor visualizar
+ *                 e navegar pelas igrejas do seu escopo hierárquico.
+ * Quem pode usar: admin, pastor
+ * Recebe: { page?: number, page_size?: number, root_totvs_id?: string }
+ * Retorna: { ok, churches, total, page, page_size }
+ *          Cada chiesa inclui: dados básicos, pastor (id, full_name, phone, email, is_active),
+ *          workers_count (número de obreiros ativos com default_totvs_id naquela igreja).
+ * Observações: Admin pode filtrar por root_totvs_id para ver a sub-árvore de qualquer igreja.
+ *              Pastor vê somente igrejas dentro da própria árvore hierárquica.
+ */
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { jwtVerify } from "https://esm.sh/jose@5.2.4";

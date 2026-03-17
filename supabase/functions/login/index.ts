@@ -1,3 +1,19 @@
+/**
+ * login
+ * =====
+ * O que faz: Autentica o usuário por CPF + senha (bcrypt), valida o acesso às igrejas (totvs_access),
+ *            gera dois JWTs: token de sessão da aplicação (USER_SESSION_JWT_SECRET) e token RLS
+ *            (APP_RLS_JWT_SECRET) para acesso direto via PostgREST.
+ *            Se o usuário tiver acesso a múltiplas igrejas sem padrão, retorna mode="select_church"
+ *            para o front solicitar seleção de igreja antes de emitir o token final.
+ * Para que serve: Endpoint principal de autenticação do sistema. Chamado na tela de login.
+ * Quem pode usar: público (sem autenticação)
+ * Recebe: { cpf: string, password: string }
+ * Retorna: { ok, mode: "logged_in"|"select_church", token?, rls_token?, user, session?, churches? }
+ * Observações: Proteção contra força bruta: rate limit de 10 tentativas por IP em 15 minutos.
+ *              O token da aplicação expira em 12 horas.
+ *              O token RLS inclui scope_totvs_ids e root_totvs_id para uso nas políticas RLS.
+ */
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import bcrypt from "https://esm.sh/bcryptjs@2.4.3";

@@ -1,3 +1,20 @@
+/**
+ * create-letter
+ * =============
+ * O que faz: Cria uma nova carta de pregação, validando hierarquia de igrejas de origem/destino,
+ *            determinando o pastor assinante pela regra de classe, e definindo o status inicial
+ *            (LIBERADA se can_create_released_letter=true, senão BLOQUEADO).
+ *            Se a carta já nasce LIBERADA, dispara o webhook n8n imediatamente para gerar o PDF.
+ * Para que serve: Principal função de criação de cartas. Chamada pelo front-end quando o obreiro
+ *                 ou pastor/admin cria uma nova carta de pregação.
+ * Quem pode usar: admin, pastor, obreiro
+ * Recebe: { preacher_name, minister_role, preach_date, preach_period, church_origin,
+ *           church_destination, preacher_user_id?, phone?, email? }
+ * Retorna: { ok, letter, n8n: { ok, status, response } }
+ * Observações: Obreiro cria carta para si mesmo; pastor/admin pode criar para qualquer membro.
+ *              O webhook n8n só é disparado para cartas com status LIBERADA.
+ *              Cria notificações para o pastor assinante e para o feed geral da igreja.
+ */
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { jwtVerify } from "https://esm.sh/jose@5.2.4";

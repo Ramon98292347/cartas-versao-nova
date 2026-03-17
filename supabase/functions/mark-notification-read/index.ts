@@ -1,3 +1,17 @@
+/**
+ * mark-notification-read
+ * ======================
+ * O que faz: Marca uma notificação específica como lida, atualizando is_read=true e
+ *            read_at com o timestamp atual. Valida se o usuário tem permissão para
+ *            marcar aquela notificação (própria, da igreja ativa, de filhas ou de ancestrais).
+ * Para que serve: Acionado quando o usuário clica em uma notificação no sininho para marcá-la como lida.
+ * Quem pode usar: admin, pastor, obreiro
+ * Recebe: { id: string } (ID da notificação)
+ * Retorna: { ok, notification }
+ * Observações: Atualiza tanto is_read quanto read_at para manter compatibilidade.
+ *              Pastor/admin podem marcar notificações da própria igreja, das filhas (escopo)
+ *              e também das igrejas mãe/avó (ancestrais).
+ */
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { jwtVerify } from "https://esm.sh/jose@5.2.4";

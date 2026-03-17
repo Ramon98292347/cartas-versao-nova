@@ -1,3 +1,16 @@
+/**
+ * approve-release
+ * ===============
+ * O que faz: Aprova uma solicitação de liberação de carta de pregação que estava PENDENTE,
+ *            atualiza o status da carta para LIBERADA e dispara o webhook n8n para gerar o PDF.
+ * Para que serve: Usada pelo pastor/admin para liberar manualmente uma carta que passou pelo
+ *                 fluxo de solicitação de liberação (release_requests).
+ * Quem pode usar: admin, pastor (somente cartas da própria igreja ativa)
+ * Recebe: { request_id: string }
+ * Retorna: { ok, request, letter, n8n: { fired, status, error } }
+ * Observações: Após aprovação, dispara webhook n8n (N8N_WEBHOOK_URL) para gerar o PDF da carta.
+ *              O erro no webhook não reverte a aprovação. Cria notificação para o solicitante.
+ */
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { jwtVerify } from "https://esm.sh/jose@5.2.4";

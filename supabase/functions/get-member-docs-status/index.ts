@@ -1,3 +1,17 @@
+/**
+ * get-member-docs-status
+ * ======================
+ * O que faz: Retorna o status atual da ficha de membro e da carteirinha de um membro,
+ *            incluindo URLs finais quando prontos e regras de negócio (pode gerar carteirinha?).
+ * Para que serve: Usada pelo front-end para exibir o status dos documentos do membro na tela
+ *                 de documentos/perfil, e para controlar quais botões de geração ficam habilitados.
+ * Quem pode usar: admin, pastor, obreiro (obreiro somente para si mesmo)
+ * Recebe: { member_id?: string, church_totvs_id?: string }
+ *         (se omitidos, usa o usuário e a igreja ativa da sessão)
+ * Retorna: { ok, member_id, church_totvs_id, ficha, carteirinha, rules }
+ *          rules.can_generate_carteirinha: true se a ficha já estiver pronta (final_url preenchida)
+ * Observações: Obreiro não pode consultar documentos de outro membro.
+ */
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { jwtVerify } from "https://esm.sh/jose@5.2.4";

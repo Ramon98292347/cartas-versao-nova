@@ -1,3 +1,17 @@
+/**
+ * list-notifications
+ * ==================
+ * O que faz: Lista as notificações do usuário logado, unindo notificações da igreja ativa
+ *            (church_totvs_id) com as notificações individuais (user_id), removendo duplicatas.
+ *            Suporta paginação e filtro de não lidas.
+ * Para que serve: Alimenta o sininho de notificações no front-end (badge de não lidas + lista).
+ * Quem pode usar: admin, pastor, obreiro
+ * Recebe: { page?, page_size?, unread_only?, church_totvs_id? }
+ * Retorna: { ok, notifications, total, unread_count, page, page_size }
+ * Observações: Notificações de aniversário (birthday), cartas criadas/liberadas e documentos
+ *              prontos são os tipos principais. O campo unread_count considera tanto is_read
+ *              quanto read_at para compatibilidade com registros antigos.
+ */
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { jwtVerify } from "https://esm.sh/jose@5.2.4";

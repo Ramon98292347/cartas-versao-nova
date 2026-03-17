@@ -1,3 +1,16 @@
+/**
+ * list-announcements
+ * ==================
+ * O que faz: Lista os comunicados ativos da igreja ativa e da raiz da hierarquia (estadual),
+ *            filtrando por janela de vigência (starts_at/ends_at) e ordenando por prioridade.
+ * Para que serve: Exibido no dashboard da aplicação como banners, avisos ou comunicados
+ *                 enviados pela administração para todas as igrejas do escopo.
+ * Quem pode usar: admin, pastor, obreiro
+ * Recebe: { limit?: number } (padrão 10, máximo 10)
+ * Retorna: { ok, active_totvs_id, root_totvs_id, announcements }
+ * Observações: Comunicados da própria igreja têm prioridade sobre os da raiz.
+ *              Dentro do mesmo nível, a ordenação usa o campo "position" e depois created_at desc.
+ */
 // supabase/functions/list-announcements/index.ts
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";

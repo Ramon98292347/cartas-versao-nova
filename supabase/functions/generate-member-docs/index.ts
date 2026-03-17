@@ -1,3 +1,19 @@
+/**
+ * generate-member-docs
+ * ====================
+ * O que faz: Dispara o webhook n8n para gerar ficha de membro, carteirinha ou ambos
+ *            (ficha_carteirinha) para um membro da igreja. Salva o status "ENVIADO_CONFECCAO"
+ *            nas tabelas member_ficha_documents e/ou member_carteirinha_documents.
+ * Para que serve: Usada pelo admin/pastor/obreiro para solicitar a confecção de documentos
+ *                 do membro (ficha cadastral e/ou carteirinha de identificação).
+ * Quem pode usar: admin, pastor, obreiro (obreiro somente para si mesmo)
+ * Recebe: { document_type: "ficha_membro"|"carteirinha"|"ficha_obreiro"|"ficha_carteirinha",
+ *           member_id: string, church_totvs_id?: string, dados?: Record<string, unknown> }
+ * Retorna: { ok, message, response }
+ * Observações: Carteirinha só pode ser gerada depois que a ficha estiver pronta (final_url preenchida),
+ *              a menos que seja gerado o bundle "ficha_carteirinha" que cria os dois juntos.
+ *              O webhook usado é N8N_MEMBER_DOCS_WEBHOOK_URL.
+ */
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { jwtVerify } from "https://esm.sh/jose@5.2.4";

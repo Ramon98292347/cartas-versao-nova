@@ -1,4 +1,18 @@
-﻿import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+﻿/**
+ * set-user-registration-status
+ * =============================
+ * O que faz: Aprova ou coloca em pendência o cadastro de um obreiro, atualizando o campo
+ *            registration_status dentro do array totvs_access do usuário.
+ * Para que serve: Usada pelo pastor/admin para aprovar novos cadastros que chegaram via
+ *                 public-register-member (auto-cadastro) ou para revogar aprovações.
+ * Quem pode usar: admin, pastor (somente obreiros dentro do próprio escopo e hierarquia)
+ * Recebe: { user_id: string, registration_status: "APROVADO"|"PENDENTE" }
+ * Retorna: { ok, user_id, registration_status }
+ * Observações: Só funciona para usuários com role="obreiro". Pastor não pode aprovar membros
+ *              de igrejas de nível hierárquico acima do seu.
+ *              O registration_status é atualizado em TODOS os itens do array totvs_access.
+ */
+import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { jwtVerify } from "https://esm.sh/jose@5.2.4";
 

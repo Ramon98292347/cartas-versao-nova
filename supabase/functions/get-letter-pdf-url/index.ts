@@ -1,3 +1,18 @@
+/**
+ * get-letter-pdf-url
+ * ==================
+ * O que faz: Retorna a URL assinada (ou pública) do PDF de uma carta de pregação,
+ *            tentando múltiplos caminhos possíveis no Storage do Supabase (bucket "cartas").
+ *            Prioriza url_carta > signed_url > public_url como fallback.
+ * Para que serve: Usada pelo front-end quando o usuário clica para visualizar/baixar
+ *                 o PDF de uma carta de pregação já gerada.
+ * Quem pode usar: admin, pastor, obreiro (obreiro somente para suas próprias cartas)
+ * Recebe: { letter_id: string }
+ * Retorna: { ok, url, source, path? }
+ * Observações: A URL assinada tem validade de 30 minutos.
+ *              Se storage_path não estiver salvo mas url_pronta=true, tenta caminho padrão por ID.
+ *              Obreiro só pode acessar cartas onde ele é o pregador (preacher_user_id).
+ */
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { jwtVerify } from "https://esm.sh/jose@5.2.4";

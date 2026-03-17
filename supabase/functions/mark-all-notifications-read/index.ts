@@ -1,3 +1,15 @@
+/**
+ * mark-all-notifications-read
+ * ============================
+ * O que faz: Exclui (deleta) todas as notificações da igreja ativa e as notificações individuais
+ *            do usuário logado de uma vez (equivale a "limpar tudo" no sininho).
+ * Para que serve: Acionado pelo botão "Limpar notificações" no front-end.
+ * Quem pode usar: admin, pastor, obreiro
+ * Recebe: (nenhum campo no body)
+ * Retorna: { ok, deleted: number }
+ * Observações: A ação deleta as notificações permanentemente do banco.
+ *              Notificações da igreja ativa (church_totvs_id) e do usuário (user_id) são removidas.
+ */
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { jwtVerify } from "https://esm.sh/jose@5.2.4";

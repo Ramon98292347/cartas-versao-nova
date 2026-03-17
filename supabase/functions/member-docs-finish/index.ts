@@ -1,3 +1,19 @@
+/**
+ * member-docs-finish
+ * ==================
+ * O que faz: Callback chamado pelo n8n após concluir a geração de ficha ou carteirinha.
+ *            Atualiza o status do documento (PRONTO, ERRO ou ENVIADO_CONFECCAO) e salva
+ *            a URL final (final_url) nas tabelas member_ficha_documents ou
+ *            member_carteirinha_documents.
+ * Para que serve: Webhook de retorno do n8n para o sistema saber que o documento está pronto
+ *                 e disponibilizar o link de download ao membro.
+ * Quem pode usar: apenas o n8n (autenticado via header x-docs-key = MEMBER_DOCS_FINISH_KEY)
+ * Recebe: { document_type: "ficha_membro"|"carteirinha", member_id, church_totvs_id,
+ *           status: "PRONTO"|"ERRO"|"ENVIADO_CONFECCAO", final_url?, error_message?, details? }
+ * Retorna: { ok, document }
+ * Observações: Segurança por chave estática (MEMBER_DOCS_FINISH_KEY) sem JWT de usuário.
+ *              Se status=PRONTO e final_url não for informada, retorna erro.
+ */
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 

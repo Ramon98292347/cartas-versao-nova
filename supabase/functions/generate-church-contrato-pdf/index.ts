@@ -1,3 +1,17 @@
+/**
+ * generate-church-contrato-pdf
+ * ============================
+ * O que faz: Dispara o webhook n8n (N8N_CONTRATO_WEBHOOK_URL) para gerar o PDF do contrato
+ *            da igreja, enviando os dados do contrato e do laudo armazenados no banco.
+ *            Atualiza o status do contrato para "GERANDO" antes de chamar o webhook.
+ * Para que serve: Usada pelo admin/pastor quando deseja (re)gerar o PDF do contrato da igreja.
+ * Quem pode usar: admin, pastor
+ * Recebe: { church_totvs_id: string }
+ * Retorna: { ok, n8n: { ok, status, response } }
+ * Observações: Requer que o contrato já exista na tabela church_contratos.
+ *              O laudo da tabela church_laudos é incluído no payload, se existir.
+ *              A variável de ambiente N8N_CONTRATO_WEBHOOK_URL deve estar configurada.
+ */
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { jwtVerify } from "https://esm.sh/jose@5.2.4";

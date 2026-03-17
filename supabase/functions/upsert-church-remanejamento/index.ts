@@ -1,3 +1,21 @@
+/**
+ * upsert-church-remanejamento
+ * ===========================
+ * O que faz: Salva (cria ou atualiza) os dados do formulário de remanejamento de uma igreja
+ *            na tabela church_remanejamentos. O body inteiro é armazenado no campo payload
+ *            (JSON livre) e o objeto hierarchy é salvo em campo separado. Status definido
+ *            como "FINALIZADO" ao salvar.
+ * Para que serve: Usada pelo formulário de remanejamento no front-end para salvar os dados
+ *                 antes de gerar o PDF via generate-church-remanejamento-pdf.
+ * Quem pode usar: admin, pastor
+ * Recebe: { church_totvs_id: string, hierarchy: object, ...demais campos do formulário }
+ *         (todos os campos do body são salvos no campo payload; hierarchy também é salvo
+ *          em campo dedicado para facilitar consultas)
+ * Retorna: { ok, remanejamento }
+ * Observações: Upsert por church_totvs_id (uma única linha por igreja).
+ *              O campo hierarchy armazena info sobre o signatário (setorial vs estadual).
+ *              Após salvar, use generate-church-remanejamento-pdf para acionar o n8n e gerar o PDF.
+ */
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { jwtVerify } from "https://esm.sh/jose@5.2.4";

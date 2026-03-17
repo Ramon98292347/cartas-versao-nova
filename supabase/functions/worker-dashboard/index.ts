@@ -1,3 +1,19 @@
+/**
+ * worker-dashboard
+ * ================
+ * O que faz: Retorna o perfil completo do usuário logado, os dados da sua igreja ativa
+ *            e o histórico pessoal de cartas com paginação e filtros de data opcionais.
+ * Para que serve: Usada pela tela de dashboard/perfil do obreiro no front-end para exibir
+ *                 as informações do membro e suas cartas de pregação.
+ * Quem pode usar: admin, pastor, obreiro (todos os papéis; cada um vê suas próprias cartas)
+ * Recebe: { date_start?: string (YYYY-MM-DD), date_end?: string (YYYY-MM-DD),
+ *           page?: number, page_size?: number }
+ * Retorna: { ok, user, church, page, page_size, total, letters }
+ * Observações: Para obreiros, o histórico de cartas é sempre pessoal (filtrado pelo
+ *              preacher_user_id do próprio usuário), independente da igreja ativa no token.
+ *              Cartas com status EXCLUIDA são omitidas do resultado.
+ *              Inclui fallback se as colunas url_pronta/url_carta não existirem na tabela.
+ */
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { jwtVerify } from "https://esm.sh/jose@5.2.4";

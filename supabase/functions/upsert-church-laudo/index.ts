@@ -1,3 +1,17 @@
+/**
+ * upsert-church-laudo
+ * ===================
+ * O que faz: Salva (cria ou atualiza) os dados do laudo de uma igreja na tabela church_laudos.
+ *            O body inteiro é armazenado no campo payload (JSON livre).
+ * Para que serve: Usada pelo formulário de laudo no front-end para salvar os dados do laudo
+ *                 técnico da sede da igreja (condições físicas, etc.).
+ * Quem pode usar: admin, pastor
+ * Recebe: { church_totvs_id: string, ...demais campos do formulário de laudo }
+ *         (todos os campos do body são salvos no campo payload)
+ * Retorna: { ok, laudo }
+ * Observações: Upsert por church_totvs_id (uma única linha por igreja).
+ *              O laudo é usado como complemento no payload enviado pelo generate-church-contrato-pdf.
+ */
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { jwtVerify } from "https://esm.sh/jose@5.2.4";

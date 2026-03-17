@@ -1,3 +1,21 @@
+/**
+ * create-user
+ * ===========
+ * O que faz: Cria ou atualiza (upsert por CPF) um usuário no sistema, validando escopo de igrejas,
+ *            regras de papel (role) e hash de senha com bcrypt.
+ * Para que serve: Usada pelo admin ou pastor para cadastrar novos obreiros/pastores,
+ *                 ou pelo fluxo técnico via chave x-admin-key (importação/integração).
+ * Quem pode usar: admin (cria pastor ou obreiro), pastor (cria apenas obreiro no próprio escopo),
+ *                 fluxo técnico via header x-admin-key (qualquer role)
+ * Recebe: { cpf, full_name, role?, totvs_access?, default_totvs_id?, password?,
+ *           phone?, email?, birth_date?, baptism_date?, minister_role?, rg?,
+ *           marital_status?, matricula?, profession?, avatar_url?, cep?,
+ *           address_street?, address_number?, address_complement?,
+ *           address_neighborhood?, address_city?, address_state?, is_active? }
+ * Retorna: { ok, user }
+ * Observações: Em edição (CPF já existe), o role nunca é alterado.
+ *              Pastor não pode cadastrar fora da própria árvore de igrejas.
+ */
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import bcrypt from "https://esm.sh/bcryptjs@2.4.3";

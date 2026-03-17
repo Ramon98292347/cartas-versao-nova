@@ -1,3 +1,18 @@
+/**
+ * list-letters
+ * ============
+ * O que faz: Lista as cartas de pregação com paginação e filtros. Aplica regras de escopo:
+ *            admin vê todas, pastor vê as da própria árvore mais as próprias (mesmo de igrejas acima),
+ *            obreiro vê somente as próprias. Cartas com status EXCLUIDA são sempre omitidas.
+ * Para que serve: Usada na tela de listagem de cartas do sistema (tabela principal de cartas).
+ * Quem pode usar: admin, pastor, obreiro
+ * Recebe: { page?, page_size?, church_totvs_id?, status?, minister_role?,
+ *           search?, date_start?, date_end?, quick?: "today"|"7d"|"30d" }
+ * Retorna: { ok, letters, total, page, page_size, scope_totvs_ids }
+ * Observações: O campo scope_totvs_ids retorna a lista de igrejas visíveis ao usuário.
+ *              Para pastor, as próprias cartas são sempre incluídas mesmo que a origem
+ *              seja uma igreja fora do escopo direto.
+ */
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { jwtVerify } from "https://esm.sh/jose@5.2.4";

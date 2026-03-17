@@ -1,3 +1,19 @@
+/**
+ * set-letter-status
+ * =================
+ * O que faz: Altera o status de uma carta de pregação para qualquer valor válido
+ *            (LIBERADA, BLOQUEADO, EXCLUIDA, AUTORIZADO, AGUARDANDO_LIBERACAO, ENVIADA).
+ *            Quando o novo status é LIBERADA (e o anterior não era), dispara o webhook
+ *            n8n para gerar o PDF da carta.
+ * Para que serve: Usada pelo pastor/admin para liberar, bloquear ou excluir cartas manualmente
+ *                 a partir da tabela de cartas no painel de gestão.
+ * Quem pode usar: admin, pastor (somente cartas dentro do próprio escopo)
+ * Recebe: { letter_id: string, status: string }
+ * Retorna: { ok, letter, n8n: { fired, status, error } }
+ * Observações: O webhook n8n só é disparado quando status muda PARA "LIBERADA" pela primeira vez
+ *              (prevStatus != "LIBERADA") para evitar disparos duplicados.
+ *              O erro no webhook não reverte a mudança de status da carta.
+ */
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { jwtVerify } from "https://esm.sh/jose@5.2.4";

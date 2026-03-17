@@ -1,3 +1,18 @@
+/**
+ * create-church
+ * =============
+ * O que faz: Cria ou atualiza (upsert) uma igreja no sistema, validando a hierarquia
+ *            entre classes (estadual > setorial > central > regional > local) e o escopo do usuário.
+ * Para que serve: Usada pelo admin ou pastor para cadastrar novas igrejas ou editar dados de igrejas existentes.
+ * Quem pode usar: admin, pastor (somente igrejas dentro do próprio escopo/arvore)
+ * Recebe: { totvs_id, church_name, class, parent_totvs_id, image_url, stamp_church_url,
+ *           contact_email, contact_phone, cep, address_street, address_number,
+ *           address_complement, address_neighborhood, address_city, address_state,
+ *           address_country, is_active }
+ * Retorna: { ok, mode: "created"|"updated", church }
+ * Observações: Pastor não pode criar igrejas de nível igual ou acima do seu e só pode
+ *              cadastrar como filha da própria igreja ativa.
+ */
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { jwtVerify } from "https://esm.sh/jose@5.2.4";

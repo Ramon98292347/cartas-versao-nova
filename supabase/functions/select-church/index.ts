@@ -1,3 +1,17 @@
+/**
+ * select-church
+ * =============
+ * O que faz: Emite novos tokens JWT (app token + RLS token) para o usuário após ele selecionar
+ *            qual igreja quer acessar. Valida que o CPF informado tem acesso à igreja solicitada.
+ * Para que serve: Chamado após o login quando o usuário tem múltiplos acessos a igrejas
+ *                 (mode="select_church" retornado pelo login), para que ele selecione a igreja
+ *                 desejada e receba tokens com o active_totvs_id correto.
+ * Quem pode usar: público (sem JWT de sessão — o CPF é a credencial de identificação)
+ * Recebe: { cpf: string, totvs_id: string }
+ * Retorna: { ok, mode: "logged_in", token, rls_token, user, session }
+ * Observações: Não exige senha nesta etapa pois o login já foi validado anteriormente.
+ *              O token gerado tem validade de 12 horas.
+ */
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { SignJWT } from "https://esm.sh/jose@5.2.4";

@@ -1,4 +1,21 @@
-﻿import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+﻿/**
+ * public-register-member
+ * ======================
+ * O que faz: Permite que um novo membro faça seu próprio pré-cadastro no sistema sem precisar
+ *            de um admin/pastor. O cadastro é criado com role="obreiro" e
+ *            registration_status="PENDENTE", aguardando aprovação do pastor.
+ * Para que serve: Formulário público de auto-cadastro de novos obreiros (página pública do sistema).
+ * Quem pode usar: público (sem autenticação)
+ * Recebe: { cpf, full_name, minister_role, profession?, baptism_date?, ordination_date?,
+ *           phone?, email?, avatar_url?, cep?, address_street?, address_number?,
+ *           address_complement?, address_neighborhood?, address_city?, address_state?,
+ *           password, totvs_id }
+ * Retorna: { ok, user, church, registration_status: "PENDENTE", detail }
+ * Observações: CPF duplicado retorna erro. Igreja inativa retorna erro.
+ *              O campo totvs_access é criado com registration_status="PENDENTE" para que
+ *              o pastor possa aprovar o cadastro depois.
+ */
+import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import bcrypt from "https://esm.sh/bcryptjs@2.4.3";
 

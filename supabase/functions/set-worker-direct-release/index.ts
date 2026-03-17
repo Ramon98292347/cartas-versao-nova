@@ -1,3 +1,18 @@
+/**
+ * set-worker-direct-release
+ * =========================
+ * O que faz: Ativa ou desativa a flag can_create_released_letter de um obreiro.
+ *            Quando true, as cartas criadas por esse obreiro nascem com status LIBERADA
+ *            automaticamente (sem precisar de aprovação manual do pastor).
+ * Para que serve: Usada pelo pastor/admin para configurar obreiros de confiança que podem
+ *                 criar cartas liberadas diretamente, sem passar pelo fluxo de aprovação.
+ * Quem pode usar: admin, pastor (somente obreiros dentro do próprio escopo)
+ * Recebe: { worker_id: string, can_create_released_letter: boolean }
+ * Retorna: { ok, worker }
+ * Observações: Só funciona para usuários com role="obreiro".
+ *              O usuário logado não pode alterar a própria flag.
+ *              Pastor não pode conceder liberação a obreiros de igrejas de nível acima do seu.
+ */
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { jwtVerify } from "https://esm.sh/jose@5.2.4";

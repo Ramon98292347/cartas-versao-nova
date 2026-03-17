@@ -1,4 +1,18 @@
-﻿import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+﻿/**
+ * reset-password-confirm
+ * ======================
+ * O que faz: Conclui o fluxo de redefinição de senha: valida o token recebido (hash SHA-256),
+ *            verifica a expiração (15 minutos), atualiza a senha do usuário com novo hash bcrypt
+ *            e marca o token como usado (used_at).
+ * Para que serve: Chamado pela tela de "Redefinir senha" após o usuário clicar no link enviado
+ *                 por e-mail/WhatsApp pelo fluxo de forgot-password-request.
+ * Quem pode usar: público (sem autenticação, autenticado apenas pelo token de reset)
+ * Recebe: { token: string, new_password: string } (senha mínima de 6 caracteres)
+ * Retorna: { ok, message }
+ * Observações: O token só pode ser usado uma vez (used_at é setado após uso).
+ *              Token expirado ou já usado retorna { error: "invalid_or_expired_token" }.
+ */
+import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import bcrypt from "https://esm.sh/bcryptjs@2.4.3";
 

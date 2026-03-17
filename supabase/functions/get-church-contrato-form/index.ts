@@ -1,3 +1,15 @@
+/**
+ * get-church-contrato-form
+ * ========================
+ * O que faz: Retorna os dados do formulário de contrato de uma igreja (draft preenchido com dados
+ *            salvos), junto com os dados do laudo e o status atual do contrato.
+ * Para que serve: Usada pelo front-end para pré-preencher o formulário de edição do contrato
+ *                 da igreja antes de enviar para o n8n gerar o PDF.
+ * Quem pode usar: admin, pastor
+ * Recebe: { church_totvs_id: string }
+ * Retorna: { ok, draft, laudo, status, pdf_storage_path }
+ * Observações: Se o contrato não existir, retorna { ok: false, error: "contrato_not_found" }.
+ */
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { jwtVerify } from "https://esm.sh/jose@5.2.4";

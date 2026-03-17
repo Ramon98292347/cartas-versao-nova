@@ -1,3 +1,16 @@
+/**
+ * delete-user
+ * ===========
+ * O que faz: Exclui permanentemente um usuário e todos os seus dados relacionados
+ *            (cartas, documentos de ficha/carteirinha, notificações, solicitações de liberação).
+ * Para que serve: Usada pelo admin ou pastor para remover um cadastro de obreiro do sistema.
+ * Quem pode usar: admin, pastor (somente obreiros dentro do próprio escopo)
+ * Recebe: { user_id: string }
+ * Retorna: { ok: true }
+ * Observações: Não é possível deletar a si mesmo. Pastor não pode deletar admins.
+ *              A exclusão é em cascata: remove dados de release_requests, member_carteirinha_documents,
+ *              member_ficha_documents, member_ficha_obreiro_documents, notifications e letters.
+ */
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { jwtVerify } from "https://esm.sh/jose@5.2.4";

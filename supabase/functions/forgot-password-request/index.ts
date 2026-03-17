@@ -1,4 +1,18 @@
-﻿import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+﻿/**
+ * forgot-password-request
+ * =======================
+ * O que faz: Inicia o fluxo de recuperação de senha: busca o usuário por CPF ou e-mail,
+ *            gera um token seguro (SHA-256), salva na tabela password_resets com validade de
+ *            15 minutos e dispara o webhook n8n para envio do link de redefinição.
+ * Para que serve: Chamada pela tela de "Esqueci minha senha" do front-end.
+ * Quem pode usar: público (sem autenticação)
+ * Recebe: { cpf?: string, email?: string } (pelo menos um dos dois)
+ * Retorna: { ok, message } — resposta sempre igual para não expor se o usuário existe.
+ * Observações: Endpoint público, sem JWT. O token expira em 15 minutos.
+ *              A URL de redefinição usa APP_BASE_URL do ambiente.
+ *              O webhook (N8N_FORGOT_PASSWORD_WEBHOOK_URL) envia o link por e-mail/WhatsApp.
+ */
+import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 function corsHeaders() {

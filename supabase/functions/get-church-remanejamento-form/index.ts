@@ -1,3 +1,17 @@
+/**
+ * get-church-remanejamento-form
+ * ==============================
+ * O que faz: Retorna os dados do formulário de remanejamento de uma igreja, incluindo o draft
+ *            com dados salvos, as informações de hierarquia (se precisa de assinatura setorial
+ *            ou estadual) e os dados do pastor signatário.
+ * Para que serve: Usada pelo front-end para pré-preencher o formulário de edição do remanejamento
+ *                 antes de enviar para o n8n gerar o PDF.
+ * Quem pode usar: admin, pastor (somente igrejas dentro do próprio escopo)
+ * Recebe: { church_totvs_id: string }
+ * Retorna: { ok, draft, hierarchy, status, pdf_storage_path }
+ * Observações: O campo hierarchy indica se a assinatura é do pastor setorial ou estadual,
+ *              conforme a posição da igreja na hierarquia.
+ */
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { jwtVerify } from "https://esm.sh/jose@5.2.4";

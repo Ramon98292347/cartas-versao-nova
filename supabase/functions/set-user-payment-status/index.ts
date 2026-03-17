@@ -1,3 +1,18 @@
+/**
+ * set-user-payment-status
+ * =======================
+ * O que faz: Atualiza o status de pagamento de um usuário para ATIVO ou BLOQUEADO_PAGAMENTO.
+ *            Quando bloqueado, salva o motivo (reason), valor (amount) e data de vencimento
+ *            (due_date). Dispara webhook n8n (N8N_PAYMENT_WEBHOOK_URL) para notificação.
+ * Para que serve: Usada pelo admin para controlar a situação financeira do membro no sistema,
+ *                 podendo bloquear acesso por inadimplência.
+ * Quem pode usar: somente admin
+ * Recebe: { user_id, payment_status: "ATIVO"|"BLOQUEADO_PAGAMENTO",
+ *           reason?, amount?, due_date? }
+ * Retorna: { ok, user, n8n: { ok, status, response } }
+ * Observações: Admin não pode bloquear a si mesmo. O webhook de pagamento não interrompe o
+ *              fluxo principal mesmo que falhe.
+ */
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { jwtVerify } from "https://esm.sh/jose@5.2.4";
