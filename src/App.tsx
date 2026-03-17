@@ -12,11 +12,16 @@ import { UserProvider, useUser } from "./context/UserContext";
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      staleTime: 2 * 60 * 1000,
+      // Dado fica "fresco" por 30 segundos. Depois disso, qualquer
+      // navegação ou retorno à aba vai buscar os dados novos do servidor.
+      staleTime: 30 * 1000,
       gcTime: 30 * 60 * 1000,
-      refetchOnWindowFocus: false,
-      refetchOnReconnect: false,
-      refetchOnMount: false,
+      // Atualiza quando o usuário volta para a aba do sistema
+      refetchOnWindowFocus: true,
+      // Atualiza quando a conexão com a internet é restabelecida
+      refetchOnReconnect: true,
+      // Atualiza quando o usuário navega entre páginas
+      refetchOnMount: true,
       retry: 1,
     },
     mutations: {

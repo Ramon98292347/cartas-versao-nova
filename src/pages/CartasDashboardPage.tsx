@@ -71,6 +71,7 @@ export default function CartasDashboardPage() {
     queryKey: ["cartas-dashboard-metrics", selectedScopeForLetters.join("|")],
     queryFn: () => getPastorMetrics(),
     enabled: selectedScopeForLetters.length > 0,
+    refetchInterval: 60 * 1000,
   });
 
   const { data: letters = [], isLoading: loadingLetters, isFetching: fetchingLetters } = useQuery({
@@ -97,6 +98,7 @@ export default function CartasDashboardPage() {
       return Array.from(map.values());
     },
     enabled: selectedScopeForLetters.length > 0,
+    refetchInterval: 60 * 1000,
   });
 
   const { data: membrosRes, isLoading: loadingMembers, isFetching: fetchingMembers } = useQuery({

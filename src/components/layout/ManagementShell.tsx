@@ -93,6 +93,8 @@ export function ManagementShell({
     queryKey: ["topbar-notifications", 1, 30],
     queryFn: () => listNotifications(1, 30, false),
     enabled: Boolean(usuario?.role),
+    // Verifica novas notificacoes automaticamente a cada 60 segundos
+    refetchInterval: 60 * 1000,
   });
   const notifications = notificationsData?.notifications || [];
   const unreadCount = notificationsData?.unread_count || 0;

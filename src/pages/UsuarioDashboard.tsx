@@ -169,6 +169,8 @@ export default function UsuarioDashboard() {
     queryKey: ["worker-dashboard", userId],
     queryFn: () => workerDashboard(undefined, undefined, 1, 200),
     enabled: Boolean(userId),
+    // Atualiza cartas e dados do obreiro automaticamente a cada 60 segundos
+    refetchInterval: 60 * 1000,
   });
 
   const { data: pastorFromUsers } = useQuery({
