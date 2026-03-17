@@ -835,7 +835,9 @@ export async function listObreiros(_scopeTotvsIds: string[]): Promise<UserListIt
 }
 
 export async function listMembers(params: MemberListParams): Promise<WorkerListResponse> {
-  if (!isMockMode() && supabase && getRlsToken()) {
+  // Comentario: caminho direto via Supabase desativado — o rls_token causa 401.
+  // Usa sempre a edge function via API para evitar erros no console.
+  if (!isMockMode() && false && supabase && getRlsToken()) {
     const session = getSession();
     const page = params.page || 1;
     const pageSize = params.page_size || 20;
@@ -1007,7 +1009,9 @@ export async function listMembers(params: MemberListParams): Promise<WorkerListR
 }
 
 export async function listWorkers(params: WorkerListParams): Promise<WorkerListResponse> {
-  if (!isMockMode() && supabase && getRlsToken()) {
+  // Comentario: caminho direto via Supabase desativado — o rls_token causa 401.
+  // Usa sempre a edge function via API para evitar erros no console.
+  if (!isMockMode() && false && supabase && getRlsToken()) {
     return listMembers({
       search: params.search,
       minister_role: params.minister_role,
@@ -1157,7 +1161,9 @@ export async function searchChurchesPublic(query: string, limit = 8): Promise<Ch
 }
 
 export async function listChurchesInScope(page = 1, pageSize = 200, rootTotvsId?: string): Promise<ChurchInScopeItem[]> {
-  if (supabase && getRlsToken()) {
+  // Comentario: caminho direto via Supabase desativado — o rls_token causa 401.
+  // Usa sempre a edge function via API para evitar erros no console.
+  if (false && supabase && getRlsToken()) {
     const session = getSession();
     const role = String(session?.role || "").toLowerCase();
 
