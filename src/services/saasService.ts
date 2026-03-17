@@ -1511,110 +1511,51 @@ export async function listReleaseRequests(status: "PENDENTE" | "APROVADO" | "NEG
 }
 
 export async function listNotifications(page = 1, pageSize = 20, unreadOnly = false): Promise<{ notifications: AppNotification[]; unread_count: number; total: number }> {
-  const currentSession = getSession();
-  const rootTotvs = currentSession?.root_totvs_id || currentSession?.totvs_id;
-  const currentUser = getUser();
-  const userId = String(currentUser?.id || "").trim();
-
-  // Comentario: usa supabaseAnon porque a politica RLS de notifications e anon SELECT.
-  // O cliente supabase injeta JWT customizado que o RLS nao reconhece, causando 401.
-  if (supabaseAnon && (rootTotvs || userId)) {
-    const from = (page - 1) * pageSize;
-    const to = from + pageSize - 1;
-    let query = supabaseAnon.from("notifications").select("id, title, message, is_read, read_at, created_at, type", { count: "exact" });
-
-    if (rootTotvs && userId) {
-      query = query.or(`church_totvs_id.eq.${rootTotvs},user_id.eq.${userId}`);
-    } else if (rootTotvs) {
-      query = query.eq("church_totvs_id", rootTotvs);
-    } else if (userId) {
-      query = query.eq("user_id", userId);
-    }
-
-    if (unreadOnly) {
-      query = query.eq("is_read", false);
-    }
-
-    const { data: rowsRaw, error, count } = await query.order("created_at", { ascending: false }).range(from, to);
-    if (error) throw new Error(error.message || "Erro ao listar notificacoes.");
-    const rows = Array.isArray(rowsRaw) ? rowsRaw : [];
-
-    let unreadCount = 0;
-    let unreadQuery = supabaseAnon.from("notifications").select("id", { count: "exact", head: true }).eq("is_read", false);
-    if (rootTotvs && userId) {
-      unreadQuery = unreadQuery.or(`church_totvs_id.eq.${rootTotvs},user_id.eq.${userId}`);
-    } else if (rootTotvs) {
-      unreadQuery = unreadQuery.eq("church_totvs_id", rootTotvs);
-    } else if (userId) {
-      unreadQuery = unreadQuery.eq("user_id", userId);
-    }
-    const { count: unreadDbCount } = await unreadQuery;
-    unreadCount = Number(unreadDbCount || 0);
-
+  // Comentario: usa a edge function list-notifications via api para autenticar com JWT de sessao.
+  // O Supabase direto causava 401 porque o cliente injeta JWT customizado que o RLS nao reconhece.
+  if (!isMockMode()) {
+    const currentSession = getSession();
+    const churchTotvs = currentSession?.root_totvs_id || currentSession?.totvs_id;
+    const data = await api.listNotifications({
+      page,
+      page_size: pageSize,
+      unread_only: unreadOnly,
+      church_totvs_id: churchTotvs || undefined,
+    });
+    const raw = data as Record<string, unknown>;
+    const rows = Array.isArray(raw?.notifications) ? (raw.notifications as Record<string, unknown>[]) : [];
     return {
-      notifications: rows.map((item: Record<string, unknown>) => ({
+      notifications: rows.map((item) => ({
         id: String(item?.id || ""),
         title: String(item?.title || "Notificacao"),
-        message: item?.message || null,
+        message: item?.message ? String(item.message) : null,
         is_read: Boolean(item?.is_read) || Boolean(item?.read_at),
-        created_at: item?.created_at || null,
-        type: item?.type || null,
+        created_at: item?.created_at ? String(item.created_at) : null,
+        type: item?.type ? String(item.type) : null,
       })),
-      unread_count: unreadCount,
-      total: Number(count || rows.length),
+      unread_count: Number(raw?.unread_count || 0),
+      total: Number(raw?.total || rows.length),
     };
   }
   return { notifications: [], unread_count: 0, total: 0 };
 }
 
 export async function markNotificationRead(id: string) {
-  const currentSession = getSession();
-  const rootTotvs = currentSession?.root_totvs_id || currentSession?.totvs_id;
-  const currentUser = getUser();
-  const userId = String(currentUser?.id || "").trim();
-
-  // Comentario: usa supabaseAnon — politica UPDATE de notifications permite anon.
-  if (supabaseAnon) {
-    const nowIso = new Date().toISOString();
-    let query = supabaseAnon.from("notifications").update({ is_read: true, read_at: nowIso }).eq("id", id);
-
-    if (rootTotvs && userId) {
-      query = query.or(`church_totvs_id.eq.${rootTotvs},user_id.eq.${userId}`);
-    } else if (rootTotvs) {
-      query = query.eq("church_totvs_id", rootTotvs);
-    } else if (userId) {
-      query = query.eq("user_id", userId);
-    }
-
-    const { error } = await query;
-    if (!error) return;
-    throw new Error(error.message || "Erro ao marcar notificacao como lida.");
+  // Comentario: usa a edge function mark-notification-read via api com JWT de sessao.
+  if (!isMockMode()) {
+    const currentSession = getSession();
+    const churchTotvs = currentSession?.root_totvs_id || currentSession?.totvs_id;
+    await api.markNotificationRead({ id, church_totvs_id: churchTotvs || undefined });
   }
   return;
 }
 
 export async function markAllNotificationsRead() {
-  const currentSession = getSession();
-  const rootTotvs = currentSession?.root_totvs_id || currentSession?.totvs_id;
-  const currentUser = getUser();
-  const userId = String(currentUser?.id || "").trim();
-
-  // Comentario: usa supabaseAnon — politica UPDATE de notifications permite anon.
-  if (supabaseAnon) {
-    const nowIso = new Date().toISOString();
-    let query = supabaseAnon.from("notifications").update({ is_read: true, read_at: nowIso }).eq("is_read", false);
-
-    if (rootTotvs && userId) {
-      query = query.or(`church_totvs_id.eq.${rootTotvs},user_id.eq.${userId}`);
-    } else if (rootTotvs) {
-      query = query.eq("church_totvs_id", rootTotvs);
-    } else if (userId) {
-      query = query.eq("user_id", userId);
-    }
-
-    const { error } = await query;
-    if (!error) return;
-    throw new Error(error.message || "Erro ao marcar todas as notificacoes como lidas.");
+  // Comentario: usa a edge function mark-all-notifications-read via api com JWT de sessao.
+  if (!isMockMode()) {
+    const currentSession = getSession();
+    const churchTotvs = currentSession?.root_totvs_id || currentSession?.totvs_id;
+    await api.markAllNotificationsRead({ church_totvs_id: churchTotvs || undefined });
   }
   return;
 }
