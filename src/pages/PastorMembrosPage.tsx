@@ -896,8 +896,8 @@ export default function PastorMembrosPage() {
     }
   }
 
-  // Comentario: envia dados do membro diretamente ao webhook do n8n para gerar a ficha de membro em PDF.
-  // O payload segue o modelo acordado com o n8n para montar o documento final.
+  // Comentario: gera ficha de membro chamando a edge function generate-member-docs.
+  // A edge function salva o registro no banco (member_ficha_documents) E envia ao webhook do n8n.
   async function gerarFichaMembro() {
     if (!selectedMemberId || !selectedMember) {
       toast.error("Selecione um membro.");
@@ -908,20 +908,13 @@ export default function PastorMembrosPage() {
       const churchInScope = churchesInScope?.find((c) => String(c.totvs_id) === activeTotvsId);
       const churchStamp = churchInScope?.stamp_church_url || "";
       const pastorSignature = pastorDaIgreja?.signature_url || "";
-      const membCpf = String(selectedMember.cpf || "").replace(/\D/g, "");
-      const membCpfFormatted = formatCpfBr(membCpf);
 
-      const payload = {
+      // Monta os dados do membro no formato esperado pela edge function e pelo webhook
+      const dados: Record<string, unknown> = {
         nome_completo: selectedMember.full_name || "",
         matricula: selectedMember.matricula || "",
         funcao_ministerial: selectedMember.minister_role || "",
         data_nascimento: selectedMember.birth_date || "",
-        dados: {
-          member_cep: formatCepBr(selectedMember.cep || ""),
-          endereco_igreja_completo: rodapeAuto || churchFooter || "",
-          igreja_nome: churchName || "",
-          telefone: String(selectedMember.phone || "").replace(/\D/g, ""),
-        },
         endereco: selectedMember.address_street || "",
         numero: selectedMember.address_number || "",
         bairro: selectedMember.address_neighborhood || "",
@@ -929,7 +922,7 @@ export default function PastorMembrosPage() {
         estado: selectedMember.address_state || "",
         estado_civil: selectedMember.marital_status || "",
         data_batismo: selectedMember.baptism_date || "",
-        cpf: membCpfFormatted,
+        cpf: formatCpfBr(String(selectedMember.cpf || "").replace(/\D/g, "")),
         foto_3x4_url: selectedMember.avatar_url || "",
         rg: selectedMember.rg || "",
         email: selectedMember.email || "",
@@ -938,18 +931,22 @@ export default function PastorMembrosPage() {
         profissao: selectedMember.profession || "",
         carimbo_igreja_url: churchStamp,
         assinatura_pastor_url: pastorSignature,
-        member_id: selectedMemberId,
+        // Campos extras usados pela edge function para montar endereco da igreja
+        member_cep: formatCepBr(String(selectedMember.cep || "")),
+        endereco_igreja_completo: rodapeAuto || churchFooter || "",
+        igreja_nome: churchName || "",
+        telefone: String(selectedMember.phone || "").replace(/\D/g, ""),
       };
 
-      const res = await fetch("https://n8n-n8n.ynlng8.easypanel.host/webhook/ficha-carteirinha", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
+      // Chama a edge function — ela salva no banco E envia ao webhook do n8n
+      await generateMemberDocs({
+        document_type: "ficha_membro",
+        member_id: selectedMemberId,
+        church_totvs_id: activeTotvsId,
+        dados,
       });
 
-      if (!res.ok) throw new Error(`Webhook retornou ${res.status}`);
       toast.success("Ficha enviada para confecção! Aguarde o processamento.");
-      // Atualiza status dos documentos após envio
       await refetchDocsStatus();
     } catch (err) {
       toast.error(`Falha ao gerar ficha: ${String((err as Error)?.message || err)}`);
