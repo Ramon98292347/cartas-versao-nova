@@ -835,53 +835,17 @@ export async function listObreiros(_scopeTotvsIds: string[]): Promise<UserListIt
 }
 
 export async function listMembers(params: MemberListParams): Promise<WorkerListResponse> {
-  if (!isMockMode() && supabase && getRlsToken()) {
-    const session = getSession();
-    const page = params.page || 1;
-    const pageSize = params.page_size || 20;
-    const from = (page - 1) * pageSize;
-    const to = from + pageSize - 1;
-
-    let query = supabase
-      .from("users")
-      .select(
-        "id, full_name, role, cpf, rg, phone, email, profession, minister_role, birth_date, baptism_date, marital_status, matricula, ordination_date, avatar_url, signature_url, cep, address_street, address_number, address_complement, address_neighborhood, address_city, address_state, default_totvs_id, totvs_access, is_active, can_create_released_letter, payment_status, payment_block_reason",
-        { count: "exact" },
-      )
-      .order("full_name", { ascending: true });
-
-    if (params.search?.trim()) {
-      const search = params.search.trim();
-      query = query.or(
-        `full_name.ilike.%${search}%,cpf.ilike.%${search}%,phone.ilike.%${search}%,email.ilike.%${search}%`,
-      );
-    }
-
-    if (params.minister_role?.trim()) {
-      query = query.eq("minister_role", params.minister_role.trim());
-    }
-
-    if (typeof params.is_active === "boolean") {
-      query = query.eq("is_active", params.is_active);
-    }
-
-    if (params.roles?.length) {
-      query = query.in("role", params.roles);
-    }
-
-    const role = String(session?.role || "").toLowerCase();
-    if (role === "admin" && params.church_totvs_id?.trim()) {
-      query = query.eq("default_totvs_id", params.church_totvs_id.trim());
-    } else if (params.church_totvs_id?.trim()) {
-      query = query.eq("default_totvs_id", params.church_totvs_id.trim());
-    }
-
-    const { data: rowsRaw, error, count } = await query.range(from, to);
-    if (error) {
-      throw new Error(error.message || "Erro ao listar membros.");
-    }
-
-    const rows = Array.isArray(rowsRaw) ? rowsRaw : [];
+  if (!isMockMode()) {
+    const data = await api.listWorkers({
+      search: params.search || undefined,
+      minister_role: params.minister_role || undefined,
+      is_active: typeof params.is_active === "boolean" ? params.is_active : undefined,
+      include_pastor: params.roles?.includes("pastor") ? true : undefined,
+      page: params.page || 1,
+      page_size: params.page_size || 20,
+      church_totvs_id: params.church_totvs_id || undefined,
+    });
+    const rows = (Array.isArray(data?.workers) ? data.workers : []) as Array<Record<string, unknown>>;
     return {
       workers: rows.map((w: Record<string, unknown>) => ({
         id: String(w?.id || ""),
@@ -1007,7 +971,7 @@ export async function listMembers(params: MemberListParams): Promise<WorkerListR
 }
 
 export async function listWorkers(params: WorkerListParams): Promise<WorkerListResponse> {
-  if (!isMockMode() && supabase && getRlsToken()) {
+  if (!isMockMode() && false && supabase && getRlsToken()) {
     return listMembers({
       search: params.search,
       minister_role: params.minister_role,
@@ -1157,7 +1121,7 @@ export async function searchChurchesPublic(query: string, limit = 8): Promise<Ch
 }
 
 export async function listChurchesInScope(page = 1, pageSize = 200, rootTotvsId?: string): Promise<ChurchInScopeItem[]> {
-  if (supabase && getRlsToken()) {
+  if (false && supabase && getRlsToken()) {
     const session = getSession();
     const role = String(session?.role || "").toLowerCase();
 
@@ -1286,7 +1250,7 @@ export async function listChurchesInScope(page = 1, pageSize = 200, rootTotvsId?
 }
 
 export async function listChurchesInScopePaged(page = 1, pageSize = 20, rootTotvsId?: string): Promise<{ churches: ChurchInScopeItem[]; total: number; page: number; page_size: number }> {
-  if (supabase && getRlsToken()) {
+  if (false && supabase && getRlsToken()) {
     // Sem filtro de hierarquia: usa paginação real no banco (range + count).
     // O RLS já garante que só as igrejas do escopo do usuário são retornadas.
     // Isso evita o anti-padrão anterior de buscar 5000 igrejas e fatiar em memória.
@@ -1517,39 +1481,9 @@ export async function listNotifications(page = 1, pageSize = 20, unreadOnly = fa
   const userId = String(currentUser?.id || "").trim();
   const rlsToken = getRlsToken();
 
-  if (supabase && rlsToken) {
-    const from = (page - 1) * pageSize;
-    const to = from + pageSize - 1;
-    let query = supabase.from("notifications").select("id, title, message, is_read, read_at, created_at, type", { count: "exact" });
-
-    if (rootTotvs && userId) {
-      query = query.or(`church_totvs_id.eq.${rootTotvs},user_id.eq.${userId}`);
-    } else if (rootTotvs) {
-      query = query.eq("church_totvs_id", rootTotvs);
-    } else if (userId) {
-      query = query.eq("user_id", userId);
-    }
-
-    if (unreadOnly) {
-      query = query.eq("is_read", false);
-    }
-
-    const { data: rowsRaw, error, count } = await query.order("created_at", { ascending: false }).range(from, to);
-    if (error) throw new Error(error.message || "Erro ao listar notificacoes.");
-    const rows = Array.isArray(rowsRaw) ? rowsRaw : [];
-
-    let unreadCount = 0;
-    let unreadQuery = supabase.from("notifications").select("id", { count: "exact", head: true }).eq("is_read", false);
-    if (rootTotvs && userId) {
-      unreadQuery = unreadQuery.or(`church_totvs_id.eq.${rootTotvs},user_id.eq.${userId}`);
-    } else if (rootTotvs) {
-      unreadQuery = unreadQuery.eq("church_totvs_id", rootTotvs);
-    } else if (userId) {
-      unreadQuery = unreadQuery.eq("user_id", userId);
-    }
-    const { count: unreadDbCount } = await unreadQuery;
-    unreadCount = Number(unreadDbCount || 0);
-
+  if (!isMockMode()) {
+    const data = await api.listNotifications({ page, page_size: pageSize, unread_only: unreadOnly });
+    const rows = Array.isArray(data?.notifications) ? data.notifications : [];
     return {
       notifications: rows.map((item: Record<string, unknown>) => ({
         id: String(item?.id || ""),
@@ -1559,8 +1493,8 @@ export async function listNotifications(page = 1, pageSize = 20, unreadOnly = fa
         created_at: item?.created_at || null,
         type: item?.type || null,
       })),
-      unread_count: unreadCount,
-      total: Number(count || rows.length),
+      unread_count: Number(data?.unread_count || 0),
+      total: Number(data?.total || rows.length),
     };
   }
   return { notifications: [], unread_count: 0, total: 0 };
