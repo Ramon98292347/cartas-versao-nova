@@ -1,8 +1,7 @@
-﻿import { useEffect, useMemo, useState } from "react";
+﻿import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { ArrowLeft, Eye, EyeOff, Search, UserPlus } from "lucide-react";
+import { ArrowLeft, Eye, EyeOff, Loader2, Search, UserPlus } from "lucide-react";
 import { ImageCaptureInput } from "@/components/shared/ImageCaptureInput";
 
 import { Button } from "@/components/ui/button";
@@ -10,8 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { supabase } from "@/lib/supabase";
-import { fetchChurches } from "@/services/churchService";
-import { publicRegisterMember } from "@/services/saasService";
+import { publicRegisterMember, searchChurchesPublic, type ChurchSearchResult } from "@/services/saasService";
 import { getFriendlyError } from "@/lib/error-map";
 import { fetchAddressByCep, maskCep, onlyDigits } from "@/lib/cep";
 import { formatPhoneBr } from "@/lib/br-format";
@@ -36,20 +34,16 @@ function normalizeSearch(value: string) {
     .trim();
 }
 
-function normalizeChurchClass(value: unknown) {
-  return normalizeSearch(String(value || ""));
-}
-
-function isEstadualOrSetorial(church: { classificacao?: string | null }) {
-  const cls = normalizeChurchClass(church.classificacao);
+function isEstadualOrSetorial(result: ChurchSearchResult) {
+  const cls = normalizeSearch(result.class);
   return cls === "estadual" || cls === "setorial";
 }
 
-function churchClassLabel(church: { classificacao?: string | null }) {
-  const cls = normalizeChurchClass(church.classificacao);
+function churchClassLabel(result: ChurchSearchResult) {
+  const cls = normalizeSearch(result.class);
   if (cls === "estadual") return "Estadual";
   if (cls === "setorial") return "Setorial";
-  return "—";
+  return result.class;
 }
 
 export default function CadastroRapido() {
@@ -68,8 +62,15 @@ export default function CadastroRapido() {
   const [confirmarSenha, setConfirmarSenha] = useState("");
   const [showSenha, setShowSenha] = useState(false);
   const [showConfirmarSenha, setShowConfirmarSenha] = useState(false);
-  const [filtroIgreja, setFiltroIgreja] = useState("");
-  const [igrejaEncontradaNome, setIgrejaEncontradaNome] = useState("");
+
+  // Campo A: busca da estadual/setorial
+  const [estadualSearch, setEstadualSearch] = useState("");
+  const [selectedEstadual, setSelectedEstadual] = useState<{ totvs: string; nome: string } | null>(null);
+  const [showEstadualSug, setShowEstadualSug] = useState(false);
+
+  // Campo B: busca da igreja especifica no escopo
+  const [igrejaSearch, setIgrejaSearch] = useState("");
+  const [showIgrejaSug, setShowIgrejaSug] = useState(false);
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
   const [avatarPreviewUrl, setAvatarPreviewUrl] = useState("");
   const [cep, setCep] = useState("");
@@ -109,48 +110,54 @@ export default function CadastroRapido() {
     return data.publicUrl ? `${data.publicUrl}?t=${Date.now()}` : data.publicUrl;
   }
 
-  const { data: churches = [] } = useQuery({
-    queryKey: ["public-register-churches"],
-    queryFn: fetchChurches,
-    staleTime: 60_000,
-  });
+  // Resultados de busca vindos da edge function search-churches-public
+  const [estadualResults, setEstadualResults] = useState<ChurchSearchResult[]>([]);
+  const [igrejaResults, setIgrejaResults] = useState<ChurchSearchResult[]>([]);
+  const [searchingEstadual, setSearchingEstadual] = useState(false);
+  const [searchingIgreja, setSearchingIgreja] = useState(false);
 
-  const buscaNormalizada = useMemo(() => normalizeSearch(filtroIgreja), [filtroIgreja]);
-
-  function buscarIgreja() {
-    const texto = buscaNormalizada;
-    if (!texto) {
-      toast.error("Digite nome ou TOTVS para buscar a igreja.");
+  // Campo A: debounce de 300ms - busca estaduais e setoriais ao digitar 2+ caracteres
+  useEffect(() => {
+    const q = estadualSearch.trim();
+    if (q.length < 2) {
+      setEstadualResults([]);
       return;
     }
+    const timer = setTimeout(async () => {
+      setSearchingEstadual(true);
+      try {
+        const results = await searchChurchesPublic(q, 10);
+        // Filtra somente estadual e setorial
+        setEstadualResults(results.filter((r) => isEstadualOrSetorial(r)));
+      } catch {
+        setEstadualResults([]);
+      } finally {
+        setSearchingEstadual(false);
+      }
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [estadualSearch]);
 
-    const textoNumerico = texto.replace(/\D/g, "");
-    const churchesPermitidas = churches.filter((c) => isEstadualOrSetorial(c));
-    const exataPorTotvs = churchesPermitidas.find((c) => String(c.codigoTotvs) === textoNumerico);
-    if (exataPorTotvs) {
-      setTotvs(exataPorTotvs.codigoTotvs);
-      setIgrejaEncontradaNome(`${exataPorTotvs.nome} (${churchClassLabel(exataPorTotvs)})`);
-      toast.success("Igreja encontrada.");
+  // Campo B: debounce de 300ms - busca qualquer igreja ao digitar 2+ caracteres
+  useEffect(() => {
+    const q = igrejaSearch.trim();
+    if (q.length < 2) {
+      setIgrejaResults([]);
       return;
     }
-
-    const porNomeOuPrefixo = churchesPermitidas.find((c) => {
-      const nomeNormalizado = normalizeSearch(c.nome);
-      const totvsTexto = String(c.codigoTotvs || "");
-      return nomeNormalizado.includes(texto) || totvsTexto.startsWith(textoNumerico);
-    });
-
-    if (porNomeOuPrefixo) {
-      setTotvs(porNomeOuPrefixo.codigoTotvs);
-      setIgrejaEncontradaNome(`${porNomeOuPrefixo.nome} (${churchClassLabel(porNomeOuPrefixo)})`);
-      toast.success("Igreja encontrada.");
-      return;
-    }
-
-    setTotvs("");
-    setIgrejaEncontradaNome("");
-    toast.error("Igreja nao encontrada. Use apenas igrejas Estadual ou Setorial.");
-  }
+    const timer = setTimeout(async () => {
+      setSearchingIgreja(true);
+      try {
+        const results = await searchChurchesPublic(q, 10);
+        setIgrejaResults(results);
+      } catch {
+        setIgrejaResults([]);
+      } finally {
+        setSearchingIgreja(false);
+      }
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [igrejaSearch]);
 
   async function buscarCepAutomatico(force = false) {
     const cepDigits = onlyDigits(cep);
@@ -385,39 +392,119 @@ export default function CadastroRapido() {
                 <Input value={addressState} onChange={(e) => setAddressState(e.target.value.toUpperCase().slice(0, 2))} placeholder="UF" />
               </div>
 
+              {/* Campo A: Buscar estadual ou setorial com autocomplete via edge function */}
               <div className="space-y-2 md:col-span-2">
                 <Label>Buscar igreja Estadual ou Setorial, por nome ou TOTVS</Label>
-                <div className="flex gap-2">
+                <div className="relative">
+                  {searchingEstadual ? (
+                    <Loader2 className="pointer-events-none absolute left-3 top-1/2 z-10 h-4 w-4 -translate-y-1/2 animate-spin text-slate-400" />
+                  ) : (
+                    <Search className="pointer-events-none absolute left-3 top-1/2 z-10 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                  )}
                   <Input
-                    value={filtroIgreja}
+                    value={estadualSearch}
                     onChange={(e) => {
-                      setFiltroIgreja(e.target.value);
+                      setEstadualSearch(e.target.value);
+                      setSelectedEstadual(null);
                       setTotvs("");
-                      setIgrejaEncontradaNome("");
+                      setIgrejaSearch("");
+                      setShowEstadualSug(true);
                     }}
+                    onFocus={() => setShowEstadualSug(true)}
+                    onBlur={() => setTimeout(() => setShowEstadualSug(false), 150)}
                     placeholder="Ex.: 17250 ou Estadual de Vitoria"
+                    className="pl-9"
                   />
-                  <Button type="button" variant="outline" onClick={buscarIgreja}>
-                    <Search className="mr-2 h-4 w-4" />
-                    Buscar
-                  </Button>
+                  {showEstadualSug && estadualResults.length > 0 && (
+                    <div className="absolute z-50 mt-1 w-full rounded-md border border-slate-200 bg-white shadow-lg max-h-56 overflow-y-auto">
+                      {estadualResults.map((r) => (
+                        <button
+                          key={r.totvs_id}
+                          type="button"
+                          className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-slate-50"
+                          onMouseDown={(e) => {
+                            e.preventDefault();
+                            setSelectedEstadual({ totvs: r.totvs_id, nome: r.church_name });
+                            setEstadualSearch(`${r.church_name} (${r.totvs_id})`);
+                            setEstadualResults([]);
+                            setShowEstadualSug(false);
+                            setIgrejaSearch("");
+                            setTotvs("");
+                          }}
+                        >
+                          <span className="font-medium">{r.church_name}</span>
+                          <span className="ml-auto text-xs text-slate-400">{r.totvs_id} · {churchClassLabel(r)}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
-                {igrejaEncontradaNome ? (
-                  <p className="text-xs text-slate-600">
-                    Igreja selecionada: <span className="font-medium">{igrejaEncontradaNome}</span>
+                {selectedEstadual && (
+                  <p className="text-xs text-emerald-600 font-medium">
+                    Escopo selecionado: {selectedEstadual.nome} ({selectedEstadual.totvs})
                   </p>
-                ) : null}
+                )}
+                <p className="text-xs text-slate-500">Digite ao menos 2 caracteres para buscar.</p>
               </div>
 
+              {/* Campo B: Selecionar a igreja especifica com autocomplete via edge function */}
               <div className="space-y-2 md:col-span-2">
                 <Label>TOTVS da igreja (obrigatorio)</Label>
-                <Input
-                  value={totvs}
-                  readOnly
-                  placeholder="Digite ou selecione abaixo"
-                />
-                <p className="text-xs text-slate-500">Campo preenchido automaticamente pela busca.</p>
-                <p className="text-xs text-slate-500">Somente igrejas Estadual ou Setorial podem ser selecionadas aqui.</p>
+                <div className="relative">
+                  {searchingIgreja ? (
+                    <Loader2 className="pointer-events-none absolute left-3 top-1/2 z-10 h-4 w-4 -translate-y-1/2 animate-spin text-slate-400" />
+                  ) : (
+                    <Search className="pointer-events-none absolute left-3 top-1/2 z-10 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                  )}
+                  <Input
+                    value={igrejaSearch}
+                    onChange={(e) => {
+                      setIgrejaSearch(e.target.value);
+                      setTotvs("");
+                      setShowIgrejaSug(true);
+                    }}
+                    onFocus={() => setShowIgrejaSug(true)}
+                    onBlur={() => {
+                      setTimeout(() => setShowIgrejaSug(false), 150);
+                      // Digitacao manual: se nao selecionou da lista, extrai digitos como TOTVS
+                      if (!totvs) {
+                        const digits = igrejaSearch.replace(/\D/g, "");
+                        if (digits) setTotvs(digits);
+                      }
+                    }}
+                    placeholder={selectedEstadual ? `Buscar no escopo de ${selectedEstadual.nome}` : "Digite o nome ou TOTVS da sua igreja"}
+                    className="pl-9"
+                  />
+                  {showIgrejaSug && igrejaResults.length > 0 && (
+                    <div className="absolute z-50 mt-1 w-full rounded-md border border-slate-200 bg-white shadow-lg max-h-56 overflow-y-auto">
+                      {igrejaResults.map((r) => (
+                        <button
+                          key={r.totvs_id}
+                          type="button"
+                          className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-slate-50"
+                          onMouseDown={(e) => {
+                            e.preventDefault();
+                            setIgrejaSearch(`${r.church_name} (${r.totvs_id})`);
+                            setTotvs(r.totvs_id);
+                            setIgrejaResults([]);
+                            setShowIgrejaSug(false);
+                          }}
+                        >
+                          <span className="font-medium">{r.church_name}</span>
+                          <span className="ml-auto text-xs text-slate-400">{r.totvs_id}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                {totvs && (
+                  <p className="text-xs text-emerald-600 font-medium">Igreja selecionada: TOTVS {totvs}</p>
+                )}
+                <p className="text-xs text-slate-500">
+                  {selectedEstadual
+                    ? `Escopo: ${selectedEstadual.nome}. Digite ao menos 2 caracteres.`
+                    : "Digite ao menos 2 caracteres para buscar qualquer igreja."}
+                </p>
               </div>
 
               <div className="space-y-2">
