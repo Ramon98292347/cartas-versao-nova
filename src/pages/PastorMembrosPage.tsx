@@ -942,9 +942,10 @@ export default function PastorMembrosPage() {
       // pois a edge function valida que member.default_totvs_id === church_totvs_id.
       const memberChurchTotvs = String(selectedMember.default_totvs_id || activeTotvsId);
 
-      // Chama a edge function — ela salva no banco E envia ao webhook do n8n
+      // Comentario: "ficha_carteirinha" salva em AMBAS as tabelas:
+      // member_ficha_documents e member_carteirinha_documents (createBundle=true na edge fn)
       await generateMemberDocs({
-        document_type: "ficha_membro",
+        document_type: "ficha_carteirinha",
         member_id: selectedMemberId,
         church_totvs_id: memberChurchTotvs,
         dados,
