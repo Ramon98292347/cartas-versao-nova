@@ -742,6 +742,16 @@ export default function PastorMembrosPage() {
     queryKey: ["pastor-member-docs-status", selectedMemberId, memberChurchTotvsId],
     queryFn: () => getMemberDocsStatus({ member_id: selectedMemberId, church_totvs_id: memberChurchTotvsId }),
     enabled: Boolean(docsTabOpen && selectedMemberId && memberChurchTotvsId),
+    // Comentario: polling a cada 10 segundos enquanto ficha ou carteirinha ainda nao estiver pronta.
+    // Quando ambas estiverem prontas, refetchInterval retorna false e o polling para automaticamente.
+    refetchInterval: (query) => {
+      const d = query.state.data as typeof docsStatus;
+      const fichaOk = Boolean(d?.ficha && String(d?.ficha?.final_url || "").trim().length > 0);
+      const cartOk =
+        String(d?.carteirinha?.status || "").toUpperCase() === "PRONTO" ||
+        Boolean(d?.carteirinha && String(d?.carteirinha?.final_url || "").trim().length > 0);
+      return fichaOk && cartOk ? false : 10000;
+    },
   });
   const fichaPronta = Boolean(
     docsStatus?.ficha &&
