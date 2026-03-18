@@ -336,10 +336,63 @@ user: userRaw ? {
 
 ---
 
-## 15. Commits Recentes (referência)
+## 15. Captura de Foto com Detecção de Rosto (face-api.js)
+
+Todos os formulários que exigem foto 3x4 usam o componente `AvatarCapture.tsx` com detecção de rosto em tempo real.
+
+### Como funciona
+1. Abre câmera frontal via `getUserMedia`
+2. Carrega modelo TinyFaceDetector de `/public/models/`
+3. Detecta rosto em tempo real com canvas overlay
+4. Guia oval mostra onde posicionar o rosto
+5. Retângulo **verde** quando rosto enquadrado / **amarelo** quando detectado fora
+6. Botão "Capturar" só ativa quando rosto está dentro do guia
+7. Foto capturada: JPEG qualidade 0.82, fundo branco, proporção 3x4 (300×400px)
+8. Alternativa: botão "Arquivo" para usar da galeria
+
+### Arquivos de modelo necessários em `/public/models/`
+```
+tiny_face_detector_model-weights_manifest.json
+tiny_face_detector_model-shard1
+```
+Baixar de: https://github.com/justadudewhohacks/face-api.js/tree/master/weights
+
+### Formulários que usam AvatarCapture
+| Formulário | Arquivo |
+|---|---|
+| Cadastro/edição de membro | `src/components/admin/ObreirosTab.tsx` |
+| Cadastro rápido de obreiro | `src/pages/CadastroRapido.tsx` |
+| Edição de perfil do usuário | `src/pages/UsuarioDashboard.tsx` |
+
+### ImageCaptureInput (logo/carimbo — SEM detecção de rosto)
+Para imagens de igrejas (logo, carimbo, assinatura) usa `ImageCaptureInput.tsx`
+que abre editor de recorte com zoom e proporção livre. Não usa face-api.js.
+
+---
+
+## 16. Filtros de Busca nas Páginas de Igrejas e Membros
+
+### Páginas de Igrejas (Admin + Pastor)
+- Busca por **nome** com debounce de 400ms
+- Select de **classificação** (estadual, setorial, central, regional, local)
+- Escopo limitado ao `activeTotvsId` do pastor/admin logado
+- Limpar filtros + contador de resultados
+
+### Páginas de Membros (Admin + Pastor)
+- Input de busca de **igreja** com combobox (lista filtrada, mostra 10 por padrão)
+- Select de **cargo** (pastor, presbítero, diácono, obreiro, membro)
+- Input vazio = mostra **todos os membros** do escopo
+- `ObreirosTab` aceita prop `filterMinisterRole` para filtro externo
+
+---
+
+## 17. Commits Recentes (referência)
 
 - `28b23d5` — Desativa todos os caminhos diretos Supabase (resolve 401)
 - `b327c50` — Corrige mark notifications, anúncios públicos, cabeçalhos JSDoc
 - `356cb14` — Corrige notificações: usa edge function via API
 - `701694c` — Remove caminho direto em listMembers/listWorkers/listChurchesInScope
 - `a957de8` — Adiciona ícones no menu de ações da tabela de cartas
+- `0ac19c4` — Corrige problemas críticos/altos/médios (env, tokens, confirm, webhook, skeleton)
+- `75d9e27` — Adiciona upload de foto com IA nos formulários de cadastro de membro e igreja
+- `654e87a` — Atualiza AvatarCapture com detecção de rosto via face-api.js
