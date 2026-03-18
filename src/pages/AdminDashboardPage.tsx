@@ -41,10 +41,12 @@ export default function AdminDashboardPage() {
   const { data } = useQuery({
     queryKey: ["admin-dashboard-churches"],
     queryFn: () => listChurchesInScopePaged(1, 1000),
+    refetchInterval: 10000,
   });
   const { data: membersData } = useQuery({
     queryKey: ["admin-dashboard-members-all"],
     queryFn: () => listMembers({ page: 1, page_size: 1000, roles: ["pastor", "obreiro"] }),
+    refetchInterval: 10000,
   });
 
   const churches = data?.churches || [];

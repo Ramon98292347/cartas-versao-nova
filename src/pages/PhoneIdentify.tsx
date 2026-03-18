@@ -107,6 +107,7 @@ export default function PhoneIdentify() {
       return listAnnouncementsPublicByTotvs(announcementTotvs, 10);
     },
     enabled: cachedCpf.length === 11 || Boolean(announcementTotvs) || announcementScope.length > 0,
+    refetchInterval: 10000,
   });
 
   const { data: birthdays = [] } = useQuery({
@@ -114,6 +115,7 @@ export default function PhoneIdentify() {
     queryFn: () =>
       announcementScope.length ? listBirthdaysTodayPublicByScope(announcementScope, 20) : listBirthdaysTodayPublicByTotvs(cachedTotvs, 10),
     enabled: Boolean(cachedTotvs) || announcementScope.length > 0,
+    refetchInterval: 10000,
   });
 
   async function handleLogin() {

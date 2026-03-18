@@ -53,10 +53,12 @@ export default function PastorDashboardPage() {
   const { data: membersRes } = useQuery({
     queryKey: ["pastor-dashboard-members"],
     queryFn: () => listMembers({ page: 1, page_size: 300, roles: ["pastor", "obreiro"] }),
+    refetchInterval: 10000,
   });
   const { data: churchesRes } = useQuery({
     queryKey: ["pastor-dashboard-churches"],
     queryFn: () => listChurchesInScopePaged(1, 500),
+    refetchInterval: 10000,
   });
 
   const members = membersRes?.workers || [];

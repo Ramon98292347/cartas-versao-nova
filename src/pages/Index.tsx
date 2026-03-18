@@ -144,6 +144,7 @@ const Index = () => {
     queryFn: () => listChurchesInScope(1, 1000, activeTotvsForPastor || undefined),
     enabled: role === "admin" || Boolean(activeTotvsForPastor),
     staleTime: 60_000,
+    refetchInterval: 10000,
   });
   // Converte para o tipo Church usado nos selects do formulario
   const churches = useMemo(() => rawOwnChurches.map(apiToChurch), [rawOwnChurches]);
@@ -161,6 +162,7 @@ const Index = () => {
     queryFn: () => listChurchesInScope(1, 1000, parentTotvsId || undefined),
     enabled: (role === "admin" || Boolean(activeTotvsForPastor)) && Boolean(parentTotvsId),
     staleTime: 60_000,
+    refetchInterval: 10000,
   });
   const parentScopeChurches = useMemo(() => rawParentChurches.map(apiToChurch), [rawParentChurches]);
 
@@ -180,6 +182,7 @@ const Index = () => {
     queryFn: () => searchChurchesPublic(outrosDebounced, 8),
     enabled: outrosDebounced.trim().length >= 2,
     staleTime: 30_000,
+    refetchInterval: 10000,
   });
 
   // Fonte de igrejas para o campo destino: escopo da mae (se carregado) ou escopo proprio
@@ -216,6 +219,7 @@ const Index = () => {
     },
     enabled: Boolean(session?.totvs_id),
     staleTime: 60_000,
+    refetchInterval: 10000,
   });
   const origemTotvsSelecionada = String(igrejaOrigem?.codigoTotvs || activeTotvsForPastor || "").trim();
 
@@ -245,6 +249,7 @@ const Index = () => {
     queryFn: () => getPastorByTotvsPublic(origemTotvsSelecionada),
     // So chama se nao achou nos dados locais
     enabled: Boolean(origemTotvsSelecionada) && !pastorPorId && !pastorPorTotvs,
+    refetchInterval: 10000,
   });
 
   const pastorResponsavel = String(

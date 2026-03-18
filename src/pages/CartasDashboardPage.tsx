@@ -56,6 +56,7 @@ export default function CartasDashboardPage() {
     queryKey: ["cartas-dashboard-scope", activeTotvsId, roleMode],
     queryFn: () => (roleMode === "admin" ? listChurchesInScope(1, 1000) : listChurchesInScope(1, 1000, activeTotvsId || undefined)),
     enabled: Boolean(activeTotvsId) || roleMode === "admin",
+    refetchInterval: 10000,
   });
 
   const effectiveScopeTotvsIds = useMemo(() => {
@@ -111,6 +112,7 @@ export default function CartasDashboardPage() {
         church_totvs_id: roleMode === "admin" && selectedChurchTotvs !== "all" ? selectedChurchTotvs : undefined,
       }),
     enabled: selectedScopeForLetters.length > 0,
+    refetchInterval: 10000,
   });
 
   const loadingPage =

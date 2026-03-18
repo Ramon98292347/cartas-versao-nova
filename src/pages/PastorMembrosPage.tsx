@@ -664,6 +664,7 @@ export default function PastorMembrosPage() {
         church_totvs_id: filterTotvs === "all" ? undefined : filterTotvs,
       }),
     staleTime: 30_000,
+    refetchInterval: 10000,
   });
 
   const workers = data?.workers || [];
@@ -673,6 +674,7 @@ export default function PastorMembrosPage() {
     queryKey: ["pastor-members-churches-footer", activeTotvsId],
     queryFn: () => listChurchesInScope(1, 400),
     enabled: Boolean(activeTotvsId),
+    refetchInterval: 10000,
   });
 
   const showPageLoading =

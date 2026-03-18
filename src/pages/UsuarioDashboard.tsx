@@ -178,6 +178,7 @@ export default function UsuarioDashboard() {
     queryKey: ["pastor-by-totvs", activeTotvs],
     queryFn: () => getPastorByTotvsPublic(activeTotvs),
     enabled: Boolean(activeTotvs),
+    refetchInterval: 10000,
   });
 
   const letters = useMemo(

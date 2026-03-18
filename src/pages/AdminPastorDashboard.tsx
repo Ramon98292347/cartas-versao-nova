@@ -103,12 +103,14 @@ export default function AdminPastorDashboard() {
     queryKey: ["admin-church-summary", effectiveScopeTotvsIds.join("|")],
     queryFn: () => listAdminChurchSummary(effectiveScopeTotvsIds),
     enabled: canManageChurches && effectiveScopeTotvsIds.length > 0,
+    refetchInterval: 10000,
   });
 
   const { data: churchesPaged } = useQuery({
     queryKey: ["churches-in-scope", churchPage, churchPageSize],
     queryFn: () => listChurchesInScopePaged(churchPage, churchPageSize),
     enabled: canManageChurches,
+    refetchInterval: 10000,
   });
   const churchesInScope = churchesPaged?.churches || [];
   const churchesTotal = churchesPaged?.total || churchesInScope.length;

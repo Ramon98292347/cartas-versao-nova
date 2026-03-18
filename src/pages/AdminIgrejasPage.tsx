@@ -43,12 +43,14 @@ export default function AdminIgrejasPage() {
   const { data: optionsRows = [] } = useQuery({
     queryKey: ["admin-igrejas-options"],
     queryFn: () => listChurchesInScope(1, 1000),
+    refetchInterval: 10000,
   });
 
   const { data: pageData, isLoading, isFetching } = useQuery({
     queryKey: ["admin-igrejas-page", page, pageSize, filterTotvs],
     queryFn: () => listChurchesInScopePaged(page, pageSize, filterTotvs === "all" ? undefined : filterTotvs),
     staleTime: 30_000,
+    refetchInterval: 10000,
   });
 
   const rows = pageData?.churches || [];

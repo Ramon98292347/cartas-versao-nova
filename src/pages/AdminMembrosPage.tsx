@@ -38,6 +38,7 @@ export default function AdminMembrosPage() {
   const { data: churches = [], isLoading: loadingChurches, isFetching: fetchingChurches } = useQuery({
     queryKey: ["admin-membros-churches"],
     queryFn: () => listChurchesInScope(1, 400),
+    refetchInterval: 10000,
   });
 
   useEffect(() => {
@@ -62,6 +63,7 @@ export default function AdminMembrosPage() {
         page_size: 1,
       }),
     enabled: Boolean(selectedChurchTotvs),
+    refetchInterval: 10000,
   });
 
   const showPageLoading =

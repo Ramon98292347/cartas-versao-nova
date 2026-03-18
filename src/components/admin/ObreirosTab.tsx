@@ -184,6 +184,7 @@ export function ObreirosTab({
         page,
         page_size: pageSize,
       }),
+    refetchInterval: 10000,
   });
 
   const workers = useMemo(() => data?.workers || [], [data?.workers]);

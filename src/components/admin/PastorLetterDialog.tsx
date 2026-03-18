@@ -81,6 +81,7 @@ export function PastorLetterDialog({ open, onOpenChange, letterTarget, onSuccess
     },
     enabled: open && Boolean(letterTarget?.churchTotvsId),
     staleTime: 60_000,
+    refetchInterval: 10000,
   });
 
   // ─── Escopo da mae: todas as igrejas do pai (escopo mais amplo) ─────────────
@@ -99,6 +100,7 @@ export function PastorLetterDialog({ open, onOpenChange, letterTarget, onSuccess
     },
     enabled: open && Boolean(targetParentTotvs),
     staleTime: 60_000,
+    refetchInterval: 10000,
   });
 
   // ─── Todas as igrejas do banco (para o campo Outros) ────────────────────────
@@ -110,6 +112,7 @@ export function PastorLetterDialog({ open, onOpenChange, letterTarget, onSuccess
     },
     enabled: open,
     staleTime: 5 * 60_000,
+    refetchInterval: 10000,
   });
 
   // ─── Resets ao abrir o dialog ────────────────────────────────────────────────

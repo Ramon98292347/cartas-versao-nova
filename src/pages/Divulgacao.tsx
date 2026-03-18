@@ -70,6 +70,7 @@ export default function DivulgacaoPage() {
   const { data: announcements = [], isLoading } = useQuery({
     queryKey: ["announcements-config"],
     queryFn: () => listAnnouncements(10),
+    refetchInterval: 10000,
   });
 
   const ordered = useMemo(() => [...announcements].sort((a, b) => (a.position || 999) - (b.position || 999)), [announcements]);
