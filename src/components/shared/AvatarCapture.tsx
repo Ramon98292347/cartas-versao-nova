@@ -1,201 +1,432 @@
-import { useEffect, useRef, useState } from "react";
-import { Camera, Loader2, Upload, X } from "lucide-react";
-import { removeBackground } from "@imgly/background-removal";
+/**
+ * AvatarCapture.tsx
+ * -----------------
+ * Componente de captura de foto 3x4 com detecção de rosto em tempo real.
+ *
+ * Fluxo:
+ *  1. Abre a câmera frontal usando getUserMedia
+ *  2. Carrega o modelo TinyFaceDetector do face-api.js (de /public/models/)
+ *  3. Detecta rosto em tempo real com overlay verde quando enquadrado
+ *  4. Mostra guia oval para posicionamento do rosto
+ *  5. Botão "Capturar" só ativa quando o rosto está dentro do guia
+ *  6. Captura o frame, comprime para JPEG (qualidade 0.82) com fundo branco 3x4
+ *  7. Chama onFileReady com o arquivo final
+ *  8. Alternativa: usar galeria (sem detecção, mas com ajuste de proporção)
+ */
+
+import { useCallback, useEffect, useRef, useState } from "react";
+import * as faceapi from "face-api.js";
+import { Camera, CheckCircle, Loader2, RefreshCw, Upload, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
+// Tamanho final da foto (proporção 3x4)
+const FOTO_WIDTH = 300;
+const FOTO_HEIGHT = 400;
+
+// Tamanho do visor da câmera na tela
+const DISPLAY_WIDTH = 270;
+const DISPLAY_HEIGHT = 360;
+
 interface AvatarCaptureProps {
-  /** Chamado quando a foto final (com fundo removido) estiver pronta */
+  /** Chamado quando a foto final estiver pronta (ou null se removida) */
   onFileReady: (file: File | null) => void;
   disabled?: boolean;
 }
 
-/**
- * AvatarCapture
- * -------------
- * Componente de captura de foto 3x4 com remoção automática de fundo via IA.
- * Fluxo:
- *   1. Usuário tira foto (câmera frontal) ou escolhe da galeria
- *   2. A IA remove o fundo (roda direto no navegador, gratuito, sem API key)
- *   3. A imagem resultante tem fundo branco no formato 3x4
- *   4. O arquivo PNG final é passado via onFileReady
- */
 export function AvatarCapture({ onFileReady, disabled = false }: AvatarCaptureProps) {
-  const cameraRef = useRef<HTMLInputElement>(null);
-  const galleryRef = useRef<HTMLInputElement>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const galleryInputRef = useRef<HTMLInputElement>(null);
 
-  const [previewUrl, setPreviewUrl] = useState("");
+  const [modelsLoaded, setModelsLoaded] = useState(false);
+  const [loadingModels, setLoadingModels] = useState(false);
+  const [cameraActive, setCameraActive] = useState(false);
+  const [faceDetected, setFaceDetected] = useState(false);
+  const [capturing, setCapturing] = useState(false);
   const [processing, setProcessing] = useState(false);
   const [statusMsg, setStatusMsg] = useState("");
+  const [previewUrl, setPreviewUrl] = useState("");
+  const [progress, setProgress] = useState(0);
 
-  // Revoga a URL de preview quando o componente desmonta ou preview muda
+  const detectionLoopRef = useRef<number | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+
+  // ── Carregar modelos ao montar ──────────────────────────────────────────────
+  useEffect(() => {
+    async function carregarModelos() {
+      setLoadingModels(true);
+      setStatusMsg("Carregando detecção de rosto...");
+      try {
+        await faceapi.nets.tinyFaceDetector.loadFromUri("/models");
+        setModelsLoaded(true);
+        setStatusMsg("");
+      } catch {
+        setStatusMsg("Detecção indisponível (modelos não encontrados)");
+      } finally {
+        setLoadingModels(false);
+      }
+    }
+    void carregarModelos();
+    return () => pararCamera();
+  }, []);
+
   useEffect(() => {
     return () => {
       if (previewUrl) URL.revokeObjectURL(previewUrl);
     };
   }, [previewUrl]);
 
-  // Converte um Blob PNG (fundo transparente) para um File PNG com fundo branco
-  async function adicionarFundoBranco(blob: Blob): Promise<File> {
-    return new Promise((resolve) => {
+  // ── Câmera ──────────────────────────────────────────────────────────────────
+  async function iniciarCamera() {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: "user", width: { ideal: FOTO_WIDTH }, height: { ideal: FOTO_HEIGHT } },
+        audio: false,
+      });
+      streamRef.current = stream;
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        await videoRef.current.play();
+      }
+      setCameraActive(true);
+      setFaceDetected(false);
+      if (modelsLoaded) iniciarDeteccao();
+    } catch {
+      setStatusMsg("Câmera indisponível. Use a galeria.");
+    }
+  }
+
+  function pararCamera() {
+    if (detectionLoopRef.current !== null) {
+      cancelAnimationFrame(detectionLoopRef.current);
+      detectionLoopRef.current = null;
+    }
+    streamRef.current?.getTracks().forEach((t) => t.stop());
+    streamRef.current = null;
+    if (videoRef.current) videoRef.current.srcObject = null;
+    setCameraActive(false);
+    setFaceDetected(false);
+    const ctx = canvasRef.current?.getContext("2d");
+    if (ctx) ctx.clearRect(0, 0, DISPLAY_WIDTH, DISPLAY_HEIGHT);
+  }
+
+  // ── Loop de detecção ────────────────────────────────────────────────────────
+  const iniciarDeteccao = useCallback(() => {
+    const video = videoRef.current;
+    const canvas = canvasRef.current;
+    if (!video || !canvas) return;
+    canvas.width = DISPLAY_WIDTH;
+    canvas.height = DISPLAY_HEIGHT;
+
+    async function detectar() {
+      if (!video || !canvas) return;
+      const detections = await faceapi.detectAllFaces(
+        video,
+        new faceapi.TinyFaceDetectorOptions({ inputSize: 224, scoreThreshold: 0.5 })
+      );
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return;
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      desenharGuiaOval(ctx);
+
+      if (detections.length > 0) {
+        const dims = faceapi.matchDimensions(canvas, video, true);
+        const resized = faceapi.resizeResults(detections, dims);
+        const rosto = resized[0].box;
+        const dentroDoGuia = verificarRostoDentroOval(rosto);
+        setFaceDetected(dentroDoGuia);
+        ctx.strokeStyle = dentroDoGuia ? "#22c55e" : "#f59e0b";
+        ctx.lineWidth = 3;
+        ctx.shadowBlur = 8;
+        ctx.shadowColor = dentroDoGuia ? "#22c55e" : "#f59e0b";
+        ctx.strokeRect(rosto.x, rosto.y, rosto.width, rosto.height);
+        ctx.shadowBlur = 0;
+      } else {
+        setFaceDetected(false);
+      }
+      detectionLoopRef.current = requestAnimationFrame(detectar);
+    }
+    detectionLoopRef.current = requestAnimationFrame(detectar);
+  }, []);
+
+  function desenharGuiaOval(ctx: CanvasRenderingContext2D) {
+    const cx = DISPLAY_WIDTH / 2;
+    const cy = DISPLAY_HEIGHT * 0.42;
+    ctx.beginPath();
+    ctx.ellipse(cx, cy, DISPLAY_WIDTH * 0.30, DISPLAY_HEIGHT * 0.36, 0, 0, Math.PI * 2);
+    ctx.strokeStyle = "rgba(255,255,255,0.7)";
+    ctx.lineWidth = 2;
+    ctx.setLineDash([8, 4]);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = "rgba(255,255,255,0.9)";
+    ctx.font = "13px sans-serif";
+    ctx.textAlign = "center";
+    ctx.fillText("Posicione o rosto aqui", cx, DISPLAY_HEIGHT - 16);
+  }
+
+  function verificarRostoDentroOval(box: faceapi.Box): boolean {
+    const cx = DISPLAY_WIDTH / 2;
+    const cy = DISPLAY_HEIGHT * 0.42;
+    const fx = box.x + box.width / 2;
+    const fy = box.y + box.height / 2;
+    const dentro =
+      Math.pow((fx - cx) / (DISPLAY_WIDTH * 0.35), 2) +
+      Math.pow((fy - cy) / (DISPLAY_HEIGHT * 0.40), 2) <= 1;
+    return dentro && box.width > DISPLAY_WIDTH * 0.18;
+  }
+
+  // ── Capturar foto ───────────────────────────────────────────────────────────
+  async function capturarFoto() {
+    const video = videoRef.current;
+    if (!video) return;
+    setCapturing(true);
+    setStatusMsg("Capturando...");
+    try {
+      const canvas = document.createElement("canvas");
+      canvas.width = FOTO_WIDTH;
+      canvas.height = FOTO_HEIGHT;
+      const ctx = canvas.getContext("2d")!;
+      // Espelhar (câmera frontal)
+      ctx.translate(FOTO_WIDTH, 0);
+      ctx.scale(-1, 1);
+      ctx.drawImage(video, 0, 0, FOTO_WIDTH, FOTO_HEIGHT);
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+
+      canvas.toBlob(async (blob) => {
+        if (!blob) { setCapturing(false); setStatusMsg("Erro ao capturar."); return; }
+        pararCamera();
+        const arquivo = new File([blob], "avatar.jpg", { type: "image/jpeg" });
+        await processarFoto(arquivo);
+        setCapturing(false);
+      }, "image/jpeg", 0.82);
+    } catch {
+      setCapturing(false);
+      setStatusMsg("Erro ao capturar.");
+    }
+  }
+
+  // ── Galeria ─────────────────────────────────────────────────────────────────
+  function handleGaleria(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (file) void processarFoto(file);
+  }
+
+  // ── Processar imagem (fundo branco + proporção 3x4) ──────────────────────
+  async function processarFoto(rawFile: File) {
+    setProcessing(true);
+    setStatusMsg("Preparando foto...");
+    setProgress(30);
+    try {
+      const img = await carregarImagem(rawFile);
+      const canvas = document.createElement("canvas");
+      canvas.width = FOTO_WIDTH;
+      canvas.height = FOTO_HEIGHT;
+      const ctx = canvas.getContext("2d")!;
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(0, 0, FOTO_WIDTH, FOTO_HEIGHT);
+      const scale = Math.max(FOTO_WIDTH / img.naturalWidth, FOTO_HEIGHT / img.naturalHeight);
+      const w = img.naturalWidth * scale;
+      const h = img.naturalHeight * scale;
+      ctx.drawImage(img, (FOTO_WIDTH - w) / 2, (FOTO_HEIGHT - h) / 2, w, h);
+      setProgress(80);
+      canvas.toBlob((blob) => {
+        if (!blob) { setProcessing(false); setStatusMsg("Erro ao processar."); return; }
+        const arquivo = new File([blob], "avatar.jpg", { type: "image/jpeg" });
+        const url = URL.createObjectURL(arquivo);
+        setPreviewUrl(url);
+        setProgress(100);
+        setStatusMsg("");
+        onFileReady(arquivo);
+        setProcessing(false);
+      }, "image/jpeg", 0.82);
+    } catch {
+      setProcessing(false);
+      setStatusMsg("Erro ao processar a imagem.");
+    }
+  }
+
+  function carregarImagem(file: File): Promise<HTMLImageElement> {
+    return new Promise((resolve, reject) => {
       const img = new Image();
-      const url = URL.createObjectURL(blob);
-      img.onload = () => {
-        // Canvas na proporção 3x4
-        const W = img.naturalWidth || 300;
-        const H = img.naturalHeight || 400;
-        const canvas = document.createElement("canvas");
-        canvas.width = W;
-        canvas.height = H;
-        const ctx = canvas.getContext("2d")!;
-        // Preenche com branco antes de desenhar a imagem
-        ctx.fillStyle = "#ffffff";
-        ctx.fillRect(0, 0, W, H);
-        ctx.drawImage(img, 0, 0);
-        URL.revokeObjectURL(url);
-        canvas.toBlob((canvasBlob) => {
-          const file = new File([canvasBlob!], "avatar.png", { type: "image/png" });
-          resolve(file);
-        }, "image/png");
-      };
+      const url = URL.createObjectURL(file);
+      img.onload = () => { URL.revokeObjectURL(url); resolve(img); };
+      img.onerror = () => { URL.revokeObjectURL(url); reject(new Error("Erro ao carregar imagem")); };
       img.src = url;
     });
   }
 
-  async function processarImagem(rawFile: File) {
-    setProcessing(true);
-    setStatusMsg("Carregando modelo de IA...");
-    setPreviewUrl("");
-
-    try {
-      // Remoção de fundo: roda no browser via WebAssembly, gratuito e offline
-      setStatusMsg("Removendo fundo...");
-      const blobSemFundo = await removeBackground(rawFile, {
-        // Configurações para melhor qualidade em fotos de pessoas
-        model: "medium",
-        output: {
-          format: "image/png",
-          quality: 1,
-        },
-      });
-
-      setStatusMsg("Aplicando fundo branco...");
-      const fileComFundoBranco = await adicionarFundoBranco(blobSemFundo);
-
-      // Cria URL de preview para exibir ao usuário
-      const url = URL.createObjectURL(fileComFundoBranco);
-      setPreviewUrl(url);
-      setStatusMsg("");
-      onFileReady(fileComFundoBranco);
-    } catch {
-      // Se a remoção de fundo falhar, usa a imagem original
-      setStatusMsg("Usando imagem original...");
-      const url = URL.createObjectURL(rawFile);
-      setPreviewUrl(url);
-      setStatusMsg("");
-      onFileReady(rawFile);
-    } finally {
-      setProcessing(false);
-    }
-  }
-
-  function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    e.target.value = "";
-    if (file) void processarImagem(file);
-  }
-
   function removerFoto() {
+    if (previewUrl) URL.revokeObjectURL(previewUrl);
     setPreviewUrl("");
     setStatusMsg("");
+    setProgress(0);
     onFileReady(null);
   }
 
+  // ── Render ──────────────────────────────────────────────────────────────────
   return (
     <div className="space-y-2">
-      <div className="flex items-start gap-3">
-        {/* Botões de câmera e galeria */}
-        <div className="flex flex-1 flex-col gap-2">
-          {/* Câmera frontal */}
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            disabled={disabled || processing}
-            onClick={() => cameraRef.current?.click()}
-          >
-            <Camera className="mr-2 h-4 w-4" />
-            Tirar Foto
-            <input
-              ref={cameraRef}
-              type="file"
-              accept="image/*"
-              capture="user"
-              className="hidden"
-              disabled={disabled || processing}
-              onChange={handleChange}
-            />
-          </Button>
-
-          {/* Galeria */}
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            disabled={disabled || processing}
-            onClick={() => galleryRef.current?.click()}
-          >
-            <Upload className="mr-2 h-4 w-4" />
-            Arquivo
-            <input
-              ref={galleryRef}
-              type="file"
-              accept="image/*"
-              className="hidden"
-              disabled={disabled || processing}
-              onChange={handleChange}
-            />
-          </Button>
-
-          {/* Status / mensagem */}
-          {processing ? (
-            <div className="flex items-center gap-2 text-xs text-blue-600">
-              <Loader2 className="h-3 w-3 animate-spin" />
-              {statusMsg || "Processando..."}
+      {/* Preview final */}
+      {previewUrl && !cameraActive && (
+        <div className="flex items-start gap-3">
+          <div className="flex flex-col items-center gap-1">
+            <div
+              className="overflow-hidden rounded-md border-2 border-green-400 bg-slate-50"
+              style={{ width: 90, height: 120 }}
+            >
+              <img src={previewUrl} alt="Foto 3x4" className="h-full w-full object-cover" />
             </div>
-          ) : previewUrl ? (
+            <span className="flex items-center gap-1 text-[10px] text-green-600 font-medium">
+              <CheckCircle className="h-3 w-3" /> Foto pronta
+            </span>
+          </div>
+          <div className="flex flex-col gap-2 mt-1">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => { removerFoto(); void iniciarCamera(); }}
+              disabled={disabled}
+            >
+              <RefreshCw className="h-4 w-4 mr-1" />
+              Nova foto
+            </Button>
             <button
               type="button"
               onClick={removerFoto}
               className="flex items-center gap-1 text-xs text-rose-500 hover:text-rose-700"
+              disabled={disabled}
             >
-              <X className="h-3 w-3" /> Remover foto
+              <X className="h-3 w-3" /> Remover
             </button>
-          ) : (
-            <p className="text-xs text-slate-500">
-              A IA remove o fundo automaticamente.
-            </p>
-          )}
+          </div>
         </div>
+      )}
 
-        {/* Preview 3x4 */}
-        <div className="flex flex-col items-center gap-1">
-          <div className="h-[120px] w-[90px] overflow-hidden rounded-md border border-slate-300 bg-slate-50">
-            {processing ? (
-              <div className="flex h-full w-full flex-col items-center justify-center gap-1 text-center">
-                <Loader2 className="h-5 w-5 animate-spin text-blue-500" />
-                <span className="text-[9px] text-slate-500">Processando</span>
-              </div>
-            ) : previewUrl ? (
-              <img src={previewUrl} alt="Preview 3x4" className="h-full w-full object-cover" />
+      {/* Câmera ativa */}
+      {cameraActive && (
+        <div className="space-y-2">
+          <div
+            className="relative rounded-md overflow-hidden border border-slate-300"
+            style={{ width: DISPLAY_WIDTH, height: DISPLAY_HEIGHT }}
+          >
+            <video
+              ref={videoRef}
+              className="absolute inset-0 w-full h-full object-cover"
+              style={{ transform: "scaleX(-1)" }}
+              muted
+              playsInline
+            />
+            <canvas
+              ref={canvasRef}
+              className="absolute inset-0"
+              style={{ width: DISPLAY_WIDTH, height: DISPLAY_HEIGHT }}
+            />
+          </div>
+
+          <div className="text-xs">
+            {faceDetected ? (
+              <span className="flex items-center gap-1 text-green-600 font-medium">
+                <CheckCircle className="h-3 w-3" />
+                Rosto enquadrado — pronto para capturar!
+              </span>
             ) : (
-              <div className="flex h-full w-full items-center justify-center text-center text-[10px] text-slate-500 px-1">
-                Pré-visualização 3x4
-              </div>
+              <span className="text-slate-500">Posicione o rosto dentro do guia oval...</span>
             )}
           </div>
-          <span className="text-[10px] text-slate-500">3x4</span>
+
+          <div className="flex gap-2">
+            <Button
+              type="button"
+              onClick={() => void capturarFoto()}
+              disabled={!faceDetected || capturing || !modelsLoaded}
+              className="flex-1"
+              size="sm"
+            >
+              {capturing ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Camera className="h-4 w-4 mr-1" />}
+              {capturing ? "Capturando..." : "Capturar"}
+            </Button>
+            <Button type="button" variant="outline" size="sm" onClick={pararCamera}>
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
         </div>
-      </div>
+      )}
+
+      {/* Estado inicial */}
+      {!cameraActive && !previewUrl && (
+        <div className="flex items-start gap-3">
+          <div className="flex flex-1 flex-col gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => void iniciarCamera()}
+              disabled={disabled || processing || loadingModels}
+            >
+              {loadingModels
+                ? <Loader2 className="h-4 w-4 animate-spin mr-1" />
+                : <Camera className="h-4 w-4 mr-1" />}
+              {loadingModels ? "Carregando..." : "Tirar Foto"}
+            </Button>
+
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => galleryInputRef.current?.click()}
+              disabled={disabled || processing}
+            >
+              <Upload className="h-4 w-4 mr-1" />
+              Arquivo
+            </Button>
+            <input
+              ref={galleryInputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              disabled={disabled || processing}
+              onChange={handleGaleria}
+            />
+
+            {processing ? (
+              <div className="space-y-1">
+                <div className="flex items-center gap-2 text-xs text-blue-600">
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                  {statusMsg || "Processando..."}
+                </div>
+                <div className="h-1.5 rounded-full bg-slate-200 overflow-hidden">
+                  <div
+                    className="h-full rounded-full bg-blue-500 transition-all duration-300"
+                    style={{ width: `${progress}%` }}
+                  />
+                </div>
+              </div>
+            ) : statusMsg ? (
+              <p className="text-xs text-slate-500">{statusMsg}</p>
+            ) : (
+              <p className="text-xs text-slate-500">
+                Detecção automática de rosto com câmera.
+              </p>
+            )}
+          </div>
+
+          {/* Preview vazio */}
+          <div className="flex flex-col items-center gap-1">
+            <div
+              className="flex items-center justify-center overflow-hidden rounded-md border border-slate-300 bg-slate-50 text-center text-[10px] text-slate-500 px-1"
+              style={{ width: 90, height: 120 }}
+            >
+              {processing
+                ? <Loader2 className="h-5 w-5 animate-spin text-blue-500" />
+                : "Pré-visualização 3x4"}
+            </div>
+            <span className="text-[10px] text-slate-500">3x4</span>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
