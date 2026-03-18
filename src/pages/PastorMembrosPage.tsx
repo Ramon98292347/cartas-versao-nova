@@ -947,10 +947,6 @@ export default function PastorMembrosPage() {
         telefone: String(selectedMember.phone || "").replace(/\D/g, ""),
       };
 
-      // Comentario: usa a default_totvs_id do membro (não do pastor logado),
-      // pois a edge function valida que member.default_totvs_id === church_totvs_id.
-      const memberChurchTotvs = String(selectedMember.default_totvs_id || activeTotvsId);
-
       // Comentario: "ficha_carteirinha" salva em AMBAS as tabelas:
       // member_ficha_documents e member_carteirinha_documents (createBundle=true na edge fn)
       await generateMemberDocs({
