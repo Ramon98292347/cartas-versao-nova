@@ -137,6 +137,17 @@ const App = () => (
                 </RequireAnyRole>
               }
             />
+            {/* Financeiro do pastor/secretario — somente leitura */}
+            <Route
+              path="/pastor/financeiro"
+              element={
+                <RequireAnyRole roles={["pastor", "secretario"]}>
+                  <Suspense fallback={pageFallback}>
+                    <PastorFinanceiroPage />
+                  </Suspense>
+                </RequireAnyRole>
+              }
+            />
             {/* Secretario — mesmo acesso que pastor */}
             <Route
               path="/secretario"
@@ -343,3 +354,4 @@ const FinanceiroDashboardPage = lazy(() => import("./pages/FinanceiroDashboardPa
 // Comentario: páginas do módulo financeiro — carregadas apenas quando necessário
 const FinanceiroContagemPage = lazy(() => import("./pages/FinanceiroContagemPage"));
 const FinanceiroSaidasPage = lazy(() => import("./pages/FinanceiroSaidasPage"));
+const PastorFinanceiroPage = lazy(() => import("./pages/PastorFinanceiroPage"));

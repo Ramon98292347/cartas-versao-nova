@@ -1,6 +1,6 @@
 import { useEffect, useState, type ComponentType, type ReactNode } from "react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
-import { Building2, Bell, Calculator, Church, Download, FileText, Loader2, LogOut, Megaphone, Menu, Settings, TrendingDown, Users } from "lucide-react";
+import { Building2, Bell, Calculator, Church, DollarSign, Download, FileText, Loader2, LogOut, Megaphone, Menu, Settings, TrendingDown, Users } from "lucide-react";
 import { useUser } from "@/context/UserContext";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -22,6 +22,7 @@ const pastorMenu: MenuItem[] = [
   { to: "/pastor/membros", label: "Membros", icon: Users },
   { to: "/pastor/igrejas", label: "Igrejas", icon: Building2 },
   { to: "/carta", label: "Cartas", icon: FileText },
+  { to: "/pastor/financeiro", label: "Financeiro", icon: DollarSign },
   { to: "/divulgacao", label: "Divulgacao", icon: Megaphone },
   { to: "/config", label: "Configuracoes", icon: Settings },
 ];
@@ -40,12 +41,13 @@ const obreiroMenu: MenuItem[] = [
   { to: "/usuario/documentos", label: "Documentos", icon: Users },
 ];
 
-// Secretario tem o mesmo menu do pastor
+// Secretario tem o mesmo menu do pastor (incluindo financeiro)
 const secretarioMenu: MenuItem[] = [
   { to: "/pastor/dashboard", label: "Dashboard", icon: FileText },
   { to: "/pastor/membros", label: "Membros", icon: Users },
   { to: "/pastor/igrejas", label: "Igrejas", icon: Building2 },
   { to: "/carta", label: "Cartas", icon: FileText },
+  { to: "/pastor/financeiro", label: "Financeiro", icon: DollarSign },
   { to: "/divulgacao", label: "Divulgacao", icon: Megaphone },
   { to: "/config", label: "Configuracoes", icon: Settings },
 ];
