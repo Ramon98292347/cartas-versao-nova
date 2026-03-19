@@ -8,7 +8,7 @@ export type Usuario = {
   full_name?: string | null;
   telefone: string;
   cpf?: string | null;
-  role?: "admin" | "pastor" | "obreiro" | null;
+  role?: "admin" | "pastor" | "obreiro" | "secretario" | "financeiro" | null;
   totvs?: string | null;
   default_totvs_id?: string | null;
   church_name?: string | null;
@@ -30,7 +30,7 @@ export type Usuario = {
 export type AppSession = {
   totvs_id: string;
   root_totvs_id?: string;
-  role: "admin" | "pastor" | "obreiro";
+  role: "admin" | "pastor" | "obreiro" | "secretario" | "financeiro";
   church_name: string;
   church_class?: string | null;
   scope_totvs_ids: string[];

@@ -39,7 +39,7 @@ async function verifySessionJWT(req: Request): Promise<{ user_id: string; role: 
     const { payload } = await jwtVerify(m[1].trim(), new TextEncoder().encode(secret), { algorithms: ["HS256"] });
     const user_id = String(payload.sub || "");
     const role = String(payload.role || "").toLowerCase() as Role;
-    if (!user_id || !["admin", "pastor", "obreiro"].includes(role)) return null;
+    if (!user_id || !["admin", "pastor", "obreiro", "secretario", "financeiro"].includes(role)) return null;
     return { user_id, role };
   } catch { return null; }
 }

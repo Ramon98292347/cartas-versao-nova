@@ -9,7 +9,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { listNotifications, markAllNotificationsRead, markNotificationRead } from "@/services/saasService";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 
-type RoleMode = "admin" | "pastor" | "obreiro";
+type RoleMode = "admin" | "pastor" | "obreiro" | "secretario" | "financeiro";
 
 type MenuItem = {
   to: string;
@@ -38,6 +38,21 @@ const adminMenu: MenuItem[] = [
 const obreiroMenu: MenuItem[] = [
   { to: "/obreiro", label: "Dashboard", icon: FileText },
   { to: "/usuario/documentos", label: "Documentos", icon: Users },
+];
+
+// Secretario tem o mesmo menu do pastor
+const secretarioMenu: MenuItem[] = [
+  { to: "/pastor/dashboard", label: "Dashboard", icon: FileText },
+  { to: "/pastor/membros", label: "Membros", icon: Users },
+  { to: "/pastor/igrejas", label: "Igrejas", icon: Building2 },
+  { to: "/carta", label: "Cartas", icon: FileText },
+  { to: "/divulgacao", label: "Divulgacao", icon: Megaphone },
+  { to: "/config", label: "Configuracoes", icon: Settings },
+];
+
+// Financeiro tem somente as páginas financeiras
+const financeiroMenu: MenuItem[] = [
+  { to: "/financeiro/dashboard", label: "Dashboard", icon: FileText },
 ];
 
 // Comentario: item de menu com estilo SaaS corporativo (pill azul suave + underline no ativo).
@@ -81,7 +96,12 @@ export function ManagementShell({
   const nav = useNavigate();
   const location = useLocation();
   const { usuario, clearAuth } = useUser();
-  const menu = roleMode === "admin" ? adminMenu : roleMode === "pastor" ? pastorMenu : obreiroMenu;
+  const menu =
+    roleMode === "admin" ? adminMenu :
+    roleMode === "pastor" ? pastorMenu :
+    roleMode === "secretario" ? secretarioMenu :
+    roleMode === "financeiro" ? financeiroMenu :
+    obreiroMenu;
   const [mobileOpen, setMobileOpen] = useState(false);
   const [openNotifications, setOpenNotifications] = useState(false);
   const [openInstallPrompt, setOpenInstallPrompt] = useState(false);

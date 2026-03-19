@@ -76,7 +76,7 @@ function normalizeTotvsAccess(arr: unknown, defaultRole: string): { totvs_id: st
   const out: { totvs_id: string; role: string }[] = [];
   if (!Array.isArray(arr)) return out;
 
-  const allowed = new Set(["admin", "pastor", "obreiro"]);
+  const allowed = new Set(["admin", "pastor", "obreiro", "secretario", "financeiro"]);
   const safeDefault = allowed.has(defaultRole) ? defaultRole : "obreiro";
 
   for (const item of arr as TotvsAccessItem[]) {
@@ -268,10 +268,10 @@ Deno.serve(async (req) => {
 
     const defaultTotvs = String(user.default_totvs_id || "").trim();
     const defaultAllowed = defaultTotvs && totvsIds.includes(defaultTotvs) ? defaultTotvs : "";
-    const pastorAccess = access.filter((a) => a.role === "pastor").map((a) => a.totvs_id);
+    const pastorAccess = access.filter((a) => a.role === "pastor" || a.role === "secretario").map((a) => a.totvs_id);
 
     let activeTotvs = "";
-    if (userRole === "pastor") {
+    if (userRole === "pastor" || userRole === "secretario") {
       if (defaultAllowed && pastorAccess.includes(defaultAllowed)) activeTotvs = defaultAllowed;
       else if (pastorAccess.length === 1) activeTotvs = pastorAccess[0];
       else if (defaultAllowed) activeTotvs = defaultAllowed;

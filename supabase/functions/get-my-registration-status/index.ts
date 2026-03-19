@@ -1,15 +1,15 @@
-Ôªø/**
+/**
  * get-my-registration-status
  * ==========================
- * O que faz: Retorna o status de cadastro do usu√°rio logado na igreja ativa (PENDENTE ou APROVADO).
- *            Pastores e admins s√£o sempre considerados APROVADOS.
+ * O que faz: Retorna o status de cadastro do usu·rio logado na igreja ativa (PENDENTE ou APROVADO).
+ *            Pastores e admins s„o sempre considerados APROVADOS.
  *            Para obreiros, consulta o campo registration_status dentro do array totvs_access.
- * Para que serve: Usada pelo front-end logo ap√≥s o login para verificar se o obreiro j√° foi
+ * Para que serve: Usada pelo front-end logo apÛs o login para verificar se o obreiro j· foi
  *                 aprovado pelo pastor, e bloquear recursos (cartas, documentos) se ainda PENDENTE.
  * Quem pode usar: admin, pastor, obreiro
  * Recebe: (nenhum campo no body)
  * Retorna: { ok, registration_status, is_pending, blocked_resources }
- * Observa√ß√µes: blocked_resources √© uma lista de recursos bloqueados quando PENDENTE
+ * ObservaÁıes: blocked_resources È uma lista de recursos bloqueados quando PENDENTE
  *              (ex: ["cartas", "documentos"]).
  */
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
@@ -53,7 +53,7 @@ async function verifySessionJWT(req: Request): Promise<SessionClaims | null> {
     const active_totvs_id = String(payload.active_totvs_id || "");
 
     if (!user_id || !active_totvs_id) return null;
-    if (!["admin", "pastor", "obreiro"].includes(role)) return null;
+    if (!["admin", "pastor", "obreiro", "secretario", "financeiro"].includes(role)) return null;
 
     return { user_id, role, active_totvs_id };
   } catch {

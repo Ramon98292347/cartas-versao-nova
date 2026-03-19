@@ -102,37 +102,65 @@ const App = () => (
             <Route
               path="/pastor"
               element={
-                <RequireRole role="pastor">
+                <RequireAnyRole roles={["pastor", "secretario"]}>
                   <Navigate to="/pastor/dashboard" replace />
-                </RequireRole>
+                </RequireAnyRole>
               }
             />
             <Route
               path="/pastor/dashboard"
               element={
-                <RequireRole role="pastor">
+                <RequireAnyRole roles={["pastor", "secretario"]}>
                   <Suspense fallback={pageFallback}>
                     <PastorDashboardPage />
                   </Suspense>
-                </RequireRole>
+                </RequireAnyRole>
               }
             />
             <Route
               path="/pastor/igrejas"
               element={
-                <RequireRole role="pastor">
+                <RequireAnyRole roles={["pastor", "secretario"]}>
                   <Suspense fallback={pageFallback}>
                     <PastorIgrejasPage />
                   </Suspense>
-                </RequireRole>
+                </RequireAnyRole>
               }
             />
             <Route
               path="/pastor/membros"
               element={
-                <RequireRole role="pastor">
+                <RequireAnyRole roles={["pastor", "secretario"]}>
                   <Suspense fallback={pageFallback}>
                     <PastorMembrosPage />
+                  </Suspense>
+                </RequireAnyRole>
+              }
+            />
+            {/* Secretario — mesmo acesso que pastor */}
+            <Route
+              path="/secretario"
+              element={
+                <RequireRole role="secretario">
+                  <Navigate to="/pastor/dashboard" replace />
+                </RequireRole>
+              }
+            />
+            {/* Financeiro — redirecionado para a página financeira */}
+            <Route
+              path="/financeiro"
+              element={
+                <RequireRole role="financeiro">
+                  <Navigate to="/financeiro/dashboard" replace />
+                </RequireRole>
+              }
+            />
+            <Route
+              path="/financeiro/dashboard"
+              element={
+                <RequireRole role="financeiro">
+                  <Suspense fallback={pageFallback}>
+                    <FinanceiroDashboardPage />
                   </Suspense>
                 </RequireRole>
               }
@@ -232,26 +260,29 @@ function RequireAuth({ children }: { children: JSX.Element }) {
   if (!usuario || !token) return <Navigate to="/" replace />;
   return children;
 }
-function RequireRole({ children, role }: { children: JSX.Element; role: "admin" | "pastor" | "obreiro" }) {
+// Todos os roles possíveis no sistema
+type AppRole = "admin" | "pastor" | "obreiro" | "secretario" | "financeiro";
+
+// Redireciona para a página inicial de cada role
+function redirectByRole(role?: AppRole | null) {
+  if (role === "admin") return <Navigate to="/admin/dashboard" replace />;
+  if (role === "pastor") return <Navigate to="/pastor/dashboard" replace />;
+  if (role === "secretario") return <Navigate to="/pastor/dashboard" replace />;
+  if (role === "obreiro") return <Navigate to="/obreiro" replace />;
+  if (role === "financeiro") return <Navigate to="/financeiro/dashboard" replace />;
+  return <Navigate to="/" replace />;
+}
+
+function RequireRole({ children, role }: { children: JSX.Element; role: AppRole }) {
   const { usuario, token } = useUser();
   if (!usuario || !token) return <Navigate to="/" replace />;
-  if (usuario.role !== role) {
-    if (usuario.role === "admin") return <Navigate to="/admin/dashboard" replace />;
-    if (usuario.role === "pastor") return <Navigate to="/pastor/dashboard" replace />;
-    if (usuario.role === "obreiro") return <Navigate to="/obreiro" replace />;
-    return <Navigate to="/" replace />;
-  }
+  if (usuario.role !== role) return redirectByRole(usuario.role as AppRole);
   return children;
 }
-function RequireAnyRole({ children, roles }: { children: JSX.Element; roles: Array<"admin" | "pastor" | "obreiro"> }) {
+function RequireAnyRole({ children, roles }: { children: JSX.Element; roles: AppRole[] }) {
   const { usuario, token } = useUser();
   if (!usuario || !token) return <Navigate to="/" replace />;
-  if (!roles.includes(usuario.role as "admin" | "pastor" | "obreiro")) {
-    if (usuario.role === "admin") return <Navigate to="/admin/dashboard" replace />;
-    if (usuario.role === "pastor") return <Navigate to="/pastor/dashboard" replace />;
-    if (usuario.role === "obreiro") return <Navigate to="/obreiro" replace />;
-    return <Navigate to="/" replace />;
-  }
+  if (!roles.includes(usuario.role as AppRole)) return redirectByRole(usuario.role as AppRole);
   return children;
 }
 function OnReloadRedirect() {
@@ -288,3 +319,4 @@ const SelectChurchPage = lazy(() => import("./pages/SelectChurch"));
 const ResetSenhaPage = lazy(() => import("./pages/ResetSenhaPage"));
 const ConfiguracoesPage = lazy(() => import("./pages/Configuracoes"));
 const DivulgacaoPage = lazy(() => import("./pages/Divulgacao"));
+const FinanceiroDashboardPage = lazy(() => import("./pages/FinanceiroDashboardPage"));

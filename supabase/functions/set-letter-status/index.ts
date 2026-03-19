@@ -59,7 +59,7 @@ async function verifySessionJWT(req: Request): Promise<SessionClaims | null> {
     const role = resolvedRole as Role;
     const active_totvs_id = String(payload.active_totvs_id || "");
     if (!user_id || !active_totvs_id) return null;
-    if (!["admin", "pastor", "obreiro"].includes(role)) return null;
+    if (!["admin", "pastor", "obreiro", "secretario", "financeiro"].includes(role)) return null;
     return { user_id, role, active_totvs_id };
   } catch {
     return null;

@@ -1,16 +1,16 @@
-ï»¿/**
+/**
  * set-user-registration-status
  * =============================
- * O que faz: Aprova ou coloca em pendÃªncia o cadastro de um obreiro, atualizando o campo
- *            registration_status dentro do array totvs_access do usuÃ¡rio.
+ * O que faz: Aprova ou coloca em pendência o cadastro de um obreiro, atualizando o campo
+ *            registration_status dentro do array totvs_access do usuário.
  * Para que serve: Usada pelo pastor/admin para aprovar novos cadastros que chegaram via
- *                 public-register-member (auto-cadastro) ou para revogar aprovaÃ§Ãµes.
- * Quem pode usar: admin, pastor (somente obreiros dentro do prÃ³prio escopo e hierarquia)
+ *                 public-register-member (auto-cadastro) ou para revogar aprovações.
+ * Quem pode usar: admin, pastor (somente obreiros dentro do próprio escopo e hierarquia)
  * Recebe: { user_id: string, registration_status: "APROVADO"|"PENDENTE" }
  * Retorna: { ok, user_id, registration_status }
- * ObservaÃ§Ãµes: SÃ³ funciona para usuÃ¡rios com role="obreiro". Pastor nÃ£o pode aprovar membros
- *              de igrejas de nÃ­vel hierÃ¡rquico acima do seu.
- *              O registration_status Ã© atualizado em TODOS os itens do array totvs_access.
+ * Observações: Só funciona para usuários com role="obreiro". Pastor não pode aprovar membros
+ *              de igrejas de nível hierárquico acima do seu.
+ *              O registration_status é atualizado em TODOS os itens do array totvs_access.
  */
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
@@ -101,7 +101,7 @@ async function verifySessionJWT(req: Request): Promise<SessionClaims | null> {
     const active_totvs_id = String(payload.active_totvs_id || "");
 
     if (!user_id || !active_totvs_id) return null;
-    if (!["admin", "pastor", "obreiro"].includes(role)) return null;
+    if (!["admin", "pastor", "obreiro", "secretario", "financeiro"].includes(role)) return null;
 
     return { user_id, role, active_totvs_id };
   } catch {

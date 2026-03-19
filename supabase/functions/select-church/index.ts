@@ -40,7 +40,7 @@ type TotvsAccessItem = string | { totvs_id?: string; role?: string };
 function normalizeTotvsAccess(arr: unknown, defaultRole: string): { totvs_id: string; role: string }[] {
   const out: { totvs_id: string; role: string }[] = [];
   if (!Array.isArray(arr)) return out;
-  const allowed = new Set(["admin", "pastor", "obreiro"]);
+  const allowed = new Set(["admin", "pastor", "obreiro", "secretario", "financeiro"]);
   const safeDefault = allowed.has(defaultRole) ? defaultRole : "obreiro";
   for (const item of arr as TotvsAccessItem[]) {
     if (typeof item === "string") {

@@ -49,7 +49,7 @@ async function verifySessionJWT(req: Request): Promise<SessionClaims | null> {
     const user_id = String(payload.sub || "");
     const role = String(payload.role || "").toLowerCase() as Role;
     const active_totvs_id = String(payload.active_totvs_id || "");
-    if (!user_id || !active_totvs_id || !["admin", "pastor", "obreiro"].includes(role)) return null;
+    if (!user_id || !active_totvs_id || !["admin", "pastor", "obreiro", "secretario", "financeiro"].includes(role)) return null;
     return { user_id, role, active_totvs_id };
   } catch { return null; }
 }
