@@ -16,7 +16,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import * as faceapi from "face-api.js";
-import { Camera, CheckCircle, Loader2, RefreshCw, Upload, X } from "lucide-react";
+import { Camera, CheckCircle, FlipHorizontal, Loader2, RefreshCw, Upload, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 // Tamanho final da foto (proporção 3x4)
@@ -48,6 +48,11 @@ export function AvatarCapture({ onFileReady, disabled = false }: AvatarCapturePr
   const [previewUrl, setPreviewUrl] = useState("");
   const [progress, setProgress] = useState(0);
 
+  // facingMode controla qual câmera está ativa (user = frontal, environment = traseira)
+  const [facingMode, setFacingMode] = useState<"user" | "environment">("user");
+  // Ref para evitar stale closure dentro de capturarFoto
+  const facingModeRef = useRef<"user" | "environment">("user");
+
   const detectionLoopRef = useRef<number | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
 
@@ -77,10 +82,11 @@ export function AvatarCapture({ onFileReady, disabled = false }: AvatarCapturePr
   }, [previewUrl]);
 
   // ── Câmera ──────────────────────────────────────────────────────────────────
-  async function iniciarCamera() {
+  // Aceita um modo opcional: "user" (frontal) ou "environment" (traseira)
+  async function iniciarCamera(modo: "user" | "environment" = "user") {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: "user", width: { ideal: FOTO_WIDTH }, height: { ideal: FOTO_HEIGHT } },
+        video: { facingMode: modo, width: { ideal: FOTO_WIDTH }, height: { ideal: FOTO_HEIGHT } },
         audio: false,
       });
       streamRef.current = stream;
@@ -88,11 +94,52 @@ export function AvatarCapture({ onFileReady, disabled = false }: AvatarCapturePr
         videoRef.current.srcObject = stream;
         await videoRef.current.play();
       }
+      setFacingMode(modo);
+      facingModeRef.current = modo;
       setCameraActive(true);
       setFaceDetected(false);
       if (modelsLoaded) iniciarDeteccao();
     } catch {
       setStatusMsg("Câmera indisponível. Use a galeria.");
+    }
+  }
+
+  // Alterna entre câmera frontal e traseira sem desmontar o vídeo
+  async function alternarCamera() {
+    const novoModo = facingModeRef.current === "user" ? "environment" : "user";
+    // Para o loop de detecção
+    if (detectionLoopRef.current !== null) {
+      cancelAnimationFrame(detectionLoopRef.current);
+      detectionLoopRef.current = null;
+    }
+    // Para o stream atual
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((t) => t.stop());
+      streamRef.current = null;
+    }
+    setFaceDetected(false);
+    setFacingMode(novoModo);
+    facingModeRef.current = novoModo;
+    // Abre novo stream e troca direto no elemento <video>
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: novoModo, width: { ideal: FOTO_WIDTH }, height: { ideal: FOTO_HEIGHT } },
+        audio: false,
+      });
+      streamRef.current = stream;
+      const video = videoRef.current;
+      if (video) {
+        video.srcObject = stream;
+        // Aguarda o vídeo começar a tocar para iniciar a detecção
+        const handlePlaying = () => {
+          video.removeEventListener("playing", handlePlaying);
+          if (modelsLoaded) iniciarDeteccao();
+        };
+        video.addEventListener("playing", handlePlaying);
+        void video.play();
+      }
+    } catch {
+      setStatusMsg("Câmera traseira indisponível.");
     }
   }
 
@@ -130,9 +177,18 @@ export function AvatarCapture({ onFileReady, disabled = false }: AvatarCapturePr
       desenharGuiaOval(ctx);
 
       if (detections.length > 0) {
-        const dims = faceapi.matchDimensions(canvas, video, true);
-        const resized = faceapi.resizeResults(detections, dims);
-        const rosto = resized[0].box;
+        // Calcula escala manualmente: video.width (atributo HTML) pode ser 0,
+        // por isso usamos video.videoWidth (resolução real do stream)
+        const scaleX = DISPLAY_WIDTH / (video.videoWidth || DISPLAY_WIDTH);
+        const scaleY = DISPLAY_HEIGHT / (video.videoHeight || DISPLAY_HEIGHT);
+        const det = detections[0].box;
+        // Aplica a escala manualmente na caixa de detecção
+        const rosto = {
+          x: det.x * scaleX,
+          y: det.y * scaleY,
+          width: det.width * scaleX,
+          height: det.height * scaleY,
+        };
         const dentroDoGuia = verificarRostoDentroOval(rosto);
         setFaceDetected(dentroDoGuia);
         ctx.strokeStyle = dentroDoGuia ? "#22c55e" : "#f59e0b";
@@ -165,7 +221,7 @@ export function AvatarCapture({ onFileReady, disabled = false }: AvatarCapturePr
     ctx.fillText("Posicione o rosto aqui", cx, DISPLAY_HEIGHT - 16);
   }
 
-  function verificarRostoDentroOval(box: faceapi.Box): boolean {
+  function verificarRostoDentroOval(box: { x: number; y: number; width: number; height: number }): boolean {
     const cx = DISPLAY_WIDTH / 2;
     const cy = DISPLAY_HEIGHT * 0.42;
     const fx = box.x + box.width / 2;
@@ -187,10 +243,23 @@ export function AvatarCapture({ onFileReady, disabled = false }: AvatarCapturePr
       canvas.width = FOTO_WIDTH;
       canvas.height = FOTO_HEIGHT;
       const ctx = canvas.getContext("2d")!;
-      // Espelhar (câmera frontal)
-      ctx.translate(FOTO_WIDTH, 0);
-      ctx.scale(-1, 1);
-      ctx.drawImage(video, 0, 0, FOTO_WIDTH, FOTO_HEIGHT);
+      // Fundo branco para evitar transparência
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(0, 0, FOTO_WIDTH, FOTO_HEIGHT);
+      // Cover/crop: escala proporcional sem distorção, centralizado
+      const vw = video.videoWidth;
+      const vh = video.videoHeight;
+      const scale = Math.max(FOTO_WIDTH / vw, FOTO_HEIGHT / vh);
+      const drawW = vw * scale;
+      const drawH = vh * scale;
+      const drawX = (FOTO_WIDTH - drawW) / 2;
+      const drawY = (FOTO_HEIGHT - drawH) / 2;
+      // Espelha horizontalmente somente na câmera frontal
+      if (facingModeRef.current === "user") {
+        ctx.translate(FOTO_WIDTH, 0);
+        ctx.scale(-1, 1);
+      }
+      ctx.drawImage(video, drawX, drawY, drawW, drawH);
       ctx.setTransform(1, 0, 0, 1, 0, 0);
 
       canvas.toBlob(async (blob) => {
@@ -287,7 +356,7 @@ export function AvatarCapture({ onFileReady, disabled = false }: AvatarCapturePr
               type="button"
               variant="outline"
               size="sm"
-              onClick={() => { removerFoto(); void iniciarCamera(); }}
+              onClick={() => { removerFoto(); void iniciarCamera(facingModeRef.current); }}
               disabled={disabled}
             >
               <RefreshCw className="h-4 w-4 mr-1" />
@@ -315,7 +384,7 @@ export function AvatarCapture({ onFileReady, disabled = false }: AvatarCapturePr
             <video
               ref={videoRef}
               className="absolute inset-0 w-full h-full object-cover"
-              style={{ transform: "scaleX(-1)" }}
+              style={{ transform: facingMode === "user" ? "scaleX(-1)" : "none" }}
               muted
               playsInline
             />
@@ -348,6 +417,16 @@ export function AvatarCapture({ onFileReady, disabled = false }: AvatarCapturePr
               {capturing ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Camera className="h-4 w-4 mr-1" />}
               {capturing ? "Capturando..." : "Capturar"}
             </Button>
+            {/* Botão para alternar entre câmera frontal e traseira */}
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => void alternarCamera()}
+              title={facingMode === "user" ? "Usar câmera traseira" : "Usar câmera frontal"}
+            >
+              <FlipHorizontal className="h-4 w-4" />
+            </Button>
             <Button type="button" variant="outline" size="sm" onClick={pararCamera}>
               <X className="h-4 w-4" />
             </Button>
@@ -363,7 +442,7 @@ export function AvatarCapture({ onFileReady, disabled = false }: AvatarCapturePr
               type="button"
               variant="outline"
               size="sm"
-              onClick={() => void iniciarCamera()}
+              onClick={() => void iniciarCamera(facingModeRef.current)}
               disabled={disabled || processing || loadingModels}
             >
               {loadingModels
