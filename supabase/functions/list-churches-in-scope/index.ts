@@ -133,11 +133,18 @@ Deno.serve(async (req) => {
     const requestedRoot = String(body.root_totvs_id || "").trim();
 
     let scopeList: string[] = [];
+    // Comentario: effectiveRoot guarda o TOTVS raiz do escopo computado.
+    // Usado para calcular ancestor_chain — os ancestrais acima do root
+    // (ex.: estadual acima de setorial) retornados separadamente para o frontend
+    // resolver a mae mais alta com pastor no campo "Outros".
+    let effectiveRootForAncestors = "";
+
     if (session.role === "admin") {
       // Comentario: admin enxerga todas as igrejas; root_totvs_id vira filtro opcional.
       if (requestedRoot) {
         const hasRoot = allRows.some((c) => String(c.totvs_id) === requestedRoot);
         if (!hasRoot) return json({ ok: false, error: "church_not_found" }, 404);
+        effectiveRootForAncestors = requestedRoot;
         scopeList = [...computeScope(requestedRoot, allRows)];
       } else {
         scopeList = allRows.map((c) => String(c.totvs_id)).filter(Boolean);
@@ -149,7 +156,25 @@ Deno.serve(async (req) => {
         return json({ ok: false, error: "forbidden_church_out_of_scope" }, 403);
       }
       const effectiveRoot = requestedRoot || scopeRootTotvs;
+      effectiveRootForAncestors = effectiveRoot;
       scopeList = [...computeScope(effectiveRoot, allRows)];
+    }
+
+    // Comentario: coleta IDs dos ancestrais acima do effectiveRoot (ex.: estadual).
+    // Usa allRows (todas as igrejas) para subir na hierarquia sem restricao de escopo.
+    const ancestorIds: string[] = [];
+    if (effectiveRootForAncestors) {
+      const byId = new Map(allRows.map((r) => [String(r.totvs_id), r]));
+      const visitedAnc = new Set<string>([effectiveRootForAncestors]);
+      let curAnc = byId.get(effectiveRootForAncestors)?.parent_totvs_id
+        ? String(byId.get(effectiveRootForAncestors)!.parent_totvs_id)
+        : null;
+      while (curAnc && !visitedAnc.has(curAnc)) {
+        visitedAnc.add(curAnc);
+        ancestorIds.push(curAnc);
+        const row = byId.get(curAnc);
+        curAnc = row?.parent_totvs_id ? String(row.parent_totvs_id) : null;
+      }
     }
 
     const scopeTotal = scopeList.length;
@@ -216,7 +241,31 @@ Deno.serve(async (req) => {
       workers_count: counts.get(String(ch.totvs_id)) || 0,
     }));
 
-    return json({ ok: true, churches: enriched, total: scopeTotal, page, page_size }, 200);
+    // Comentario: busca ancestrais acima do scope root com info do pastor.
+    // Retornados em ancestor_chain — nao sao destinos, apenas para o frontend
+    // resolver a mae mais alta com pastor (estadual > setorial > central).
+    let ancestorChain: unknown[] = [];
+    if (ancestorIds.length > 0) {
+      const { data: ancData } = await sb
+        .from("churches")
+        .select(`
+          totvs_id,
+          parent_totvs_id,
+          church_name,
+          class,
+          pastor:pastor_user_id (
+            id,
+            full_name,
+            phone,
+            email,
+            is_active
+          )
+        `)
+        .in("totvs_id", ancestorIds);
+      ancestorChain = ancData || [];
+    }
+
+    return json({ ok: true, churches: enriched, ancestor_chain: ancestorChain, total: scopeTotal, page, page_size }, 200);
   } catch (err) {
     return json({ ok: false, error: "exception", details: String(err) }, 500);
   }

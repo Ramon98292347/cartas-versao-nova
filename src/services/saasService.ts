@@ -1291,6 +1291,35 @@ export async function listChurchesInScope(page = 1, pageSize = 5000, rootTotvsId
   }));
 }
 
+// Tipo minimo para ancestral com info do pastor
+export type AncestorChainItem = {
+  totvs_id: string;
+  church_name: string;
+  parent_totvs_id?: string | null;
+  pastor?: { full_name?: string | null; phone?: string | null } | null;
+};
+
+// Comentario: busca apenas os ancestrais acima do root_totvs_id (ex.: estadual acima da setorial).
+// Usado no campo "Outros" da carta para mostrar a mae mais alta com pastor como origem.
+// O ancestor_chain e retornado na ordem: [pai direto, avo, bisavo, ...], entao o ULTIMO com pastor
+// e o mais alto.
+export async function fetchAncestorChain(rootTotvsId: string): Promise<AncestorChainItem[]> {
+  if (!rootTotvsId) return [];
+  const data = await api.listChurchesInScope({ page: 1, page_size: 1, root_totvs_id: rootTotvsId });
+  const chain = Array.isArray((data as any)?.ancestor_chain) ? (data as any).ancestor_chain : [];
+  return chain.map((item: Record<string, unknown>) => ({
+    totvs_id: String(item.totvs_id || ""),
+    church_name: String(item.church_name || ""),
+    parent_totvs_id: item.parent_totvs_id ? String(item.parent_totvs_id) : null,
+    pastor: item.pastor
+      ? {
+          full_name: (item.pastor as any)?.full_name || null,
+          phone: (item.pastor as any)?.phone || null,
+        }
+      : null,
+  }));
+}
+
 export async function listChurchesInScopePaged(page = 1, pageSize = 20, rootTotvsId?: string): Promise<{ churches: ChurchInScopeItem[]; total: number; page: number; page_size: number }> {
   if (false && supabase && getRlsToken()) {
     // Sem filtro de hierarquia: usa paginação real no banco (range + count).
