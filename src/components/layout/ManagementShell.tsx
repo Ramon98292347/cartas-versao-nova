@@ -1,6 +1,6 @@
 import { useEffect, useState, type ComponentType, type ReactNode } from "react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
-import { Building2, Bell, Church, Download, FileText, Loader2, LogOut, Megaphone, Menu, Settings, Users } from "lucide-react";
+import { Building2, Bell, Calculator, Church, Download, FileText, Loader2, LogOut, Megaphone, Menu, Settings, TrendingDown, Users } from "lucide-react";
 import { useUser } from "@/context/UserContext";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -50,9 +50,11 @@ const secretarioMenu: MenuItem[] = [
   { to: "/config", label: "Configuracoes", icon: Settings },
 ];
 
-// Financeiro tem somente as páginas financeiras
+// Comentario: financeiro tem acesso ao dashboard, contagem de caixa e saídas
 const financeiroMenu: MenuItem[] = [
   { to: "/financeiro/dashboard", label: "Dashboard", icon: FileText },
+  { to: "/financeiro/contagem", label: "Contagem", icon: Calculator },
+  { to: "/financeiro/saidas", label: "Saídas", icon: TrendingDown },
 ];
 
 // Comentario: item de menu com estilo SaaS corporativo (pill azul suave + underline no ativo).

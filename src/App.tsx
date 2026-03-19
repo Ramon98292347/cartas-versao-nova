@@ -166,6 +166,26 @@ const App = () => (
               }
             />
             <Route
+              path="/financeiro/contagem"
+              element={
+                <RequireRole role="financeiro">
+                  <Suspense fallback={pageFallback}>
+                    <FinanceiroContagemPage />
+                  </Suspense>
+                </RequireRole>
+              }
+            />
+            <Route
+              path="/financeiro/saidas"
+              element={
+                <RequireRole role="financeiro">
+                  <Suspense fallback={pageFallback}>
+                    <FinanceiroSaidasPage />
+                  </Suspense>
+                </RequireRole>
+              }
+            />
+            <Route
               path="/admin/dashboard"
               element={
                 <RequireRole role="admin">
@@ -320,3 +340,6 @@ const ResetSenhaPage = lazy(() => import("./pages/ResetSenhaPage"));
 const ConfiguracoesPage = lazy(() => import("./pages/Configuracoes"));
 const DivulgacaoPage = lazy(() => import("./pages/Divulgacao"));
 const FinanceiroDashboardPage = lazy(() => import("./pages/FinanceiroDashboardPage"));
+// Comentario: páginas do módulo financeiro — carregadas apenas quando necessário
+const FinanceiroContagemPage = lazy(() => import("./pages/FinanceiroContagemPage"));
+const FinanceiroSaidasPage = lazy(() => import("./pages/FinanceiroSaidasPage"));
