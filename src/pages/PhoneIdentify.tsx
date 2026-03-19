@@ -61,9 +61,12 @@ function validarCpf(cpf: string): boolean {
   return remainder === parseInt(digits[10]);
 }
 
-function routeByRole(role: "admin" | "pastor" | "obreiro") {
+// Comentario: redireciona o usuário para a página inicial do seu role após o login
+function routeByRole(role: string) {
   if (role === "admin") return "/admin/dashboard";
   if (role === "pastor") return "/pastor/dashboard";
+  if (role === "secretario") return "/pastor/dashboard";
+  if (role === "financeiro") return "/financeiro/dashboard";
   return "/obreiro";
 }
 
