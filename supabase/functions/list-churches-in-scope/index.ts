@@ -59,7 +59,7 @@ async function verifySessionJWT(req: Request): Promise<SessionClaims | null> {
   }
 }
 
-type ChurchRow = { totvs_id: string; parent_totvs_id: string | null };
+type ChurchRow = { totvs_id: string; parent_totvs_id: string | null; class?: string | null };
 
 function computeScope(rootTotvs: string, churches: ChurchRow[]): Set<string> {
   const children = new Map<string, string[]>();
@@ -82,6 +82,32 @@ function computeScope(rootTotvs: string, churches: ChurchRow[]): Set<string> {
   }
 
   return scope;
+}
+
+// Comentario: determina o root do escopo de DESTINO para o obreiro.
+// Regra: sobe para o pai da propria igreja. Se o pai for "central", sobe mais um nivel
+// (setorial ou estadual) pois a central pertence ao escopo da setorial/estadual acima.
+function findObreiroScopeRoot(activeTotvs: string, churches: ChurchRow[]): string {
+  const byId = new Map<string, ChurchRow>();
+  for (const c of churches) byId.set(String(c.totvs_id), c);
+
+  const own = byId.get(activeTotvs);
+  if (!own) return activeTotvs;
+
+  const parentId = own.parent_totvs_id ? String(own.parent_totvs_id) : null;
+  if (!parentId) return activeTotvs;
+
+  const parent = byId.get(parentId);
+  if (!parent) return parentId;
+
+  const parentClass = String(parent.class || "").toLowerCase().trim();
+  if (parentClass === "central") {
+    const grandparentId = parent.parent_totvs_id ? String(parent.parent_totvs_id) : null;
+    if (grandparentId) return grandparentId;
+    return parentId;
+  }
+
+  return parentId;
 }
 
 async function resolveScopeRootTotvs(
@@ -110,7 +136,8 @@ Deno.serve(async (req) => {
   try {
     const session = await verifySessionJWT(req);
     if (!session) return json({ ok: false, error: "unauthorized" }, 401);
-    if (session.role === "obreiro") return json({ ok: false, error: "forbidden" }, 403);
+    // Comentario: obreiro tambem pode chamar esta funcao para carregar destinos de carta.
+    // Apenas "secretario" e "financeiro" sem restricao especial — todos os roles passam.
     const body = (await req.json().catch(() => ({}))) as Body;
     const page = Number.isFinite(body.page) ? Math.max(1, Number(body.page)) : 1;
     // Comentario: limite maximo reduzido de 5000 para 1000 para evitar sobrecarga de memoria e performance.
@@ -125,7 +152,7 @@ Deno.serve(async (req) => {
     // 1) Carrega todas as igrejas (para montar escopo)
     const { data: all, error: aErr } = await sb
       .from("churches")
-      .select("totvs_id, parent_totvs_id");
+      .select("totvs_id, parent_totvs_id, class");
 
     if (aErr) return json({ ok: false, error: "db_error_scope", details: aErr.message }, 500);
 
@@ -138,6 +165,8 @@ Deno.serve(async (req) => {
     // (ex.: estadual acima de setorial) retornados separadamente para o frontend
     // resolver a mae mais alta com pastor no campo "Outros".
     let effectiveRootForAncestors = "";
+    // Comentario: declarado aqui para ser visivel em todos os branches do if/else abaixo.
+    const ancestorIds: string[] = [];
 
     if (session.role === "admin") {
       // Comentario: admin enxerga todas as igrejas; root_totvs_id vira filtro opcional.
@@ -149,7 +178,15 @@ Deno.serve(async (req) => {
       } else {
         scopeList = allRows.map((c) => String(c.totvs_id)).filter(Boolean);
       }
+    } else if (session.role === "obreiro") {
+      // Comentario: obreiro nao tem escopo proprio — sobe para a mae (ou avo se mae for "central")
+      // usando findObreiroScopeRoot, igual ao telas-cartas. Nao pode usar requestedRoot.
+      const obreiroScopeRoot = findObreiroScopeRoot(session.active_totvs_id, allRows);
+      effectiveRootForAncestors = obreiroScopeRoot;
+      scopeList = [...computeScope(obreiroScopeRoot, allRows)];
+      // Comentario: ancestorIds sera preenchido pelo bloco compartilhado abaixo usando effectiveRootForAncestors.
     } else {
+      // Comentario: pastor (e outros roles) — usa resolveScopeRootTotvs para pegar a igreja certa.
       const scopeRootTotvs = await resolveScopeRootTotvs(sb, session);
       const baseScope = computeScope(scopeRootTotvs, allRows);
       if (requestedRoot && !baseScope.has(requestedRoot)) {
@@ -162,7 +199,6 @@ Deno.serve(async (req) => {
 
     // Comentario: coleta IDs dos ancestrais acima do effectiveRoot (ex.: estadual).
     // Usa allRows (todas as igrejas) para subir na hierarquia sem restricao de escopo.
-    const ancestorIds: string[] = [];
     if (effectiveRootForAncestors) {
       const byId = new Map(allRows.map((r) => [String(r.totvs_id), r]));
       const visitedAnc = new Set<string>([effectiveRootForAncestors]);
