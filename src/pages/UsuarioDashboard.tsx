@@ -15,14 +15,18 @@ import { toast } from "sonner";
 import { supabase } from "@/lib/supabase";
 import { fetchAddressByCep, maskCep, onlyDigits } from "@/lib/cep";
 import {
+  fetchAncestorChain,
   getPastorByTotvsPublic,
   getSignedPdfUrl,
   listChurchesInScope,
   requestRelease,
+  searchChurchesPublic,
   softDeleteLetter,
   updateMyProfile,
   upsertStamps,
   workerDashboard,
+  type AncestorChainItem,
+  type ChurchInScopeItem,
   type PastorLetter,
 } from "@/services/saasService";
 import { post } from "@/lib/api";
@@ -118,6 +122,14 @@ export default function UsuarioDashboard() {
   const [destinationOptions, setDestinationOptions] = useState<DestinationOption[]>([]);
   const [searchingDestinations, setSearchingDestinations] = useState(false);
   const [creatingLetter, setCreatingLetter] = useState(false);
+  // Dados brutos das igrejas do escopo (com info do pastor) — para calcular signerChurch
+  const [rawScopeChurches, setRawScopeChurches] = useState<ChurchInScopeItem[]>([]);
+  // Ancestrais acima do scope root (para campo "Outros" — mae mais alta com pastor)
+  const [ancestorChain, setAncestorChain] = useState<AncestorChainItem[]>([]);
+  // Debounce e busca publica para o campo "Outros"
+  const [outrosDebounced, setOutrosDebounced] = useState("");
+  const [outrosSuggestions, setOutrosSuggestions] = useState<Array<{totvs_id: string; church_name: string; class: string}>>([]);
+  const [outrosLoading, setOutrosLoading] = useState(false);
 
   const todayIso = useMemo(() => new Date().toISOString().slice(0, 10), []);
   const maxPregacaoIso = useMemo(() => {
@@ -384,20 +396,87 @@ async function openPdf(letter: PastorLetter) {
   useEffect(() => {
     if (!openLetterDialog) {
       setDestinationOptions([]);
+      setRawScopeChurches([]);
+      setAncestorChain([]);
+      setOutrosSuggestions([]);
+      setOutrosDebounced("");
       return;
     }
     setSearchingDestinations(true);
     listChurchesInScope(1, 1000)
       .then((churches) => {
+        setRawScopeChurches(churches);
         setDestinationOptions(
           churches.map((c) => ({ totvs_id: String(c.totvs_id || ""), church_name: String(c.church_name || "") }))
         );
       })
-      .catch(() => {
-        setDestinationOptions([]);
-      })
+      .catch(() => { setRawScopeChurches([]); setDestinationOptions([]); })
       .finally(() => setSearchingDestinations(false));
+    // Comentario: busca ancestrais acima do scope root do obreiro (ex.: estadual acima de setorial).
+    // Usado para calcular a mae MAIS ALTA com pastor no campo "Outros".
+    const activeTotvsId = String(session?.totvs_id || "");
+    if (activeTotvsId) {
+      fetchAncestorChain(activeTotvsId).then(setAncestorChain).catch(() => setAncestorChain([]));
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [openLetterDialog]);
+
+  // ─── Igreja assinante (origem da carta) ─────────────────────────────────────
+  // Comentario: igual ao telas-cartas — regional/local NUNCA e a origem.
+  // Percorre rawScopeChurches de baixo para cima a partir da propria igreja do obreiro
+  // ate achar a primeira com pastor (mae direta). Para "Outros", usa highestSignerForOthers.
+  const signerChurch = useMemo<ChurchInScopeItem | null>(() => {
+    if (!rawScopeChurches.length) return null;
+    const byId = new Map(rawScopeChurches.map((c) => [String(c.totvs_id || ""), c]));
+    const activeTotvs = String(session?.totvs_id || "");
+    let cur: ChurchInScopeItem | null = byId.get(activeTotvs) || null;
+    const visited = new Set<string>();
+    while (cur) {
+      const id = String(cur.totvs_id || "");
+      if (visited.has(id)) break;
+      visited.add(id);
+      if (cur.pastor?.full_name) return cur;
+      const parentId = String(cur.parent_totvs_id || "");
+      cur = byId.get(parentId) || null;
+    }
+    // Fallback: raiz do escopo (sem pai no escopo) — provavelmente tem pastor
+    const allIds = new Set(rawScopeChurches.map((c) => String(c.totvs_id || "")));
+    return rawScopeChurches.find((c) => !c.parent_totvs_id || !allIds.has(String(c.parent_totvs_id || ""))) || null;
+  }, [rawScopeChurches, session?.totvs_id]);
+
+  // Mae mais alta com pastor: percorre ancestorChain do final (mais alto) para o inicio.
+  // Usada no campo "Outros" — sempre pega estadual > setorial > central.
+  const highestSignerForOthers = useMemo<AncestorChainItem | null>(() => {
+    for (let i = ancestorChain.length - 1; i >= 0; i--) {
+      if (ancestorChain[i].pastor?.full_name) return ancestorChain[i];
+    }
+    return null;
+  }, [ancestorChain]);
+
+  // Calcula nome/totvs da origem diretamente (sem estado intermediario)
+  const manualFilled = !!letterForm.igreja_destino_manual.trim();
+  const displayOriginName = manualFilled
+    ? (highestSignerForOthers?.church_name || signerChurch?.church_name || session?.church_name || "")
+    : (signerChurch?.church_name || session?.church_name || "");
+  const displayOriginTotvs = manualFilled
+    ? (highestSignerForOthers?.totvs_id || String(signerChurch?.totvs_id || "") || String(session?.totvs_id || ""))
+    : (String(signerChurch?.totvs_id || "") || String(session?.totvs_id || ""));
+
+  // ─── Debounce e busca publica para o campo "Outros" ─────────────────────────
+  useEffect(() => {
+    const t = setTimeout(() => setOutrosDebounced(letterForm.igreja_destino_manual), 300);
+    return () => clearTimeout(t);
+  }, [letterForm.igreja_destino_manual]);
+
+  useEffect(() => {
+    const q = outrosDebounced.trim();
+    if (q.length < 2) { setOutrosSuggestions([]); return; }
+    setOutrosLoading(true);
+    searchChurchesPublic(q, 10)
+      .then(setOutrosSuggestions)
+      .catch(() => setOutrosSuggestions([]))
+      .finally(() => setOutrosLoading(false));
+  }, [outrosDebounced]);
 
   const filteredDestinationOptions = useMemo(() => {
     const term = String(letterForm.igreja_destino || "").trim().toLowerCase();
@@ -495,7 +574,9 @@ async function openPdf(letter: PastorLetter) {
         minister_role: ministerialRole,
         preach_date: letterForm.dia_pregacao,
         preach_period: "NOITE",
-        church_origin: String(session?.totvs_id ? `${session.totvs_id} ${session.church_name || ""}`.trim() : session?.church_name || ""),
+        // Comentario: origem e sempre a mae com pastor (signerChurch), nunca a propria regional/local.
+        // Para "Outros", usa a mae mais alta (highestSignerForOthers). Igual ao telas-cartas.
+        church_origin: displayOriginTotvs ? `${displayOriginTotvs} ${displayOriginName}`.trim() : (displayOriginName || String(session?.church_name || "")),
         preacher_user_id: userId,
         phone: String(profile?.phone || usuario?.telefone || ""),
         email: String(profile?.email || "") || null,
@@ -798,10 +879,23 @@ async function openPdf(letter: PastorLetter) {
                 </div>
                 <div className="space-y-2">
                   <Label>Igreja que faz a carta (origem)</Label>
+                  {/* Comentario: sempre mostra a mae com pastor — regional/local nunca e origem.
+                      Mesma regra do telas-cartas: mae direta para destino normal,
+                      mae mais alta (estadual > setorial > central) para o campo "Outros". */}
                   <div className="relative">
                     <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-                    <Input value={session?.church_name || church?.church_name || ""} disabled className="pl-10" />
+                    <Input
+                      value={displayOriginName || "Carregando..."}
+                      disabled
+                      className="pl-10"
+                    />
                   </div>
+                  {/* Aviso quando "Outros" esta preenchido — origem subiu para a mae mais alta */}
+                  {manualFilled && displayOriginName && (
+                    <p className="text-xs text-amber-700">
+                      Destino fora do escopo. A carta sera emitida pela: {displayOriginName}.
+                    </p>
+                  )}
                 </div>
                 <div className="space-y-2">
                   <Label>Funcao ministerial</Label>
@@ -878,16 +972,47 @@ async function openPdf(letter: PastorLetter) {
                 </div>
                 <div className="space-y-2">
                   <Label>Outros (se nao encontrar)</Label>
-                  <Input
-                    value={letterForm.igreja_destino_manual}
-                    onChange={(e) => setLetterForm((prev) => ({ ...prev, igreja_destino_manual: e.target.value, igreja_destino: "" }))}
-                    onBlur={async (e) => {
-                      const resolved = await resolveManualDestination(e.target.value);
-                      setLetterForm((prev) => ({ ...prev, igreja_destino_manual: resolved, igreja_destino: "" }));
-                    }}
-                    placeholder="Ex.: 9901 - PIUMA-NITEROI"
-                    disabled={!!letterForm.igreja_destino.trim()}
-                  />
+                  {/* Comentario: busca qualquer igreja do banco com 2+ caracteres.
+                      Igual ao ChurchSearchInput do telas-cartas — publico, sem auth. */}
+                  <div className="relative">
+                    <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                    <Input
+                      value={letterForm.igreja_destino_manual}
+                      onChange={(e) => setLetterForm((prev) => ({ ...prev, igreja_destino_manual: e.target.value, igreja_destino: "" }))}
+                      onBlur={async (e) => {
+                        const resolved = await resolveManualDestination(e.target.value);
+                        setLetterForm((prev) => ({ ...prev, igreja_destino_manual: resolved, igreja_destino: "" }));
+                      }}
+                      placeholder="Ex.: 9901 ou PIUMA-NITEROI"
+                      disabled={!!letterForm.igreja_destino.trim()}
+                      className="pl-10"
+                    />
+                    {outrosLoading && <Loader2 className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin text-slate-400" />}
+                  </div>
+                  {/* Lista de sugestoes em tempo real (busca publica, todas as igrejas) */}
+                  {outrosSuggestions.length > 0 && !letterForm.igreja_destino.trim() && (
+                    <div className="max-h-48 overflow-y-auto rounded-md border border-slate-200 bg-white shadow-sm">
+                      {outrosSuggestions.map((c) => (
+                        <button
+                          key={c.totvs_id}
+                          type="button"
+                          className="flex w-full items-start justify-between gap-3 border-b border-slate-100 px-3 py-2 text-left text-sm last:border-b-0 hover:bg-slate-50"
+                          onClick={() => {
+                            const label = `${c.totvs_id} - ${c.church_name}`;
+                            setLetterForm((prev) => ({ ...prev, igreja_destino_manual: label, igreja_destino: "" }));
+                            setOutrosSuggestions([]);
+                            setOutrosDebounced("");
+                          }}
+                        >
+                          <span className="font-medium text-slate-900">{c.totvs_id} - {c.church_name}</span>
+                          <span className="shrink-0 text-xs uppercase tracking-wide text-slate-500">{c.class}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  {!outrosLoading && outrosDebounced.trim().length >= 2 && outrosSuggestions.length === 0 && (
+                    <p className="text-xs text-slate-500">Nenhuma igreja encontrada. Digite o codigo ou nome manualmente.</p>
+                  )}
                   <p className="text-xs text-slate-500">
                     Modelo: <span className="font-medium">9901 - PIUMA-NITEROI</span>. Se digitar diferente, o sistema tenta padronizar automaticamente.
                   </p>
