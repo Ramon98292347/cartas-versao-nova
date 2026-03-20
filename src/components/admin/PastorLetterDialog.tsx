@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { createLetterByPastor, fetchAncestorChain, listChurchesInScope } from "@/services/saasService";
-import type { AncestorChainItem } from "@/services/saasService";
+import type { AncestorChainItem, ChurchInScopeItem } from "@/services/saasService";
 import type { Church } from "@/components/ChurchSearch";
 
 // Tipo do pregador alvo da carta
@@ -73,17 +73,16 @@ export function PastorLetterDialog({ open, onOpenChange, letterTarget, onSuccess
   const [saving, setSaving] = useState(false);
 
   // ─── Escopo proprio: igreja do obreiro/pastor ───────────────────────────────
-  // Carrega as igrejas do escopo proprio da igreja do alvo
-  const { data: ownScopeChurches = [] } = useQuery({
+  // Comentario: mantemos dados brutos (ownScopeRaw) para verificar se a propria
+  // igreja do alvo tem pastor — informacao necessaria para calcular signerChurch.
+  const { data: ownScopeRaw = [] } = useQuery<ChurchInScopeItem[]>({
     queryKey: ["churches-dialog-own", letterTarget?.churchTotvsId],
-    queryFn: async () => {
-      const rows = await listChurchesInScope(1, 1000, letterTarget?.churchTotvsId || undefined);
-      return rows.map(apiToChurch);
-    },
+    queryFn: () => listChurchesInScope(1, 1000, letterTarget?.churchTotvsId || undefined),
     enabled: open && Boolean(letterTarget?.churchTotvsId),
     staleTime: 60_000,
     refetchInterval: 10000,
   });
+  const ownScopeChurches = useMemo(() => ownScopeRaw.map(apiToChurch), [ownScopeRaw]);
 
   // ─── Escopo da mae: todas as igrejas do pai (escopo mais amplo) ─────────────
   // Busca o parent totvs da propria igreja do alvo
@@ -114,13 +113,40 @@ export function PastorLetterDialog({ open, onOpenChange, letterTarget, onSuccess
     staleTime: 60_000,
   });
 
-  // Mae mais alta com pastor: percorre o ancestorChain do final (mais alto) para o inicio
+  // Mae mais alta com pastor: percorre ancestorChain do final (mais alto) para o inicio.
+  // Usada no campo "Outros" — sempre pega estadual > setorial > central.
   const highestSignerForOthers = useMemo<AncestorChainItem | null>(() => {
     for (let i = ancestorChain.length - 1; i >= 0; i--) {
       if (ancestorChain[i].pastor?.full_name) return ancestorChain[i];
     }
     return null;
   }, [ancestorChain]);
+
+  // Igreja propria do alvo com dados brutos (inclui pastor info)
+  const targetChurchRaw = useMemo(
+    () => ownScopeRaw.find((c) => c.totvs_id === letterTarget?.churchTotvsId) || null,
+    [ownScopeRaw, letterTarget?.churchTotvsId],
+  );
+
+  // Comentario: signerChurch e a mae direta com pastor — assina a carta para destinos normais.
+  // Regra: se a propria igreja do alvo tem pastor, ela assina. Caso contrario, sobe pelo
+  // ancestorChain ate achar o primeiro com pastor (regional/local NUNCA assina).
+  const signerChurch = useMemo<AncestorChainItem | null>(() => {
+    // Verifica se a propria igreja tem pastor
+    if (targetChurchRaw?.pastor?.full_name) {
+      return {
+        totvs_id: targetChurchRaw.totvs_id,
+        church_name: targetChurchRaw.church_name,
+        parent_totvs_id: targetChurchRaw.parent_totvs_id || null,
+        pastor: targetChurchRaw.pastor,
+      };
+    }
+    // Sobe na hierarquia pelo ancestorChain (pai, avo...) ate achar pastor
+    for (const anc of ancestorChain) {
+      if (anc.pastor?.full_name) return anc;
+    }
+    return null;
+  }, [targetChurchRaw, ancestorChain]);
 
   // ─── Todas as igrejas do banco (para o campo Outros) ────────────────────────
   const { data: allChurches = [] } = useQuery({
@@ -134,16 +160,33 @@ export function PastorLetterDialog({ open, onOpenChange, letterTarget, onSuccess
     refetchInterval: 10000,
   });
 
-  // ─── Resets ao abrir o dialog ────────────────────────────────────────────────
+  // ─── Reset dos campos ao abrir o dialog ─────────────────────────────────────
   useEffect(() => {
     if (!open) return;
-    setOriginTotvs(letterTarget?.churchTotvsId || "");
     setDestino(null);
     setDestinoSearch("");
     setDestinoOutros("");
     setPreachDate("");
     setPreachPeriod("");
+    // Origem inicia na signerChurch se ja carregou; senao fallback para propria.
+    setOriginTotvs(signerChurch?.totvs_id || letterTarget?.churchTotvsId || "");
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, letterTarget]);
+
+  // ─── Calcula a origem automaticamente ───────────────────────────────────────
+  // Comentario: sempre que signerChurch, highestSignerForOthers ou destinoOutros mudar,
+  // recalcula a origem seguindo a regra:
+  //   - Sem "Outros": mae direta com pastor (signerChurch)
+  //   - Com "Outros": mae mais alta com pastor (highestSignerForOthers)
+  // NUNCA deixa a origem ser a propria regional/local sem pastor.
+  useEffect(() => {
+    if (!open) return;
+    const manualFilled = !!destinoOutros.trim();
+    const totvs = manualFilled
+      ? (highestSignerForOthers?.totvs_id || signerChurch?.totvs_id || letterTarget?.churchTotvsId || "")
+      : (signerChurch?.totvs_id || letterTarget?.churchTotvsId || "");
+    if (totvs) setOriginTotvs(totvs);
+  }, [open, destinoOutros, highestSignerForOthers, signerChurch, letterTarget?.churchTotvsId]);
 
   // ─── Igrejas de destino disponíveis (escopo da mae ou proprio) ───────────────
   // Se o alvo tem mae, usa escopo da mae (mais amplo). Senao usa proprio.
@@ -151,68 +194,6 @@ export function PastorLetterDialog({ open, onOpenChange, letterTarget, onSuccess
     () => (parentScopeChurches.length ? parentScopeChurches : ownScopeChurches),
     [parentScopeChurches, ownScopeChurches],
   );
-
-  // Set de TOTVS do escopo proprio (para detectar se destino e fora do escopo)
-  const ownScopeSet = useMemo(
-    () => new Set(ownScopeChurches.map((c) => c.codigoTotvs).filter(Boolean)),
-    [ownScopeChurches],
-  );
-  // Set de TOTVS do escopo da mae
-  const parentScopeSet = useMemo(
-    () => new Set(destinationSourceChurches.map((c) => c.codigoTotvs).filter(Boolean)),
-    [destinationSourceChurches],
-  );
-
-  // Igreja propria do alvo
-  const targetChurch = useMemo(
-    () => destinationSourceChurches.find((c) => c.codigoTotvs === letterTarget?.churchTotvsId) || null,
-    [destinationSourceChurches, letterTarget?.churchTotvsId],
-  );
-
-  // Igreja mae do alvo
-  const parentChurch = useMemo(
-    () => (targetParentTotvs ? destinationSourceChurches.find((c) => c.codigoTotvs === targetParentTotvs) || null : null),
-    [destinationSourceChurches, targetParentTotvs],
-  );
-
-  // Origens permitidas: [propria, mae]
-  const allowedOrigins = useMemo(() => {
-    const list: Church[] = [];
-    if (targetChurch) list.push(targetChurch);
-    if (parentChurch && parentChurch.codigoTotvs !== targetChurch?.codigoTotvs) list.push(parentChurch);
-    return list.length ? list : ownScopeChurches.slice(0, 3);
-  }, [targetChurch, parentChurch, ownScopeChurches]);
-
-  // ─── Ajuste automatico de origem ────────────────────────────────────────────
-  // Se o destino escolhido esta no escopo da mae mas NAO no escopo proprio
-  // → a origem deve mudar automaticamente para a mae
-  const shouldUseParentOrigin = useMemo(() => {
-    if (!destino || !parentChurch || !targetChurch) return false;
-    const d = destino.codigoTotvs;
-    return parentScopeSet.has(d) && !ownScopeSet.has(d);
-  }, [destino, parentChurch, targetChurch, parentScopeSet, ownScopeSet]);
-
-  // Para campo Outros: usa a mae MAIS ALTA disponivel como origem (estadual > setorial > central).
-  // highestSignerForOthers e o ancestral mais alto com pastor retornado pelo backend.
-  const shouldUseParentOriginForOthers = Boolean(destinoOutros.trim() && (highestSignerForOthers || parentChurch));
-
-  useEffect(() => {
-    if (shouldUseParentOrigin || shouldUseParentOriginForOthers) {
-      // Para "Outros": usa a mae mais alta (estadual > setorial > central)
-      // Para destino fora do escopo proprio: usa a mae direta
-      const parentTotvs = shouldUseParentOriginForOthers && highestSignerForOthers
-        ? highestSignerForOthers.totvs_id
-        : parentChurch?.codigoTotvs || targetParentTotvs;
-      if (parentTotvs) setOriginTotvs(parentTotvs);
-    } else if (!shouldUseParentOrigin && !shouldUseParentOriginForOthers) {
-      // Volta para a propria quando o destino esta dentro do escopo proprio
-      const ownTotvs = targetChurch?.codigoTotvs || letterTarget?.churchTotvsId || "";
-      if (ownTotvs && originTotvs !== ownTotvs && !allowedOrigins.some((c) => c.codigoTotvs === originTotvs)) {
-        setOriginTotvs(ownTotvs);
-      }
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [shouldUseParentOrigin, shouldUseParentOriginForOthers, parentChurch, targetChurch, highestSignerForOthers]);
 
   // ─── Igreja de origem selecionada ───────────────────────────────────────────
   // Estadual pode estar apenas no ancestor_chain (acima do escopo). Verifica la tambem.
@@ -264,13 +245,10 @@ export function PastorLetterDialog({ open, onOpenChange, letterTarget, onSuccess
     ? `${destino.codigoTotvs} - ${destino.nome}`
     : destinoOutros.trim() || "-";
 
-  // Aviso quando a origem foi ajustada automaticamente para a mae
-  const originAdjustedMessage = (shouldUseParentOrigin || shouldUseParentOriginForOthers)
-    ? shouldUseParentOriginForOthers && highestSignerForOthers
-      ? `Destino fora do escopo. A carta sera emitida pela: ${highestSignerForOthers.totvs_id} - ${highestSignerForOthers.church_name}.`
-      : parentChurch
-        ? `Destino fora do seu escopo. A origem foi ajustada para a mae: ${parentChurch.codigoTotvs} - ${parentChurch.nome}.`
-        : null
+  // Comentario: aviso mostrado quando "Outros" esta preenchido — indica que a origem
+  // subiu para a mae mais alta com pastor (estadual > setorial > central).
+  const originAdjustedMessage = destinoOutros.trim() && highestSignerForOthers
+    ? `Destino fora do escopo. Carta assinada pela mae mais alta: ${highestSignerForOthers.totvs_id} - ${highestSignerForOthers.church_name}.`
     : null;
 
   // ─── Submit ──────────────────────────────────────────────────────────────────
@@ -345,22 +323,26 @@ export function PastorLetterDialog({ open, onOpenChange, letterTarget, onSuccess
                 <Input value={letterTarget?.telefone || ""} disabled placeholder="Telefone do pregador" />
               </div>
 
-              {/* Igreja de origem — muda automaticamente conforme o destino */}
+              {/* Igreja de origem — calculada automaticamente pela hierarquia */}
               <div className="space-y-2">
                 <Label>Igreja que faz a carta (origem)</Label>
-                <Select value={originTotvs} onValueChange={setOriginTotvs}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Selecione a origem" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {allowedOrigins.map((c) => (
-                      <SelectItem key={c.codigoTotvs} value={c.codigoTotvs}>
-                        {c.codigoTotvs} - {c.nome}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                {/* Aviso quando a origem foi ajustada automaticamente */}
+                {/* Comentario: campo somente leitura — a origem e sempre a mae com pastor.
+                    Regional/local nunca aparece como origem pela regra do sistema. */}
+                <div className="relative">
+                  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                  <Input
+                    value={
+                      originChurch
+                        ? `${originChurch.codigoTotvs} - ${originChurch.nome}`
+                        : originTotvs
+                          ? "Carregando..."
+                          : "Nao identificada"
+                    }
+                    disabled
+                    className="pl-10 bg-slate-50"
+                  />
+                </div>
+                {/* Aviso quando "Outros" esta preenchido e a origem subiu para a mae mais alta */}
                 {originAdjustedMessage && (
                   <p className="text-xs text-amber-700">{originAdjustedMessage}</p>
                 )}
