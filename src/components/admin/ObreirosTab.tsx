@@ -192,15 +192,14 @@ export function ObreirosTab({
         search: debouncedSearch || undefined,
         // Comentario: secretario e financeiro sao roles do sistema, nao minister_role.
         // Para eles, filtramos pelo array roles; para os demais, usamos minister_role.
-        minister_role:
-          ministerRole === "all" || ministerRole === "secretario" || ministerRole === "financeiro"
-            ? undefined
-            : ministerRole,
+        // Comentario: todos = todos; pastor = filtra por role; demais = filtra por minister_role (normalizado no backend)
+        minister_role: ministerRole === "all" || ministerRole === "pastor" ? undefined : ministerRole,
         is_active: activeFilter === "all" ? undefined : activeFilter === "active",
-        roles:
-          ministerRole === "secretario" || ministerRole === "financeiro"
-            ? [ministerRole as "secretario" | "financeiro"]
-            : ["pastor", "obreiro", "secretario", "financeiro"],
+        roles: ministerRole === "all"
+          ? ["pastor", "obreiro", "secretario", "financeiro"]
+          : ministerRole === "pastor"
+          ? ["pastor"]
+          : ["pastor", "obreiro"],
         church_totvs_id: selectedChurchFilter || (useScopeList ? undefined : activeTotvsId || undefined),
         page,
         page_size: pageSize,

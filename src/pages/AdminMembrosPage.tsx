@@ -83,17 +83,13 @@ export default function AdminMembrosPage() {
       listMembers({
         // Comentario: quando filtrando por cargo especifico de pastor, usa roles=["pastor"],
         // para outros cargos usa roles=["pastor","obreiro"] para pegar todos os ministeriais.
-        // Comentario: secretario e financeiro sao roles do sistema, nao minister_role.
-        roles:
-          filterCargo === "pastor" ? ["pastor"] :
-          filterCargo === "secretario" ? ["secretario"] :
-          filterCargo === "financeiro" ? ["financeiro"] :
-          ["pastor", "obreiro", "secretario", "financeiro"],
-        minister_role:
-          filterCargo !== "all" && filterCargo !== "pastor" &&
-          filterCargo !== "secretario" && filterCargo !== "financeiro"
-            ? filterCargo
-            : undefined,
+        // Comentario: todos = todos os roles; pastor = filtra por role; demais = filtra por minister_role
+        roles: filterCargo === "all"
+          ? ["pastor", "obreiro", "secretario", "financeiro"]
+          : filterCargo === "pastor"
+          ? ["pastor"]
+          : ["pastor", "obreiro"],
+        minister_role: filterCargo !== "all" && filterCargo !== "pastor" ? filterCargo : undefined,
         church_totvs_id: selectedChurchTotvs || undefined,
         page: 1,
         // Comentario: page_size=1 basta para trazer as metricas do backend, sem lista grande.
@@ -206,11 +202,9 @@ export default function AdminMembrosPage() {
               <SelectContent>
                 <SelectItem value="all">Todos os cargos</SelectItem>
                 <SelectItem value="pastor">Pastor</SelectItem>
-                <SelectItem value="secretario">Secretario</SelectItem>
-                <SelectItem value="financeiro">Financeiro</SelectItem>
-                <SelectItem value="presbitero">Presbitero</SelectItem>
-                <SelectItem value="diacono">Diacono</SelectItem>
-                <SelectItem value="obreiro">Obreiro</SelectItem>
+                <SelectItem value="presbitero">Presbítero</SelectItem>
+                <SelectItem value="diacono">Diácono</SelectItem>
+                <SelectItem value="cooperador">Cooperador</SelectItem>
                 <SelectItem value="membro">Membro</SelectItem>
               </SelectContent>
             </Select>

@@ -130,7 +130,7 @@ export type MemberListParams = {
   search?: string;
   minister_role?: string;
   is_active?: boolean;
-  roles?: Array<"pastor" | "obreiro">;
+  roles?: Array<"pastor" | "obreiro" | "secretario" | "financeiro">;
   church_totvs_id?: string;
   page?: number;
   page_size?: number;

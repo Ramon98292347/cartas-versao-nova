@@ -209,7 +209,6 @@ Deno.serve(async (req) => {
       .order("full_name", { ascending: true });
 
     if (typeof body.is_active === "boolean") q = q.eq("is_active", body.is_active);
-    if (body.minister_role) q = q.eq("minister_role", body.minister_role);
     if (body.search) {
       const safe = String(body.search).replace(/"/g, "").trim();
       if (safe) q = q.or(`full_name.ilike.%${safe}%,cpf.ilike.%${safe}%,phone.ilike.%${safe}%`);
@@ -218,12 +217,18 @@ Deno.serve(async (req) => {
     const { data: users, error: usersErr } = await q;
     if (usersErr) return json({ ok: false, error: "db_error_users", details: usersErr.message }, 500);
 
+    // Comentario: normaliza o filtro de cargo para comparar sem acento e sem diferenca de maiusculas.
+    // Exemplo: "presbitero" bate com "Presbítero" no banco; "diacono" bate com "Diácono".
+    const normalizedRoleFilter = body.minister_role ? normalizeMinisterRole(body.minister_role) : null;
+
     const filtered = (users || []).filter((u: Record<string, unknown>) => {
       const defaultTotvs = String(u.default_totvs_id || "").trim();
       if (!defaultTotvs) return false;
       if (!scope.has(defaultTotvs)) return false;
       // Comentario: quando seleciona uma igreja, traz somente membros dessa igreja (sem filhas).
       if (churchTotvsFilter && defaultTotvs !== churchTotvsFilter) return false;
+      // Comentario: filtra por cargo ministerial normalizando acentos dos dois lados.
+      if (normalizedRoleFilter && normalizeMinisterRole(u.minister_role) !== normalizedRoleFilter) return false;
       return true;
     });
 

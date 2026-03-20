@@ -1131,9 +1131,9 @@ export default function PastorMembrosPage() {
               <SelectContent>
                 <SelectItem value="all">Todos os cargos</SelectItem>
                 <SelectItem value="pastor">Pastor</SelectItem>
-                <SelectItem value="presbitero">Presbitero</SelectItem>
-                <SelectItem value="diacono">Diacono</SelectItem>
-                <SelectItem value="obreiro">Obreiro</SelectItem>
+                <SelectItem value="presbitero">Presbítero</SelectItem>
+                <SelectItem value="diacono">Diácono</SelectItem>
+                <SelectItem value="cooperador">Cooperador</SelectItem>
                 <SelectItem value="membro">Membro</SelectItem>
               </SelectContent>
             </Select>
