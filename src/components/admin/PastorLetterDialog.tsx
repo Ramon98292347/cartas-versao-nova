@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { createLetterByPastor, fetchAncestorChain, listChurchesInScope } from "@/services/saasService";
+import { createLetterByPastor, fetchAncestorChain, listChurchesInScope, searchChurchesPublic } from "@/services/saasService";
 import type { AncestorChainItem, ChurchInScopeItem } from "@/services/saasService";
 import type { Church } from "@/components/ChurchSearch";
 
@@ -63,11 +63,12 @@ export function PastorLetterDialog({ open, onOpenChange, letterTarget, onSuccess
   maxDate.setDate(maxDate.getDate() + 30);
   const maxDateIso = maxDate.toISOString().slice(0, 10);
 
-  const [originTotvs, setOriginTotvs] = useState("");
   const [destino, setDestino] = useState<Church | null>(null);
   const [destinoSearch, setDestinoSearch] = useState("");
   // Campo "Outros": texto livre digitado pelo usuario
   const [destinoOutros, setDestinoOutros] = useState("");
+  // Debounce do campo Outros — so dispara a busca apos 300ms sem digitar
+  const [outrosDebounced, setOutrosDebounced] = useState("");
   const [preachDate, setPreachDate] = useState("");
   const [preachPeriod, setPreachPeriod] = useState<"MANHA" | "TARDE" | "NOITE" | "">("");
   const [saving, setSaving] = useState(false);
@@ -148,16 +149,21 @@ export function PastorLetterDialog({ open, onOpenChange, letterTarget, onSuccess
     return null;
   }, [targetChurchRaw, ancestorChain]);
 
-  // ─── Todas as igrejas do banco (para o campo Outros) ────────────────────────
-  const { data: allChurches = [] } = useQuery({
-    queryKey: ["churches-dialog-all"],
-    queryFn: async () => {
-      const rows = await listChurchesInScope(1, 5000);
-      return rows.map(apiToChurch);
-    },
-    enabled: open,
-    staleTime: 5 * 60_000,
-    refetchInterval: 10000,
+  // ─── Debounce do campo Outros ────────────────────────────────────────────────
+  // Comentario: igual ao Index.tsx — atualiza outrosDebounced 300ms apos o usuario parar de digitar.
+  useEffect(() => {
+    const t = setTimeout(() => setOutrosDebounced(destinoOutros), 300);
+    return () => clearTimeout(t);
+  }, [destinoOutros]);
+
+  // ─── Busca publica para o campo Outros ──────────────────────────────────────
+  // Comentario: usa search-churches-public (sem auth) para buscar QUALQUER igreja do banco,
+  // nao apenas as do escopo do pastor. Igual ao que telas-cartas faz com ChurchSearchInput.
+  const { data: outrosSuggestions = [], isFetching: outrosLoading } = useQuery({
+    queryKey: ["churches-outros-search", outrosDebounced],
+    queryFn: () => searchChurchesPublic(outrosDebounced, 10),
+    enabled: outrosDebounced.trim().length >= 2,
+    staleTime: 30_000,
   });
 
   // ─── Reset dos campos ao abrir o dialog ─────────────────────────────────────
@@ -166,27 +172,10 @@ export function PastorLetterDialog({ open, onOpenChange, letterTarget, onSuccess
     setDestino(null);
     setDestinoSearch("");
     setDestinoOutros("");
+    setOutrosDebounced("");
     setPreachDate("");
     setPreachPeriod("");
-    // Origem inicia na signerChurch se ja carregou; senao fallback para propria.
-    setOriginTotvs(signerChurch?.totvs_id || letterTarget?.churchTotvsId || "");
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, letterTarget]);
-
-  // ─── Calcula a origem automaticamente ───────────────────────────────────────
-  // Comentario: sempre que signerChurch, highestSignerForOthers ou destinoOutros mudar,
-  // recalcula a origem seguindo a regra:
-  //   - Sem "Outros": mae direta com pastor (signerChurch)
-  //   - Com "Outros": mae mais alta com pastor (highestSignerForOthers)
-  // NUNCA deixa a origem ser a propria regional/local sem pastor.
-  useEffect(() => {
-    if (!open) return;
-    const manualFilled = !!destinoOutros.trim();
-    const totvs = manualFilled
-      ? (highestSignerForOthers?.totvs_id || signerChurch?.totvs_id || letterTarget?.churchTotvsId || "")
-      : (signerChurch?.totvs_id || letterTarget?.churchTotvsId || "");
-    if (totvs) setOriginTotvs(totvs);
-  }, [open, destinoOutros, highestSignerForOthers, signerChurch, letterTarget?.churchTotvsId]);
 
   // ─── Igrejas de destino disponíveis (escopo da mae ou proprio) ───────────────
   // Se o alvo tem mae, usa escopo da mae (mais amplo). Senao usa proprio.
@@ -195,17 +184,17 @@ export function PastorLetterDialog({ open, onOpenChange, letterTarget, onSuccess
     [parentScopeChurches, ownScopeChurches],
   );
 
-  // ─── Igreja de origem selecionada ───────────────────────────────────────────
-  // Estadual pode estar apenas no ancestor_chain (acima do escopo). Verifica la tambem.
-  const originChurch = useMemo(() => {
-    const found = allChurches.find((c) => c.codigoTotvs === originTotvs)
-      || destinationSourceChurches.find((c) => c.codigoTotvs === originTotvs)
-      || null;
-    if (found) return found;
-    const anc = ancestorChain.find((a) => a.totvs_id === originTotvs);
-    if (anc) return { id: 0, codigoTotvs: anc.totvs_id, nome: anc.church_name, cidade: "", uf: "", carimboIgreja: "", carimboPastor: "", classificacao: "", parentTotvsId: anc.parent_totvs_id || undefined } as Church;
-    return null;
-  }, [allChurches, destinationSourceChurches, originTotvs, ancestorChain]);
+  // ─── Origem calculada diretamente (sem depender de originTotvs) ─────────────
+  // Comentario: como telas-cartas — calcula nome e totvs da origem direto de signerChurch
+  // e highestSignerForOthers, sem passar por estado intermediario. Elimina o problema
+  // de exibir a propria igreja do obreiro enquanto as queries carregam.
+  const manualFilled = !!destinoOutros.trim();
+  const displayOriginName = manualFilled
+    ? (highestSignerForOthers?.church_name || signerChurch?.church_name || "")
+    : (signerChurch?.church_name || "");
+  const displayOriginTotvs = manualFilled
+    ? (highestSignerForOthers?.totvs_id || signerChurch?.totvs_id || letterTarget?.churchTotvsId || "")
+    : (signerChurch?.totvs_id || letterTarget?.churchTotvsId || "");
 
   // ─── Opcoes de destino filtradas pelo texto digitado ────────────────────────
   const filteredDestinoOptions = useMemo(() => {
@@ -219,18 +208,6 @@ export function PastorLetterDialog({ open, onOpenChange, letterTarget, onSuccess
       .slice(0, 15);
   }, [destinationSourceChurches, destinoSearch]);
 
-  // ─── Campo Outros: busca em TODAS as igrejas do banco ───────────────────────
-  const filteredOutrosOptions = useMemo(() => {
-    const q = destinoOutros.trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-    if (q.length < 2) return [];
-    return allChurches
-      .filter((c) => {
-        const hay = `${c.codigoTotvs} ${c.nome}`.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-        return hay.includes(q);
-      })
-      .slice(0, 15);
-  }, [allChurches, destinoOutros]);
-
   // ─── Preview ─────────────────────────────────────────────────────────────────
   const formatDateBr = (iso: string) => {
     if (!iso) return "-";
@@ -238,9 +215,9 @@ export function PastorLetterDialog({ open, onOpenChange, letterTarget, onSuccess
     return `${d}/${m}/${y}`;
   };
 
-  const previewOriginName = originChurch
-    ? `${originChurch.codigoTotvs} - ${originChurch.nome}`
-    : originTotvs || "-";
+  const previewOriginName = displayOriginName
+    ? `${displayOriginTotvs} - ${displayOriginName}`
+    : "Carregando...";
   const previewDestination = destino
     ? `${destino.codigoTotvs} - ${destino.nome}`
     : destinoOutros.trim() || "-";
@@ -259,9 +236,9 @@ export function PastorLetterDialog({ open, onOpenChange, letterTarget, onSuccess
     if (preachDate < todayIso) { toast.error("A data de pregacao deve ser hoje ou no futuro."); return; }
     if (!destino && !destinoOutros.trim()) { toast.error("Selecione a igreja de destino ou informe em Outros."); return; }
 
-    const origemText = originChurch
-      ? `${originChurch.codigoTotvs} - ${originChurch.nome}`
-      : originTotvs;
+    const origemText = displayOriginName
+      ? `${displayOriginTotvs} - ${displayOriginName}`
+      : displayOriginTotvs;
     const destinoText = destino
       ? `${destino.codigoTotvs} - ${destino.nome}`
       : normalizeManual(destinoOutros);
@@ -269,7 +246,7 @@ export function PastorLetterDialog({ open, onOpenChange, letterTarget, onSuccess
     try {
       setSaving(true);
       await createLetterByPastor({
-        church_totvs_id: originChurch?.codigoTotvs || originTotvs,
+        church_totvs_id: displayOriginTotvs,
         preacher_name: letterTarget.nome,
         preacher_user_id: letterTarget.userId || undefined,
         minister_role: letterTarget.ministerRole || "Obreiro",
@@ -332,11 +309,9 @@ export function PastorLetterDialog({ open, onOpenChange, letterTarget, onSuccess
                   <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
                   <Input
                     value={
-                      originChurch
-                        ? `${originChurch.codigoTotvs} - ${originChurch.nome}`
-                        : originTotvs
-                          ? "Carregando..."
-                          : "Nao identificada"
+                      displayOriginName
+                        ? `${displayOriginTotvs} - ${displayOriginName}`
+                        : "Carregando..."
                     }
                     disabled
                     className="pl-10 bg-slate-50"
@@ -462,25 +437,37 @@ export function PastorLetterDialog({ open, onOpenChange, letterTarget, onSuccess
                 </div>
 
                 {/* Lista de sugestoes do campo Outros (todas do banco) */}
-                {filteredOutrosOptions.length > 0 && !destino && !destinoSearch.trim() && (
+                {/* Spinner enquanto a busca carrega */}
+                {outrosLoading && (
+                  <p className="text-xs text-muted-foreground flex items-center gap-1">
+                    <Loader2 className="h-3 w-3 animate-spin" /> Buscando igrejas...
+                  </p>
+                )}
+                {/* Lista de sugestoes vindas da busca publica (todas as igrejas) */}
+                {outrosSuggestions.length > 0 && !destino && !destinoSearch.trim() && (
                   <div className="max-h-48 overflow-y-auto rounded-md border border-slate-200 bg-white shadow-sm">
-                    {filteredOutrosOptions.map((c) => (
+                    {outrosSuggestions.map((c) => (
                       <button
-                        key={c.codigoTotvs}
+                        key={c.totvs_id}
                         type="button"
                         className="flex w-full items-start justify-between gap-3 border-b border-slate-100 px-3 py-2 text-left text-sm last:border-b-0 hover:bg-slate-50"
                         onClick={() => {
-                          const label = `${c.codigoTotvs} - ${c.nome}`;
+                          const label = `${c.totvs_id} - ${c.church_name}`;
                           setDestinoOutros(label);
+                          setOutrosDebounced("");
                           setDestino(null);
                           setDestinoSearch("");
                         }}
                       >
-                        <span className="font-medium text-slate-900">{c.codigoTotvs} - {c.nome}</span>
-                        <span className="shrink-0 text-xs uppercase tracking-wide text-slate-500">{c.classificacao}</span>
+                        <span className="font-medium text-slate-900">{c.totvs_id} - {c.church_name}</span>
+                        <span className="shrink-0 text-xs uppercase tracking-wide text-slate-500">{c.class}</span>
                       </button>
                     ))}
                   </div>
+                )}
+                {/* Sem resultados apos digitar 2+ chars */}
+                {!outrosLoading && outrosDebounced.trim().length >= 2 && outrosSuggestions.length === 0 && (
+                  <p className="text-xs text-muted-foreground">Nenhuma igreja encontrada. Digite o nome ou codigo manualmente.</p>
                 )}
                 <p className="text-xs text-muted-foreground">
                   Modelo: <span className="font-medium">9901 - PIUMA-NITEROI</span>. Se digitar diferente, o sistema formata automaticamente ao sair do campo.
