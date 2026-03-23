@@ -252,7 +252,7 @@ export default function CadastroRapido() {
         <Card className="border-slate-200 bg-white shadow-sm">
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-2xl">
-              <UserPlus className="h-6 w-6 text-blue-600" /> Cadastro rapido de membro
+              <UserPlus className="h-6 w-6 text-blue-600" /> Cadastro rápido de membro
             </CardTitle>
             <CardDescription>
               Preencha seus dados. Seu cadastro entra como pendente de liberação.
@@ -306,7 +306,7 @@ export default function CadastroRapido() {
                   <option value="Presbitero">Presbitero</option>
                   <option value="Pastor">Pastor</option>
                 </select>
-                <p className="text-xs text-slate-500">Cadastro rapido cria usuario com role obreiro; este campo define apenas o cargo ministerial.</p>
+                <p className="text-xs text-slate-500">Cadastro rápido cria usuário com role obreiro; este campo define apenas o cargo ministerial.</p>
               </div>
 
               <div className="space-y-2">

@@ -393,7 +393,7 @@ export default function PhoneIdentify() {
 
             <Button type="button" variant="outline" onClick={openCadastroRapido} disabled={openingCadastro}>
               {openingCadastro ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <UserPlus className="mr-2 h-4 w-4" />}
-              {openingCadastro ? "Abrindo..." : "Cadastro rapido"}
+              {openingCadastro ? "Abrindo..." : "Cadastro rápido"}
             </Button>
           </div>
 
