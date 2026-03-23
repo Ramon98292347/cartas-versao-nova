@@ -1,24 +1,145 @@
 # Arquivo de configuracao das edge functions do Supabase.
 # verify_jwt = false: desativa a verificacao padrao do JWT do Supabase para que
 # a propria funcao valide o JWT customizado (USER_SESSION_JWT_SECRET).
+# IMPORTANTE: Toda funcao nova deve ser adicionada aqui com verify_jwt = false.
 
-[functions.mark-notification-read]
+[functions.approve-release]
 verify_jwt = false
 
-[functions.mark-all-notifications-read]
+[functions.birthday-notify]
+verify_jwt = false
+
+[functions.birthdays-today]
+verify_jwt = false
+
+[functions.create-church]
+verify_jwt = false
+
+[functions.create-letter]
 verify_jwt = false
 
 [functions.create-ministerial-meeting]
 verify_jwt = false
 
-[functions.list-ministerial-meetings]
+[functions.create-user]
 verify_jwt = false
 
-[functions.manage-ministerial-meeting]
+[functions.delete-user]
+verify_jwt = false
+
+[functions.fin-api]
+verify_jwt = false
+
+[functions.forgot-password-request]
+verify_jwt = false
+
+[functions.generate-church-contrato-pdf]
+verify_jwt = false
+
+[functions.generate-church-remanejamento-pdf]
+verify_jwt = false
+
+[functions.generate-member-docs]
+verify_jwt = false
+
+[functions.get-church-contrato-form]
+verify_jwt = false
+
+[functions.get-church-remanejamento-form]
+verify_jwt = false
+
+[functions.get-letter-pdf-url]
+verify_jwt = false
+
+[functions.get-member-docs-status]
+verify_jwt = false
+
+[functions.get-my-registration-status]
+verify_jwt = false
+
+[functions.get-pastor-contact]
 verify_jwt = false
 
 [functions.get-public-ministerial-meeting]
 verify_jwt = false
 
+[functions.list-announcements]
+verify_jwt = false
+
+[functions.list-churches-in-scope]
+verify_jwt = false
+
+[functions.list-letters]
+verify_jwt = false
+
+[functions.list-members]
+verify_jwt = false
+
+[functions.list-ministerial-meetings]
+verify_jwt = false
+
+[functions.list-notifications]
+verify_jwt = false
+
+[functions.login]
+verify_jwt = false
+
+[functions.manage-ministerial-meeting]
+verify_jwt = false
+
+[functions.mark-all-notifications-read]
+verify_jwt = false
+
+[functions.mark-notification-read]
+verify_jwt = false
+
+[functions.member-docs-finish]
+verify_jwt = false
+
+[functions.public-register-member]
+verify_jwt = false
+
+[functions.reset-password-confirm]
+verify_jwt = false
+
+[functions.save-ministerial-attendance]
+verify_jwt = false
+
 [functions.save-public-ministerial-attendance]
+verify_jwt = false
+
+[functions.select-church]
+verify_jwt = false
+
+[functions.set-church-pastor]
+verify_jwt = false
+
+[functions.set-letter-status]
+verify_jwt = false
+
+[functions.set-user-payment-status]
+verify_jwt = false
+
+[functions.set-user-registration-status]
+verify_jwt = false
+
+[functions.set-worker-direct-release]
+verify_jwt = false
+
+[functions.toggle-worker-active]
+verify_jwt = false
+
+[functions.update-member-avatar]
+verify_jwt = false
+
+[functions.upsert-church-contrato]
+verify_jwt = false
+
+[functions.upsert-church-laudo]
+verify_jwt = false
+
+[functions.upsert-church-remanejamento]
+verify_jwt = false
+
+[functions.worker-dashboard]
 verify_jwt = false
