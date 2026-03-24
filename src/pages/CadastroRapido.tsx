@@ -302,8 +302,8 @@ export default function CadastroRapido() {
                 >
                   <option value="Membro">Membro</option>
                   <option value="Obreiro">Obreiro/Cooperador</option>
-                  <option value="Diacono">Diacono</option>
-                  <option value="Presbitero">Presbitero</option>
+                  <option value="Diacono">Diácono</option>
+                  <option value="Presbitero">Presbítero</option>
                   <option value="Pastor">Pastor</option>
                 </select>
                 <p className="text-xs text-slate-500">Cadastro rápido cria usuário com role obreiro; este campo define apenas o cargo ministerial.</p>

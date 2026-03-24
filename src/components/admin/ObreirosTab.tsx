@@ -126,7 +126,14 @@ const initialForm: WorkerForm = {
   is_active: true,
 };
 
-const ministerRoleOptions = ["Pastor", "Presbitero", "Diacono", "Obreiro", "Membro"];
+// Comentario: value = valor salvo no banco; label = texto exibido ao usuário.
+const ministerRoleOptions = [
+  { value: "Pastor",     label: "Pastor" },
+  { value: "Presbitero", label: "Presbítero" },
+  { value: "Diacono",    label: "Diácono" },
+  { value: "Obreiro",    label: "Obreiro" },
+  { value: "Membro",     label: "Membro" },
+];
 const FAILED_AVATAR_URLS = new Set<string>();
 
 function resolveAvatarUrl(src?: string | null) {
@@ -779,7 +786,7 @@ export function ObreirosTab({
                   </SelectTrigger>
                   <SelectContent>
                     {ministerRoleOptions.map((role) => (
-                      <SelectItem key={role} value={role}>{role}</SelectItem>
+                      <SelectItem key={role.value} value={role.value}>{role.label}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
