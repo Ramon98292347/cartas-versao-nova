@@ -419,7 +419,7 @@ async function handleCreate(session: SessionClaims, body: Record<string, unknown
       }
     }
 
-    if (destinationTotvs && !allowedDestinations.has(destinationTotvs) && session.role === "obreiro") {
+    if (destinationTotvs && !allowedDestinations.has(destinationTotvs) && session.role === "obreiro" && !manual_destination) {
       return json({
         ok: false,
         error: "destination_out_of_scope_use_parent",
