@@ -62,53 +62,21 @@ async function actionList(sb: ReturnType<typeof createClient>, session: Awaited<
   const page = Number.isFinite(body.page) ? Math.max(1, Number(body.page)) : 1;
   const page_size = Number.isFinite(body.page_size) ? Math.max(1, Math.min(100, Number(body.page_size))) : 20;
   const unreadOnly = Boolean(body.unread_only);
-  const churchTotvs = String(body.church_totvs_id || "").trim() || session!.active_totvs_id;
   const isFinanceiro = session!.role === "financeiro";
 
-  let qChurch = sb.from("notifications").select("*").eq("church_totvs_id", churchTotvs).order("created_at", { ascending: false });
   let qMine = sb.from("notifications").select("*").eq("user_id", session!.user_id).order("created_at", { ascending: false });
 
   if (isFinanceiro) {
-    qChurch = qChurch.eq("type", "financial");
     qMine = qMine.eq("type", "financial");
   }
   if (unreadOnly) {
-    qChurch = qChurch.or("is_read.eq.false,read_at.is.null");
     qMine = qMine.or("is_read.eq.false,read_at.is.null");
   }
 
-  const [{ data: churchRows, error: churchErr }, { data: myRows, error: myErr }] = await Promise.all([qChurch, qMine]);
-  if (churchErr) return json({ ok: false, error: "db_error_list_church" }, 500);
+  const { data: myRows, error: myErr } = await qMine;
   if (myErr) return json({ ok: false, error: "db_error_list_user" }, 500);
 
-  const merged = [...(churchRows || []), ...(myRows || [])];
-  const byBusinessKey = new Map<string, Record<string, unknown>>();
-  for (const item of merged) {
-    const row = item as Record<string, unknown>;
-    const relatedId = String(row.related_id || "").trim();
-    const type = String(row.type || "").trim();
-    const churchId = String(row.church_totvs_id || "").trim();
-    const title = String(row.title || "").trim();
-    const message = String(row.message || "").trim();
-    const key = relatedId
-      ? `${churchId}|${type}|${relatedId}`
-      : `${churchId}|${type}|${title}|${message}`;
-    const current = byBusinessKey.get(key);
-    if (!current) {
-      byBusinessKey.set(key, row);
-      continue;
-    }
-    const currentIsMine = String(current.user_id || "").trim() === session!.user_id;
-    const nextIsMine = String(row.user_id || "").trim() === session!.user_id;
-    if (!currentIsMine && nextIsMine) {
-      byBusinessKey.set(key, row);
-      continue;
-    }
-    const currentCreatedAt = String(current.created_at || "");
-    const nextCreatedAt = String(row.created_at || "");
-    if (nextCreatedAt > currentCreatedAt) byBusinessKey.set(key, row);
-  }
-  const sorted = [...byBusinessKey.values()].sort((a, b) => String(b.created_at || "").localeCompare(String(a.created_at || "")));
+  const sorted = [...(myRows || [])].sort((a, b) => String((b as Record<string, unknown>).created_at || "").localeCompare(String((a as Record<string, unknown>).created_at || "")));
 
   const total = sorted.length;
   const notifications = sorted.slice((page - 1) * page_size, page * page_size);
@@ -130,18 +98,7 @@ async function actionMarkRead(sb: ReturnType<typeof createClient>, session: Awai
   if (!row) return json({ ok: false, error: "notification_not_found" }, 404);
 
   const isMine = String(row.user_id || "") === session!.user_id;
-  let isChurchAllowed = String(row.church_totvs_id || "") === session!.active_totvs_id;
-
-  if (!isChurchAllowed && (session!.role === "pastor" || session!.role === "admin")) {
-    const { data: allChurches, error: cErr } = await sb.from("churches").select("totvs_id,parent_totvs_id");
-    if (cErr) return json({ ok: false, error: "db_error_scope" }, 500);
-    const rows = (allChurches || []) as ChurchRow[];
-    const scope = computeScope(session!.active_totvs_id, rows);
-    const ancestors = collectAncestors(session!.active_totvs_id, rows);
-    isChurchAllowed = scope.has(String(row.church_totvs_id || "")) || ancestors.has(String(row.church_totvs_id || ""));
-  }
-
-  if (!isMine && !isChurchAllowed) return json({ ok: false, error: "forbidden" }, 403);
+  if (!isMine) return json({ ok: false, error: "forbidden" }, 403);
 
   const idsToUpdate = new Set<string>([id]);
   const relatedId = String(row.related_id || "").trim();
@@ -153,6 +110,7 @@ async function actionMarkRead(sb: ReturnType<typeof createClient>, session: Awai
   let siblingsQuery = sb
     .from("notifications")
     .select("id")
+    .eq("user_id", session!.user_id)
     .eq("church_totvs_id", churchId)
     .eq("type", type);
 
@@ -173,16 +131,11 @@ async function actionMarkRead(sb: ReturnType<typeof createClient>, session: Awai
 }
 
 async function actionMarkAllRead(sb: ReturnType<typeof createClient>, session: Awaited<ReturnType<typeof verifySessionJWT>>) {
-  const [{ data: churchRows, error: churchErr }, { data: userRows, error: userErr }] = await Promise.all([
-    sb.from("notifications").select("id").eq("church_totvs_id", session!.active_totvs_id),
-    sb.from("notifications").select("id").eq("user_id", session!.user_id),
-  ]);
-
-  if (churchErr) return json({ ok: false, error: "db_error_list_church" }, 500);
+  const { data: userRows, error: userErr } = await sb.from("notifications").select("id").eq("user_id", session!.user_id);
   if (userErr) return json({ ok: false, error: "db_error_list_user" }, 500);
 
   const ids = new Set<string>();
-  for (const r of [...(churchRows || []), ...(userRows || [])]) ids.add(String((r as Record<string, unknown>).id || ""));
+  for (const r of userRows || []) ids.add(String((r as Record<string, unknown>).id || ""));
   const idList = [...ids].filter(Boolean);
 
   if (idList.length === 0) return json({ ok: true, deleted: 0 });
