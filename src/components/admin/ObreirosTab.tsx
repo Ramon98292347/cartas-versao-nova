@@ -129,8 +129,8 @@ const initialForm: WorkerForm = {
 // Comentario: value = valor salvo no banco; label = texto exibido ao usuário.
 const ministerRoleOptions = [
   { value: "Pastor",     label: "Pastor" },
-  { value: "Presbitero", label: "Presbítero" },
-  { value: "Diacono",    label: "Diácono" },
+  { value: "Presbítero", label: "Presbítero" },
+  { value: "Diácono",    label: "Diácono" },
   { value: "Obreiro",    label: "Obreiro" },
   { value: "Membro",     label: "Membro" },
 ];
