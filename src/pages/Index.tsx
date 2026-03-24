@@ -12,7 +12,7 @@ import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useQuery } from "@tanstack/react-query";
-import { createLetterByPastor, getPastorByTotvsPublic, listChurchesInScope, listMembers, searchChurchesPublic, setLetterStatus, type UserListItem } from "@/services/saasService";
+import { createLetterByPastor, getPastorByTotvsPublic, listChurchesInScope, listMembers, searchChurchesPublic, type UserListItem } from "@/services/saasService";
 import { format, parse } from "date-fns";
 import { useUser } from "@/context/UserContext";
 import { useNavigate, useLocation } from "react-router-dom";
@@ -499,6 +499,7 @@ const Index = () => {
         preach_period: preachPeriod as "MANHA" | "TARDE" | "NOITE",
         church_origin: origemText,
         church_destination: destinoText,
+        destination_totvs_id: igrejaDestino?.codigoTotvs || undefined,
         manual_destination: !igrejaDestino && Boolean(destinoManual),
         phone: (values.telefone || "").replace(/\D/g, ""),
         email: usuarioEmail || selectedPreacher?.email || (usuario as LegacyUsuarioExtra | null)?.email || null,
@@ -506,17 +507,6 @@ const Index = () => {
         pastor_name: pastorResponsavel || undefined,
         pastor_phone: telefonePastorResponsavel || undefined,
       })) as CreateLetterResult;
-
-      const directReleaseEnabled = Boolean((usuario as LegacyUsuarioExtra & { can_create_released_letter?: boolean } | null)?.can_create_released_letter);
-      const isObreiro = String(usuario?.role || "").toLowerCase() === "obreiro";
-      const createdLetterId = String(result?.letter?.id || "");
-      if (isObreiro && directReleaseEnabled && createdLetterId) {
-        try {
-          await setLetterStatus(createdLetterId, "LIBERADA");
-        } catch {
-          // Comentario: nao bloqueia o fluxo da carta quando falhar liberacao automatica.
-        }
-      }
 
       if (result?.n8n?.ok === false) {
         toast.warning("Carta criada, mas houve falha ao enviar para geração do PDF.");
