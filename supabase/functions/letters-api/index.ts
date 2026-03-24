@@ -472,18 +472,18 @@ async function handleCreate(session: SessionClaims, body: Record<string, unknown
     let preacher_registration_status: string | null = null;
 
     // ─── REGRA DE LIBERAÇÃO AUTOMÁTICA ───────────────────────────────────────
-    // Status inicial é sempre BLOQUEADO.
+    // Status inicial é sempre AGUARDANDO_LIBERACAO.
     // Só muda para LIBERADA se o pregador tiver can_create_released_letter = true
     // na tabela "users". Esse campo é configurado pelo administrador do sistema.
     //
     // Fluxo LIBERADA (automático):
     //   can_create_released_letter = true → status = LIBERADA → webhook dispara → PDF gerado
     //
-    // Fluxo BLOQUEADO (aguarda liberação manual):
-    //   can_create_released_letter = false → status = BLOQUEADO → sem webhook
+    // Fluxo AGUARDANDO_LIBERACAO (aguarda liberação manual):
+    //   can_create_released_letter = false → status = AGUARDANDO_LIBERACAO → sem webhook
     //   Pastor acessa o painel → clica "Liberar carta" → webhook dispara → PDF gerado
     // ─────────────────────────────────────────────────────────────────────────
-    let status = "BLOQUEADO";
+    let status = "AGUARDANDO_LIBERACAO";
     let canDirectRelease = false;
 
     if (session.role === "obreiro") {
@@ -630,7 +630,7 @@ async function handleCreate(session: SessionClaims, body: Record<string, unknown
     let n8nResponse: unknown = null;
 
     // Só dispara o webhook para cartas já liberadas (liberado automático).
-    // Cartas em BLOQUEADO aguardam liberação manual; o webhook é disparado pelo approve-release ou set-letter-status.
+    // Cartas em AGUARDANDO_LIBERACAO aguardam liberação manual; o webhook é disparado pelo approve-release ou set-letter-status.
     if (status === "LIBERADA") {
       try {
         const resp = await fetch(N8N_WEBHOOK_URL, {
