@@ -1535,10 +1535,13 @@ export default function PastorMembrosPage() {
                     >
                       <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="Voluntario Financeiro">Voluntário Financeiro</SelectItem>
-                        <SelectItem value="Cooperador">Cooperador</SelectItem>
-                        <SelectItem value="Diácono">Diácono</SelectItem>
+                        <SelectItem value="Pastor">Pastor</SelectItem>
                         <SelectItem value="Presbítero">Presbítero</SelectItem>
+                        <SelectItem value="Diácono">Diácono</SelectItem>
+                        <SelectItem value="Cooperador">Cooperador</SelectItem>
+                        <SelectItem value="Obreiro">Obreiro</SelectItem>
+                        <SelectItem value="Membro">Membro</SelectItem>
+                        <SelectItem value="Voluntario Financeiro">Voluntário Financeiro</SelectItem>
                         <SelectItem value="Dirigente">Dirigente</SelectItem>
                         <SelectItem value="Conselheiro Espiritual">Conselheiro Espiritual</SelectItem>
                       </SelectContent>
