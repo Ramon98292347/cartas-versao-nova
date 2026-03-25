@@ -539,3 +539,49 @@ que abre editor de recorte com zoom e proporção livre. Não usa face-api.js.
 - A refer?ncia funcional e visual do m?dulo financeiro fica em:
   - `C:\Users\ramon\OneDrive\Documentos\Ramon\Projeto trae\financeiro-novo`
 - Sempre que houver d?vida sobre comportamento, layout ou fluxo do Financeiro no sistema completo, comparar primeiro com esse projeto
+
+---
+
+## Autenticação e Cadastro — Configurações Críticas (2026-03)
+
+### Fluxo de login
+- O login usa a função `auth-api` unificada (todas as ações de auth passam por ela)
+- Ação `login` → valida CPF + senha → retorna token
+- Ação `select-church` → chamada depois que o usuário escolhe a igreja (multi-TOTVS)
+- O projeto `telas-cartas` (tela de login separada) também foi migrado para usar `auth-api`
+
+### Cadastro rápido (ação `public-register` no `auth-api`)
+- Usuário preenche: nome, CPF, telefone, cargo, TOTVS da igreja
+- O campo TOTVS é enviado como `totvs_id` (somente dígitos)
+- O sistema cria o usuário com:
+  - `is_active: false`
+  - `registration_status: "PENDENTE"` na tabela `totvs_access`
+- O pastor aprova pelo painel admin → `is_active: true` + status `APROVADO`
+- Enquanto pendente, o login retorna o erro `registration_pending` com mensagem amigável
+
+### Bloqueio por status pendente no login
+- Se `is_active = false` → sistema verifica `totvs_access` buscando registro com `registration_status = "PENDENTE"`
+- Se encontrado → retorna `registration_pending`
+- Se não encontrado → retorna `inactive_user`
+- Usuário com `is_active = true` + registro PENDENTE → também retorna `registration_pending` (segurança extra)
+
+### CPF não cadastrado
+- Backend retorna `user_not_found` quando o CPF não existe no sistema
+- O `telas-cartas` detecta `user_not_found` e abre automaticamente o dialog de cadastro rápido
+- O `ipda-letter-creator` detecta `user_not_found` e navega para `/cadastro`
+
+### Constraint de cargo no banco
+- A tabela `users` tem constraint `users_minister_role_check` que exige valores COM acento:
+  - `'Diácono'`, `'Presbítero'`, `'Evangelista'`, `'Missionário'`, `'Obreiro'`
+- A função `normalizeMinisterRole` no `auth-api` normaliza a entrada e devolve o valor com acento correto
+
+### Supabase Publishable Key (formato novo)
+- Chaves no formato `sb_publishable_...` NÃO são JWT — não podem ser usadas como `Authorization: Bearer`
+- O Storage rejeita com 401 se receber esse formato como Bearer token
+- Os arquivos de cliente Supabase detectam esse formato e omitem o header `Authorization` onde necessário
+- Variável de ambiente aceita: `VITE_SUPABASE_ANON_KEY` ou `VITE_SUPABASE_PUBLISHABLE_KEY`
+
+### Mensagens de erro amigáveis
+- Arquivo: `src/lib/friendlyErrorMessages.ts`
+- A função `normalizeKey` converte hífens em underscores para unificar os códigos de erro
+- Todos os códigos retornados pelo backend têm mensagem em português mapeada nesse arquivo
