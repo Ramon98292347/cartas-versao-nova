@@ -186,6 +186,7 @@ async function handleSaveTransacao(
   const id = body.id ? String(body.id) : null;
 
   // Comentario: monta o objeto com os dados da transacao
+  // user_id e obrigatorio (NOT NULL) — registra quem criou a transacao
   const payload: Record<string, unknown> = {
     descricao: String(body.descricao || ""),
     valor: Number(body.valor) || 0,
@@ -194,6 +195,7 @@ async function handleSaveTransacao(
     categoria_id: body.categoria_id ? String(body.categoria_id) : null,
     observacoes: body.observacoes ? String(body.observacoes) : null,
     church_totvs_id: churchId,
+    user_id: session.user_id,
   };
 
   let result;
@@ -345,8 +347,7 @@ async function handleSaveContagem(
       tipo: String(item.tipo || "nota"),
       quantidade: Number(item.quantidade) || 0,
       valor_unitario: Number(item.valor_unitario) || 0,
-      // Comentario: valor total deste item = quantidade * valor_unitario
-      valor_total: (Number(item.quantidade) || 0) * (Number(item.valor_unitario) || 0),
+      // Comentario: valor_total e GENERATED ALWAYS AS (quantidade * valor_unitario) — banco calcula automaticamente
     }));
 
     const { error: itensError } = await sb
@@ -437,7 +438,7 @@ Deno.serve(async (req) => {
       default:
         return json({ ok: false, error: "unknown_action", action }, 400);
     }
-  } catch (err) {
-    return json({ ok: false, error: "exception", details: String(err) }, 500);
+  } catch {
+    return json({ ok: false, error: "exception" }, 500);
   }
 });
