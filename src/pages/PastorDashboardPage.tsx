@@ -107,8 +107,9 @@ export default function PastorDashboardPage() {
             <h3 className="text-xl font-bold text-slate-900">Membros</h3>
             <p className="text-sm text-slate-500">Indicadores por cargo ministerial. Clique para filtrar.</p>
           </div>
-          {/* Comentario: 1 col no celular | 2 no sm | 3 no md | 5 no desktop */}
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5">
+          {/* Comentario: 1 col no celular | 2 no sm | 3 no md | 6 no desktop */}
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6">
+            <KpiCard title="Total de membros" value={counters.totalMembers} subtitle="cadastros no escopo" icon={Users} gradient="from-blue-600 to-blue-500" onClick={() => navigate("/pastor/membros?status=ativo")} />
             <KpiCard title="Pastor" value={counters.pastors} subtitle="cargo pastor" icon={UserRound} gradient="from-blue-700 to-blue-600" onClick={() => navigate("/pastor/membros?cargo=pastor")} />
             <KpiCard title="Presbítero" value={counters.presbiteros} subtitle="cargo presbítero" icon={UserRound} gradient="from-purple-600 to-purple-500" onClick={() => navigate("/pastor/membros?cargo=presbitero")} />
             <KpiCard title="Diácono" value={counters.diaconos} subtitle="cargo diácono" icon={UserRound} gradient="from-emerald-600 to-emerald-500" onClick={() => navigate("/pastor/membros?cargo=diacono")} />
