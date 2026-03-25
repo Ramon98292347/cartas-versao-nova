@@ -26,14 +26,18 @@ function MiniCard({
   value,
   subtitle,
   gradient,
+  onClick,
+  active,
 }: {
   title: string;
   value: number;
   subtitle: string;
   gradient: string;
+  onClick?: () => void;
+  active?: boolean;
 }) {
   return (
-    <div className={`${gradient} rounded-xl p-5 shadow-md`}>
+    <div className={`${gradient} rounded-xl p-5 shadow-md ${onClick ? "cursor-pointer hover:opacity-90 transition-opacity" : ""} ${active ? "ring-2 ring-white ring-offset-2" : ""}`} onClick={onClick}>
       <div className="mb-1 flex items-center justify-between">
         <p className="text-xs font-semibold text-white/80">{title}</p>
         <Users className="h-4 w-4 text-white/70" />
@@ -62,6 +66,8 @@ export default function AdminMembrosPage() {
   // Comentario: showChurchList controla se o dropdown de opcoes de igrejas esta visivel.
   const [showChurchList, setShowChurchList] = useState(false);
   const [section, setSection] = useState<"membros" | "presenca">("membros");
+  // Comentario: filtro de ativos/inativos — undefined = todos, false = so inativos
+  const [filterActive, setFilterActive] = useState<boolean | undefined>(undefined);
 
   const { data: churches = [], isLoading: loadingChurches, isFetching: fetchingChurches } = useQuery({
     queryKey: ["admin-membros-churches", activeTotvsId],
@@ -111,6 +117,21 @@ export default function AdminMembrosPage() {
     refetchInterval: 10000,
   });
 
+  // Comentario: busca contagem de membros inativos para exibir no card
+  const { data: inativosData } = useQuery({
+    queryKey: ["admin-membros-inativos-count", selectedChurchTotvs],
+    queryFn: () =>
+      listMembers({
+        page: 1,
+        page_size: 1,
+        roles: ["pastor", "obreiro", "secretario", "financeiro"],
+        church_totvs_id: selectedChurchTotvs || undefined,
+        is_active: false,
+      }),
+    staleTime: 60_000,
+  });
+  const inativosCount = Number(inativosData?.total || 0);
+
   const showPageLoading =
     loadingChurches ||
     (fetchingChurches && churches.length === 0) ||
@@ -148,6 +169,7 @@ export default function AdminMembrosPage() {
     diacono: "bg-gradient-to-br from-emerald-600 to-emerald-500",
     obreiro: "bg-gradient-to-br from-amber-500 to-amber-400",
     ativo: "bg-gradient-to-br from-slate-600 to-slate-500",
+    inativos: "bg-gradient-to-br from-red-600 to-red-500",
   };
 
   return (
@@ -224,13 +246,28 @@ export default function AdminMembrosPage() {
           </div>
         </section>
 
-        <section className="grid gap-4 md:grid-cols-3 xl:grid-cols-6">
+        <section className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-7">
           <MiniCard title="Total de membros" value={counters.total} subtitle="cadastros na igreja" gradient={memberTone.total} />
           <MiniCard title="Pastor" value={counters.pastor} subtitle="cargo pastor" gradient={memberTone.pastor} />
           <MiniCard title="Presbitero" value={counters.presbitero} subtitle="cargo presbitero" gradient={memberTone.presbitero} />
           <MiniCard title="Diacono" value={counters.diacono} subtitle="cargo diacono" gradient={memberTone.diacono} />
           <MiniCard title="Cooperador" value={counters.obreiro} subtitle="cargo cooperador" gradient={memberTone.obreiro} />
           <MiniCard title="Membros ativos" value={counters.membrosAtivos} subtitle="ministerio membro" gradient={memberTone.ativo} />
+          {/* Comentario: card clicavel — ao clicar mostra so os inativos na tabela */}
+          <MiniCard
+            title="Inativos"
+            value={inativosCount}
+            subtitle="membros inativos"
+            gradient={memberTone.inativos}
+            active={filterActive === false}
+            onClick={() => {
+              if (filterActive === false) {
+                setFilterActive(undefined);
+              } else {
+                setFilterActive(false);
+              }
+            }}
+          />
         </section>
 
         <section className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
@@ -259,6 +296,7 @@ export default function AdminMembrosPage() {
             activeTotvsId={selectedChurchTotvs}
             forceSingleChurchFilter
             filterMinisterRole={filterCargo !== "all" ? filterCargo : undefined}
+            initialActiveFilter={filterActive === false ? "inactive" : "all"}
           />
         ) : null}
 

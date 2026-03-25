@@ -173,12 +173,15 @@ export function ObreirosTab({
   churchTotvsFilter,
   forceSingleChurchFilter = false,
   filterMinisterRole,
+  initialActiveFilter,
 }: {
   activeTotvsId: string;
   churchTotvsFilter?: string;
   forceSingleChurchFilter?: boolean;
   // Comentario: filterMinisterRole permite que a pagina pai pre-filtre o cargo exibido na tabela.
   filterMinisterRole?: string;
+  // Comentario: permite que a pagina pai force o filtro de ativo/inativo (ex: card de inativos)
+  initialActiveFilter?: "all" | "active" | "inactive";
 }) {
   const { session, usuario } = useUser();
   const roleLower = String(usuario?.role || session?.role || "").toLowerCase();
@@ -198,7 +201,12 @@ export function ObreirosTab({
     setMinisterRole(filterMinisterRole ?? "all");
   }, [filterMinisterRole]);
 
-  const [activeFilter, setActiveFilter] = useState<"all" | "active" | "inactive">("all");
+  const [activeFilter, setActiveFilter] = useState<"all" | "active" | "inactive">(initialActiveFilter || "all");
+
+  // Comentario: sincroniza o filtro de ativo/inativo com a prop externa (ex: clique no card de inativos)
+  useEffect(() => {
+    if (initialActiveFilter) setActiveFilter(initialActiveFilter);
+  }, [initialActiveFilter]);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(50);
 

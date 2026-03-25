@@ -86,14 +86,8 @@ export function AnnouncementCarousel({
   }
 
   const cur = list[idx];
-  const next = list.length > 1 ? list[(idx + 1) % list.length] : null;
-  const dualImageMode = Boolean(
-    list.length > 1 &&
-      cur?.type === "image" &&
-      cur?.media_url &&
-      next?.type === "image" &&
-      next?.media_url,
-  );
+  // Comentario: sempre mostra 1 imagem por vez, alternando automaticamente
+  const dualImageMode = false;
 
   function saveImageSize(id: string, width: number, height: number) {
     if (!id || !width || !height) return;

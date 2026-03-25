@@ -251,7 +251,7 @@ export default function DivulgacaoPage() {
                     <div className="space-y-1">
                       <input
                         type="file"
-                        accept={form.type === "video" ? "video/*" : "image/*"}
+                        accept={form.type === "video" ? "video/mp4,video/*" : "image/png,image/jpeg,image/jpg,image/webp,image/gif,image/*"}
                         className="flex h-11 w-full rounded-xl border border-slate-300 bg-slate-50 px-3 py-2 text-sm file:mr-3 file:rounded-md file:border-0 file:bg-slate-100 file:px-3 file:py-1 file:text-sm file:font-medium"
                         onChange={(e) => onFileSelected(e.target.files?.[0] || null)}
                       />

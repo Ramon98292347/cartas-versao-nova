@@ -270,14 +270,21 @@ function MiniCard({
   value,
   subtitle,
   gradient,
+  onClick,
+  active,
 }: {
   title: string;
   value: number;
   subtitle: string;
   gradient?: string;
+  onClick?: () => void;
+  active?: boolean;
 }) {
   return (
-    <div className={`${gradient || "bg-gradient-to-br from-blue-600 to-blue-500"} rounded-xl p-5 shadow-md`}>
+    <div
+      className={`${gradient || "bg-gradient-to-br from-blue-600 to-blue-500"} rounded-xl p-5 shadow-md ${onClick ? "cursor-pointer hover:opacity-90 transition-opacity" : ""} ${active ? "ring-2 ring-white ring-offset-2" : ""}`}
+      onClick={onClick}
+    >
       <div className="mb-1 flex items-center justify-between">
         <p className="text-xs font-semibold text-white/80">{title}</p>
         <Users className="h-4 w-4 text-white/70" />
@@ -653,6 +660,8 @@ export default function PastorMembrosPage() {
   const [membersPage, setMembersPage] = useState(1);
   const [membersPageSize, setMembersPageSize] = useState(50);
   const [filterTotvs, setFilterTotvs] = useState("all");
+  // Comentario: filtro de membros ativos/inativos — undefined = todos ativos, false = so inativos
+  const [filterActive, setFilterActive] = useState<boolean | undefined>(undefined);
   // Comentario: searchChurch e o texto digitado no combobox de busca de igreja.
   const [searchChurch, setSearchChurch] = useState("");
   const debouncedSearchChurch = useDebounce(searchChurch, 400);
@@ -672,13 +681,14 @@ export default function PastorMembrosPage() {
   const fichaMembroHtml = useMemo(() => buildFichaMembroHtml(form), [form]);
 
   const { data, isLoading: loadingMembers, isFetching: fetchingMembers, refetch: refetchMembers } = useQuery({
-    queryKey: ["pastor-members-page", membersPage, membersPageSize, filterTotvs],
+    queryKey: ["pastor-members-page", membersPage, membersPageSize, filterTotvs, filterActive],
     queryFn: () =>
       listMembers({
         page: membersPage,
         page_size: membersPageSize,
         roles: ["pastor", "obreiro"],
         church_totvs_id: filterTotvs === "all" ? undefined : filterTotvs,
+        is_active: filterActive,
       }),
     staleTime: 30_000,
     refetchInterval: 10000,
@@ -687,6 +697,22 @@ export default function PastorMembrosPage() {
   const workers = data?.workers || [];
   const membersTotal = Number(data?.total || workers.length);
   const membersTotalPages = Math.max(1, Math.ceil(membersTotal / membersPageSize));
+
+  // Comentario: busca a contagem de membros inativos para exibir no card
+  const { data: inativosData } = useQuery({
+    queryKey: ["pastor-members-inativos-count", filterTotvs],
+    queryFn: () =>
+      listMembers({
+        page: 1,
+        page_size: 1,
+        roles: ["pastor", "obreiro"],
+        church_totvs_id: filterTotvs === "all" ? undefined : filterTotvs,
+        is_active: false,
+      }),
+    staleTime: 60_000,
+  });
+  const inativosCount = Number(inativosData?.total || 0);
+
   const { data: churchesInScope = [], isLoading: loadingChurches, isFetching: fetchingChurches } = useQuery({
     queryKey: ["pastor-members-churches-footer", activeTotvsId],
     queryFn: () => listChurchesInScope(1, 400),
@@ -876,13 +902,14 @@ export default function PastorMembrosPage() {
     if (membersPage >= membersTotalPages) return;
     const nextPage = membersPage + 1;
     void queryClient.prefetchQuery({
-      queryKey: ["pastor-members-page", nextPage, membersPageSize, filterTotvs],
+      queryKey: ["pastor-members-page", nextPage, membersPageSize, filterTotvs, filterActive],
       queryFn: () =>
         listMembers({
           page: nextPage,
           page_size: membersPageSize,
           roles: ["pastor", "obreiro"],
           church_totvs_id: filterTotvs === "all" ? undefined : filterTotvs,
+          is_active: filterActive,
         }),
       staleTime: 30_000,
     });
@@ -1051,6 +1078,7 @@ export default function PastorMembrosPage() {
     diacono: "bg-gradient-to-br from-emerald-600 to-emerald-500",
     obreiro: "bg-gradient-to-br from-amber-500 to-amber-400",
     batizados: "bg-gradient-to-br from-slate-600 to-slate-500",
+    inativos: "bg-gradient-to-br from-red-600 to-red-500",
   };
 
   return (
@@ -1064,13 +1092,29 @@ export default function PastorMembrosPage() {
         <p className="mt-1 text-base text-slate-600">Gestao de membros com visualizacao, filtros e documentos.</p>
       </div>
 
-      <section className="mb-5 grid gap-4 md:grid-cols-3 xl:grid-cols-6">
+      <section className="mb-5 grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-7">
         <MiniCard title="Total de membros" value={counters.total} subtitle="membros encontrados" gradient={memberTone.total} />
         <MiniCard title="Pastor" value={counters.pastor} subtitle="pastores" gradient={memberTone.pastor} />
         <MiniCard title="Presbitero" value={counters.presbitero} subtitle="presbiteros" gradient={memberTone.presbitero} />
         <MiniCard title="Diacono" value={counters.diacono} subtitle="diaconos" gradient={memberTone.diacono} />
         <MiniCard title="Cooperador" value={counters.obreiro} subtitle="cooperadores" gradient={memberTone.obreiro} />
         <MiniCard title="Membros ativos" value={counters.batizados} subtitle="ministerio membro" gradient={memberTone.batizados} />
+        {/* Comentario: card clicavel — ao clicar mostra so os inativos, clica de novo volta aos ativos */}
+        <MiniCard
+          title="Inativos"
+          value={inativosCount}
+          subtitle="membros inativos"
+          gradient={memberTone.inativos}
+          active={filterActive === false}
+          onClick={() => {
+            if (filterActive === false) {
+              setFilterActive(undefined);
+            } else {
+              setFilterActive(false);
+            }
+            setMembersPage(1);
+          }}
+        />
       </section>
 
       <MobileFiltersCard
