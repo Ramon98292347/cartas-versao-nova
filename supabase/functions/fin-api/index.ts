@@ -305,7 +305,7 @@ async function handleSaveCategoria(
   return json({ ok: true, data: result.data });
 }
 
-// Comentario: salva uma contagem de caixa com seus itens (notas e moedas)
+// Comentario: salva uma contagem de caixa com os itens em JSON e os responsáveis
 async function handleSaveContagem(
   sb: ReturnType<typeof createClient>,
   session: SessionClaims,
@@ -321,7 +321,16 @@ async function handleSaveContagem(
   const saldo_sistema = Number(body.saldo_sistema) || 0;
   const saldo_contado = Number(body.saldo_contado) || 0;
 
-  // Comentario: insere o registro principal da contagem
+  // Comentario: converte o array de itens para JSON limpo (apenas os campos necessários)
+  const itens = Array.isArray(body.itens) ? body.itens : [];
+  const itens_json = itens.map((item: Record<string, unknown>) => ({
+    denominacao: String(item.denominacao || ""),
+    tipo: String(item.tipo || "nota"),
+    quantidade: Number(item.quantidade) || 0,
+    valor_unitario: Number(item.valor_unitario) || 0,
+  }));
+
+  // Comentario: insere o registro da contagem com itens em JSON e responsáveis
   const { data: contagem, error: contagemError } = await sb
     .from("fin_contagens_caixa")
     .insert({
@@ -332,35 +341,26 @@ async function handleSaveContagem(
       observacoes: body.observacoes ? String(body.observacoes) : null,
       status: "fechada",
       user_id: session.user_id,
+      // Comentario: todas as denominações ficam numa coluna JSONB — sem tabela de itens
+      itens_json,
+      responsavel_1: body.responsavel_1 ? String(body.responsavel_1) : null,
+      responsavel_2: body.responsavel_2 ? String(body.responsavel_2) : null,
+      responsavel_3: body.responsavel_3 ? String(body.responsavel_3) : null,
+      // Comentario: tipo da coleta e valores por forma de pagamento
+      tipo_coleta: body.tipo_coleta ? String(body.tipo_coleta) : null,
+      valor_dinheiro: Number(body.valor_dinheiro) || 0,
+      valor_pix: Number(body.valor_pix) || 0,
+      valor_cartao: Number(body.valor_cartao) || 0,
     })
     .select()
     .single();
 
   if (contagemError) return json({ ok: false, error: "db_error_contagem", details: contagemError.message }, 500);
 
-  // Comentario: insere os itens (notas e moedas) da contagem
-  const itens = Array.isArray(body.itens) ? body.itens : [];
-  if (itens.length > 0) {
-    const itensPayload = itens.map((item: Record<string, unknown>) => ({
-      contagem_id: (contagem as Record<string, unknown>).id,
-      denominacao: String(item.denominacao || ""),
-      tipo: String(item.tipo || "nota"),
-      quantidade: Number(item.quantidade) || 0,
-      valor_unitario: Number(item.valor_unitario) || 0,
-      // Comentario: valor_total e GENERATED ALWAYS AS (quantidade * valor_unitario) — banco calcula automaticamente
-    }));
-
-    const { error: itensError } = await sb
-      .from("fin_contagens_caixa_itens")
-      .insert(itensPayload);
-
-    if (itensError) return json({ ok: false, error: "db_error_itens", details: itensError.message }, 500);
-  }
-
   return json({ ok: true, data: contagem });
 }
 
-// Comentario: lista as contagens de caixa com JOIN nos itens
+// Comentario: lista as contagens de caixa com itens em JSON e responsáveis
 async function handleListContagens(
   sb: ReturnType<typeof createClient>,
   session: SessionClaims,
@@ -368,6 +368,7 @@ async function handleListContagens(
 ) {
   const churchId = getChurchFilter(session, body);
 
+  // Comentario: agora os itens ficam em itens_json (JSONB) — sem JOIN necessário
   const { data, error } = await sb
     .from("fin_contagens_caixa")
     .select(`
@@ -379,17 +380,38 @@ async function handleListContagens(
       observacoes,
       status,
       created_at,
-      fin_contagens_caixa_itens (
-        id,
-        denominacao,
-        tipo,
-        quantidade,
-        valor_unitario,
-        valor_total
-      )
+      itens_json,
+      responsavel_1,
+      responsavel_2,
+      responsavel_3,
+      tipo_coleta,
+      valor_dinheiro,
+      valor_pix,
+      valor_cartao
     `)
     .eq("church_totvs_id", churchId)
     .order("data_contagem", { ascending: false });
+
+  if (error) return json({ ok: false, error: "db_error", details: error.message }, 500);
+  return json({ ok: true, data: data || [] });
+}
+
+// Comentario: pesquisa igrejas pelo nome ou codigo PDA (totvs_id)
+async function handleSearchChurches(
+  sb: ReturnType<typeof createClient>,
+  _session: SessionClaims,
+  body: Record<string, unknown>,
+) {
+  const query = String(body.query || "").trim();
+  // Comentario: exige pelo menos 2 caracteres para evitar buscas muito amplas
+  if (query.length < 2) return json({ ok: true, data: [] });
+
+  const { data, error } = await sb
+    .from("churches")
+    .select("totvs_id, church_name, class, address_neighborhood, address_city, address_state, cep, contact_email")
+    .or(`church_name.ilike.%${query}%,totvs_id.ilike.%${query}%`)
+    .eq("is_active", true)
+    .limit(10);
 
   if (error) return json({ ok: false, error: "db_error", details: error.message }, 500);
   return json({ ok: true, data: data || [] });
@@ -435,6 +457,8 @@ Deno.serve(async (req) => {
         return await handleSaveContagem(sb, session, body);
       case "list-contagens":
         return await handleListContagens(sb, session, body);
+      case "search-churches":
+        return await handleSearchChurches(sb, session, body);
       default:
         return json({ ok: false, error: "unknown_action", action }, 400);
     }
