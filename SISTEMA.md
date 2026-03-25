@@ -398,7 +398,7 @@ Fluxo:
 | `get-letter-pdf-url` | URL assinada para download do PDF |
 | `create-letter` | Criar nova carta (dispara n8n) |
 | `create-user` | Criar novo usuário (admin) |
-| `reset-password` | Resetar senha (admin) |
+| `admin-reset-password` | Resetar senha de membro (pastor/admin/secretario via auth-api) |
 | `update-my-profile` | Obreiro atualiza próprio perfil |
 | `list-workers` | Listar obreiros com paginação |
 | `list-members` | Listar membros com filtros avançados |
@@ -585,3 +585,37 @@ que abre editor de recorte com zoom e proporção livre. Não usa face-api.js.
 - Arquivo: `src/lib/friendlyErrorMessages.ts`
 - A função `normalizeKey` converte hífens em underscores para unificar os códigos de erro
 - Todos os códigos retornados pelo backend têm mensagem em português mapeada nesse arquivo
+
+---
+
+## 16. Funcionalidades Recentes (2026-03-25)
+
+### Carrossel de divulgações
+- Exibe **1 imagem por vez**, alternando automaticamente a cada 7 segundos
+- Indicadores (bolinhas) permitem navegar manualmente
+- Componente: `src/components/shared/AnnouncementCarousel.tsx`
+
+### Card de membros inativos
+- Nas páginas de membros (pastor e admin), há um **card vermelho "Inativos"** com a contagem
+- Ao clicar, a tabela filtra mostrando **somente membros inativos**
+- Clicar novamente volta à listagem normal (todos)
+- PastorMembrosPage: filtro via `is_active` na query `listMembers`
+- AdminMembrosPage: filtro via prop `initialActiveFilter` no `ObreirosTab`
+
+### Reset de senha por pastor/admin/secretário
+- Action `admin-reset-password` dentro do `auth-api` (não é function standalone)
+- Valida hierarquia e escopo antes de permitir o reset
+- Aceita `user_id` ou `cpf` + `new_password` (mínimo 6 caracteres)
+- Usa bcrypt para hash da senha
+
+### Aprovação/bloqueio de pastores pelo pastor mãe
+- `set-user-registration-status` agora permite pastor mãe aprovar/bloquear pastores do seu escopo
+- Atualiza `is_active` junto com `registration_status` para manter consistência
+
+### Campos de data no perfil do obreiro
+- Campos "Data de batismo" e "Data de separação" no formulário de atualização de perfil
+- Visíveis apenas para cooperador e acima (até pastor)
+- Salvos via `members-api` action `save-profile`
+
+### Upload de mídia em divulgações
+- Input de arquivo aceita extensões explícitas (PNG, JPEG, JPG, WebP, GIF) para compatibilidade com Windows
