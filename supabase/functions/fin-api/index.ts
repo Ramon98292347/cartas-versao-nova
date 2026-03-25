@@ -266,6 +266,26 @@ async function handleListCategorias(
   return json({ ok: true, data: data || [] });
 }
 
+// Comentario: exclui (desativa) uma categoria financeira — marca ativo=false em vez de deletar
+async function handleDeleteCategoria(
+  sb: ReturnType<typeof createClient>,
+  session: SessionClaims,
+  body: Record<string, unknown>,
+) {
+  const churchId = getChurchFilter(session, body);
+  const id = String(body.id || "");
+  if (!id) return json({ ok: false, error: "missing_id" }, 400);
+
+  const { error } = await sb
+    .from("fin_categorias")
+    .update({ ativo: false })
+    .eq("id", id)
+    .eq("church_totvs_id", churchId);
+
+  if (error) return json({ ok: false, error: "db_error", details: error.message }, 500);
+  return json({ ok: true });
+}
+
 // Comentario: cria ou atualiza uma categoria financeira
 async function handleSaveCategoria(
   sb: ReturnType<typeof createClient>,
@@ -700,6 +720,8 @@ Deno.serve(async (req) => {
         return await handleListCategorias(sb, session, body);
       case "save-categoria":
         return await handleSaveCategoria(sb, session, body);
+      case "delete-categoria":
+        return await handleDeleteCategoria(sb, session, body);
       case "save-contagem":
         return await handleSaveContagem(sb, session, body);
       case "list-contagens":
