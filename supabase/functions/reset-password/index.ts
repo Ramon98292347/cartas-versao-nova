@@ -1,23 +1,19 @@
 /**
- * set-user-registration-status
- * =============================
- * O que faz: Aprova ou coloca em pend�ncia o cadastro de um obreiro, atualizando o campo
- *            registration_status dentro do array totvs_access do usu�rio.
- * Para que serve: Usada pelo pastor/admin para aprovar novos cadastros que chegaram via
- *                 public-register-member (auto-cadastro) ou para revogar aprova��es.
- * Quem pode usar: admin, pastor (somente obreiros dentro do pr�prio escopo e hierarquia)
- * Recebe: { user_id: string, registration_status: "APROVADO"|"PENDENTE" }
- * Retorna: { ok, user_id, registration_status }
- * Observacoes: Funciona para qualquer role (obreiro ou pastor). Pastor mae pode
- *              bloquear/aprovar pastores do seu escopo. A hierarquia garante a seguranca.
- *              O registration_status � atualizado em TODOS os itens do array totvs_access.
+ * reset-password
+ * ==============
+ * O que faz: Permite que pastor ou admin redefinam a senha de um membro do seu escopo.
+ * Quem pode usar: admin, pastor, secretario (nunca obreiro)
+ * Recebe: { user_id?: string, cpf?: string, new_password: string }
+ * Retorna: { ok, message }
+ * Observacoes: Usa a mesma logica de escopo e hierarquia do set-user-registration-status.
+ *              A senha precisa ter pelo menos 6 caracteres.
  */
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { jwtVerify } from "https://esm.sh/jose@5.2.4";
+import bcrypt from "https://esm.sh/bcryptjs@2.4.3";
 
-type Role = "admin" | "pastor" | "obreiro";
-type RegistrationStatus = "APROVADO" | "PENDENTE";
+type Role = "admin" | "pastor" | "obreiro" | "secretario" | "financeiro";
 type ChurchClass = "estadual" | "setorial" | "central" | "regional" | "local";
 
 type SessionClaims = { user_id: string; role: Role; active_totvs_id: string };
@@ -36,12 +32,14 @@ function json(obj: unknown, status = 200) {
   return new Response(JSON.stringify(obj), { status, headers: corsHeaders() });
 }
 
+// Comentario: normaliza o campo class da igreja para um dos valores validos
 function normalizeChurchClass(value: string | null | undefined): ChurchClass | null {
   const safe = String(value || "").trim().toLowerCase();
   if (safe === "estadual" || safe === "setorial" || safe === "central" || safe === "regional" || safe === "local") return safe;
   return null;
 }
 
+// Comentario: calcula o escopo (todas as igrejas filhas) a partir de um totvs raiz
 function computeScope(rootTotvs: string, churches: ChurchRow[]): Set<string> {
   const children = new Map<string, string[]>();
   for (const c of churches) {
@@ -61,6 +59,7 @@ function computeScope(rootTotvs: string, churches: ChurchRow[]): Set<string> {
   return scope;
 }
 
+// Comentario: verifica se o usuario logado pode gerenciar o membro alvo (hierarquia)
 function canManageMember(
   sessionRole: Role,
   sessionActiveTotvs: string,
@@ -85,6 +84,7 @@ function canManageMember(
   return rank[memberChurchClass] <= rank[sessionChurchClass];
 }
 
+// Comentario: valida o JWT de sessao do usuario logado
 async function verifySessionJWT(req: Request): Promise<SessionClaims | null> {
   const auth = req.headers.get("authorization") || "";
   const match = auth.match(/^Bearer\s+(.+)$/i);
@@ -109,50 +109,31 @@ async function verifySessionJWT(req: Request): Promise<SessionClaims | null> {
   }
 }
 
-function normalizeTotvsAccess(raw: unknown, status: RegistrationStatus) {
-  if (!Array.isArray(raw)) return [];
-  return raw
-    .map((item) => {
-      if (!item || typeof item !== "object") {
-        const value = String(item || "").trim();
-        if (!value) return null;
-        return { totvs_id: value, role: "obreiro", registration_status: status };
-      }
-      const entry = item as Record<string, unknown>;
-      const totvsId = String(entry.totvs_id || "").trim();
-      if (!totvsId) return null;
-      const roleRaw = String(entry.role || "obreiro").toLowerCase();
-      const role = roleRaw === "admin" || roleRaw === "pastor" || roleRaw === "obreiro" ? roleRaw : "obreiro";
-      return {
-        ...entry,
-        totvs_id: totvsId,
-        role,
-        registration_status: status,
-      };
-    })
-    .filter(Boolean);
-}
-
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders() });
   if (req.method !== "POST") return json({ ok: false, error: "method_not_allowed" }, 405);
 
   try {
+    // Comentario: somente pastor, admin ou secretario podem resetar senhas
     const session = await verifySessionJWT(req);
     if (!session) return json({ ok: false, error: "unauthorized" }, 401);
-    if (session.role === "obreiro") return json({ ok: false, error: "forbidden" }, 403);
+    if (session.role === "obreiro" || session.role === "financeiro") {
+      return json({ ok: false, error: "forbidden" }, 403);
+    }
 
     const body = await req.json().catch(() => ({})) as {
       user_id?: string;
-      registration_status?: RegistrationStatus;
+      cpf?: string;
+      new_password?: string;
     };
 
     const userId = String(body.user_id || "").trim();
-    const status = String(body.registration_status || "").toUpperCase() as RegistrationStatus;
+    const cpf = String(body.cpf || "").replace(/\D/g, "").trim();
+    const newPassword = String(body.new_password || "");
 
-    if (!userId) return json({ ok: false, error: "missing_user_id" }, 400);
-    if (status !== "APROVADO" && status !== "PENDENTE") {
-      return json({ ok: false, error: "invalid_registration_status" }, 400);
+    if (!userId && !cpf) return json({ ok: false, error: "missing_user_id" }, 400);
+    if (newPassword.length < 6) {
+      return json({ ok: false, error: "weak_password" }, 400);
     }
 
     const sb = createClient(
@@ -160,19 +141,21 @@ Deno.serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "",
     );
 
-    const { data: target, error: targetError } = await sb
-      .from("users")
-      .select("id, role, default_totvs_id, totvs_access")
-      .eq("id", userId)
-      .maybeSingle();
+    // Comentario: busca o usuario alvo por id ou por cpf
+    let targetQuery = sb.from("users").select("id, role, default_totvs_id").limit(1);
+    if (userId) {
+      targetQuery = targetQuery.eq("id", userId);
+    } else {
+      targetQuery = targetQuery.eq("cpf", cpf);
+    }
+    const { data: targets, error: targetError } = await targetQuery;
 
     if (targetError) return json({ ok: false, error: "db_error_target", details: targetError.message }, 500);
-    if (!target) return json({ ok: false, error: "user_not_found" }, 404);
+    if (!targets || targets.length === 0) return json({ ok: false, error: "user_not_found" }, 404);
 
-    // Comentario: pastor mae pode bloquear/aprovar pastores e obreiros do seu escopo.
-    // A verificacao de hierarquia em canManageMember ja garante que so pode
-    // gerenciar membros de nivel igual ou inferior.
+    const target = targets[0] as { id: string; role: string; default_totvs_id: string | null };
 
+    // Comentario: busca todas as igrejas para calcular escopo e hierarquia
     const { data: churches, error: churchesErr } = await sb
       .from("churches")
       .select("totvs_id,parent_totvs_id,class");
@@ -196,22 +179,17 @@ Deno.serve(async (req) => {
 
     if (!canManage) return json({ ok: false, error: "forbidden" }, 403);
 
-    const nextTotvsAccess = normalizeTotvsAccess(target.totvs_access, status);
+    // Comentario: gera o hash bcrypt e atualiza a senha
+    const password_hash = bcrypt.hashSync(newPassword, 10);
 
-    // Comentario: atualiza is_active junto com o status para manter consistencia.
-    // APROVADO = ativo, PENDENTE = inativo (bloqueado).
     const { error: updateError } = await sb
       .from("users")
-      .update({
-        totvs_access: nextTotvsAccess,
-        is_active: status === "APROVADO",
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", userId);
+      .update({ password_hash })
+      .eq("id", target.id);
 
-    if (updateError) return json({ ok: false, error: "db_error_update", details: updateError.message }, 500);
+    if (updateError) return json({ ok: false, error: "db_error_update_password", details: updateError.message }, 500);
 
-    return json({ ok: true, user_id: userId, registration_status: status }, 200);
+    return json({ ok: true, message: "Senha redefinida com sucesso." }, 200);
   } catch (err) {
     return json({ ok: false, error: "exception", details: String(err) }, 500);
   }

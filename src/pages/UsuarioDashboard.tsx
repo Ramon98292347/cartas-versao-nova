@@ -103,6 +103,9 @@ export default function UsuarioDashboard() {
     phone: "",
     email: "",
     birth_date: "",
+    // Comentario: data de batismo e data de separação/ordenação — exibidos para cooperador e acima
+    baptism_date: "",
+    ordination_date: "",
     avatar_url: "",
     cep: "",
     address_street: "",
@@ -202,6 +205,9 @@ export default function UsuarioDashboard() {
       phone: profile?.phone || "",
       email: profile?.email || "",
       birth_date: String(profile?.birth_date || ""),
+      // Comentario: preenche campos de batismo e separação vindos do perfil
+      baptism_date: String(profileRaw?.baptism_date || ""),
+      ordination_date: String(profileRaw?.ordination_date || ""),
       avatar_url: String(profile?.avatar_url || ""),
       // Lendo das colunas planas corretas retornadas pelo worker-dashboard
       cep: String(profileRaw?.cep || ""),
@@ -643,6 +649,9 @@ async function openPdf(letter: PastorLetter) {
         phone: profileForm.phone || undefined,
         email: profileForm.email || undefined,
         birth_date: profileForm.birth_date || undefined,
+        // Comentario: envia campos de batismo e separação ao backend
+        baptism_date: profileForm.baptism_date || undefined,
+        ordination_date: profileForm.ordination_date || undefined,
         avatar_url: avatarUrl,
         cep: profileForm.cep || undefined,
         address_street: profileForm.address_street || undefined,
@@ -1273,6 +1282,23 @@ async function openPdf(letter: PastorLetter) {
               <Label>Data de nascimento</Label>
               <Input type="date" value={profileForm.birth_date} onChange={(e) => setProfileForm((p) => ({ ...p, birth_date: e.target.value }))} />
             </div>
+            {/* Comentario: campos de batismo e separação — exibidos para cooperador e acima */}
+            {(() => {
+              const cargo = String(profile?.minister_role || "").toLowerCase();
+              const cargosComSeparacao = ["cooperador", "obreiro", "diácono", "diacono", "presbítero", "presbitero", "evangelista", "missionário", "missionario", "pastor"];
+              return cargosComSeparacao.some((c) => cargo.includes(c));
+            })() && (
+              <div className="grid gap-2 md:grid-cols-2">
+                <div className="space-y-1">
+                  <Label>Data de batismo</Label>
+                  <Input type="date" value={profileForm.baptism_date} onChange={(e) => setProfileForm((p) => ({ ...p, baptism_date: e.target.value }))} />
+                </div>
+                <div className="space-y-1">
+                  <Label>Data de separação</Label>
+                  <Input type="date" value={profileForm.ordination_date} onChange={(e) => setProfileForm((p) => ({ ...p, ordination_date: e.target.value }))} />
+                </div>
+              </div>
+            )}
             <div className="grid gap-2 md:grid-cols-3">
               <div className="space-y-1">
                 <Label>CEP</Label>

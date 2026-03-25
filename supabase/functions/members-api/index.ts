@@ -449,6 +449,7 @@ type SaveProfileBody = {
   phone?: string | null;
   email?: string | null;
   birth_date?: string | null;
+  baptism_date?: string | null;
   ordination_date?: string | null;
   minister_role?: string | null;
   cep?: string | null;
@@ -487,6 +488,7 @@ async function handleSaveProfile(
     phone: String(body.phone || "").trim() || null,
     email: String(body.email || "").trim() || null,
     birth_date: String(body.birth_date || "").trim() || null,
+    baptism_date: String(body.baptism_date || "").trim() || null,
     ordination_date: String(body.ordination_date || "").trim() || null,
     minister_role: String(body.minister_role || "").trim() || null,
     cep: String(body.cep || "").trim() || null,
@@ -506,7 +508,7 @@ async function handleSaveProfile(
     .update(profilePayload)
     .eq("id", session.user_id)
     .select(
-      "id, full_name, phone, email, birth_date, ordination_date, minister_role, cep, address_street, address_number, address_complement, address_neighborhood, address_city, address_state, is_active, can_create_released_letter"
+      "id, full_name, phone, email, birth_date, baptism_date, ordination_date, minister_role, cep, address_street, address_number, address_complement, address_neighborhood, address_city, address_state, is_active, can_create_released_letter"
     )
     .single();
 
@@ -527,7 +529,7 @@ async function handleGetProfile(session: SessionClaims): Promise<Response> {
   const { data, error } = await sb
     .from("users")
     .select(
-      "id, full_name, phone, email, birth_date, ordination_date, minister_role, cep, address_street, address_number, address_complement, address_neighborhood, address_city, address_state, is_active, can_create_released_letter"
+      "id, full_name, phone, email, birth_date, baptism_date, ordination_date, minister_role, cep, address_street, address_number, address_complement, address_neighborhood, address_city, address_state, is_active, can_create_released_letter"
     )
     .eq("id", session.user_id)
     .single();
