@@ -50,18 +50,9 @@ export default function PastorDashboardPage() {
   const navigate = useNavigate();
   const { session } = useUser();
 
-  // Comentario: usa root_totvs_id (mãe) como escopo — nunca puxa o banco todo para o role pastor
-  const rootTotvs = session?.root_totvs_id || session?.totvs_id || "";
-
   const { data: membersRes } = useQuery({
-    queryKey: ["pastor-dashboard-members", rootTotvs],
-    queryFn: () => listMembers({
-      page: 1,
-      page_size: 1000,
-      roles: ["pastor", "obreiro"],
-      church_totvs_id: rootTotvs || undefined,
-    }),
-    enabled: Boolean(rootTotvs),
+    queryKey: ["pastor-dashboard-members"],
+    queryFn: () => listMembers({ page: 1, page_size: 300, roles: ["pastor", "obreiro"] }),
     refetchInterval: 10000,
   });
   const { data: churchesRes } = useQuery({
@@ -74,14 +65,9 @@ export default function PastorDashboardPage() {
   const churches = churchesRes?.churches || [];
   const totalIgrejasEscopo = Number(churchesRes?.total || churches.length || 0);
 
-  // Comentario: total real vem da API — não do length do array (que é limitado pelo page_size)
-  const totalMembrosReal = Number(membersRes?.total || members.length || 0);
-
   const counters = useMemo(() => {
-    // Comentario: pastor = role "pastor" OU minister_role "pastor" (cobre ambos os casos do banco)
-    const pastors = members.filter(
-      (m) => String(m.role || "").toLowerCase() === "pastor" || normalizeMinisterRole(m.minister_role) === "pastor"
-    ).length;
+    const totalMembers = members.length;
+    const pastors = members.filter((m) => normalizeMinisterRole(m.minister_role) === "pastor").length;
     const obreiros = members.filter((m) => normalizeMinisterRole(m.minister_role) === "cooperador").length;
     const presbiteros = members.filter((m) => normalizeMinisterRole(m.minister_role) === "presbitero").length;
     const diaconos = members.filter((m) => normalizeMinisterRole(m.minister_role) === "diacono").length;
@@ -95,8 +81,8 @@ export default function PastorDashboardPage() {
       local: churches.filter((c) => String(c.church_class || "").toLowerCase() === "local").length,
     };
 
-    return { totalMembers: totalMembrosReal, pastors, obreiros, presbiteros, diaconos, membrosAtivos, byClass };
-  }, [members, churches, totalMembrosReal]);
+    return { totalMembers, pastors, obreiros, presbiteros, diaconos, membrosAtivos, byClass };
+  }, [members, churches]);
 
   return (
     <ManagementShell roleMode="pastor">
