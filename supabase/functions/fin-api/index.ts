@@ -328,7 +328,7 @@ async function handleSaveContagem(
       saldo_sistema,
       saldo_contado,
       observacoes: body.observacoes ? String(body.observacoes) : null,
-      status: "finalizada",
+      status: "fechada",
       user_id: session.user_id,
     })
     .select()
