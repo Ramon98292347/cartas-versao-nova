@@ -396,6 +396,60 @@ async function handleListContagens(
   return json({ ok: true, data: data || [] });
 }
 
+// Comentario: salva (ou atualiza) o fechamento mensal com todos os dados do relatório.
+// Usa UPSERT — se já existe um fechamento para o mesmo mês/ano/igreja, ele é atualizado.
+async function handleSaveFechamento(
+  sb: ReturnType<typeof createClient>,
+  session: SessionClaims,
+  body: Record<string, unknown>,
+) {
+  if (!["financeiro", "admin"].includes(session.role)) {
+    return json({ ok: false, error: "forbidden" }, 403);
+  }
+
+  const churchId = getChurchFilter(session, body);
+  const now = new Date();
+
+  const payload: Record<string, unknown> = {
+    church_totvs_id: churchId,
+    ano: Number(body.ano) || now.getFullYear(),
+    mes: Number(body.mes) || now.getMonth() + 1,
+    // Comentario: totais gerais
+    total_receitas: Number(body.total_receitas) || 0,
+    total_despesas: Number(body.total_despesas) || 0,
+    total_transacoes: Number(body.total_transacoes) || 0,
+    saldo_inicial_mes: Number(body.saldo_inicial_mes) || 0,
+    saldo_final_mes: Number(body.saldo_final_mes) || 0,
+    observacoes: body.observacoes ? String(body.observacoes) : null,
+    // Comentario: quem fechou e quando
+    fechado_por: session.user_id,
+    fechado_em: now.toISOString(),
+    status: "fechado",
+    // Comentario: breakdown por tipo de coleta
+    dizimos_dinheiro: Number(body.dizimos_dinheiro) || 0,
+    dizimos_pix_cartao: Number(body.dizimos_pix_cartao) || 0,
+    ofertas_dinheiro: Number(body.ofertas_dinheiro) || 0,
+    ofertas_pix_cartao: Number(body.ofertas_pix_cartao) || 0,
+    missionarias_dinheiro: Number(body.missionarias_dinheiro) || 0,
+    missionarias_pix_cartao: Number(body.missionarias_pix_cartao) || 0,
+    transferencia_mes_anterior: Number(body.transferencia_mes_anterior) || 0,
+    // Comentario: responsáveis e data de fechamento do relatório
+    responsavel_anterior: body.responsavel_anterior ? String(body.responsavel_anterior) : null,
+    responsavel_atual: body.responsavel_atual ? String(body.responsavel_atual) : null,
+    data_fechamento: body.data_fechamento ? String(body.data_fechamento) : null,
+  };
+
+  // Comentario: upsert — se já existe fechamento para esse mês/ano/igreja, atualiza
+  const { data, error } = await sb
+    .from("fin_fechamentos_mensais")
+    .upsert(payload, { onConflict: "ano,mes,church_totvs_id" })
+    .select()
+    .single();
+
+  if (error) return json({ ok: false, error: "db_error", details: error.message }, 500);
+  return json({ ok: true, data });
+}
+
 // Comentario: pesquisa igrejas pelo nome ou codigo PDA (totvs_id)
 async function handleSearchChurches(
   sb: ReturnType<typeof createClient>,
@@ -459,6 +513,8 @@ Deno.serve(async (req) => {
         return await handleListContagens(sb, session, body);
       case "search-churches":
         return await handleSearchChurches(sb, session, body);
+      case "save-fechamento":
+        return await handleSaveFechamento(sb, session, body);
       default:
         return json({ ok: false, error: "unknown_action", action }, 400);
     }
