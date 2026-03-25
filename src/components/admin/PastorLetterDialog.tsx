@@ -179,10 +179,18 @@ export function PastorLetterDialog({ open, onOpenChange, letterTarget, onSuccess
 
   // ─── Igrejas de destino disponíveis (escopo da mae ou proprio) ───────────────
   // Se o alvo tem mae, usa escopo da mae (mais amplo). Senao usa proprio.
-  const destinationSourceChurches = useMemo(
-    () => (parentScopeChurches.length ? parentScopeChurches : ownScopeChurches),
-    [parentScopeChurches, ownScopeChurches],
-  );
+  const destinationSourceChurches = useMemo(() => {
+    // Comentario: ordena pela hierarquia (estadual > setorial > central > regional > local)
+    // e dentro de cada nível, pelo TOTVS numérico crescente.
+    const classOrder: Record<string, number> = { estadual: 0, setorial: 1, central: 2, regional: 3, local: 4 };
+    const base = parentScopeChurches.length ? parentScopeChurches : ownScopeChurches;
+    return [...base].sort((a, b) => {
+      const oA = classOrder[String(a.classificacao || "").toLowerCase()] ?? 99;
+      const oB = classOrder[String(b.classificacao || "").toLowerCase()] ?? 99;
+      if (oA !== oB) return oA - oB;
+      return Number(a.codigoTotvs || 0) - Number(b.codigoTotvs || 0);
+    });
+  }, [parentScopeChurches, ownScopeChurches]);
 
   // ─── Origem calculada diretamente (sem depender de originTotvs) ─────────────
   // Comentario: como telas-cartas — calcula nome e totvs da origem direto de signerChurch

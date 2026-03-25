@@ -412,8 +412,18 @@ async function openPdf(letter: PastorLetter) {
     listChurchesInScope(1, 1000)
       .then((churches) => {
         setRawScopeChurches(churches);
+        // Comentario: ordena pela hierarquia (estadual > setorial > central > regional > local)
+        // e dentro de cada nível, pelo TOTVS numérico crescente.
+        const classOrder: Record<string, number> = { estadual: 0, setorial: 1, central: 2, regional: 3, local: 4 };
         setDestinationOptions(
-          churches.map((c) => ({ totvs_id: String(c.totvs_id || ""), church_name: String(c.church_name || "") }))
+          [...churches]
+            .sort((a, b) => {
+              const oA = classOrder[String(a.church_class || "").toLowerCase()] ?? 99;
+              const oB = classOrder[String(b.church_class || "").toLowerCase()] ?? 99;
+              if (oA !== oB) return oA - oB;
+              return Number(a.totvs_id || 0) - Number(b.totvs_id || 0);
+            })
+            .map((c) => ({ totvs_id: String(c.totvs_id || ""), church_name: String(c.church_name || "") }))
         );
       })
       .catch(() => { setRawScopeChurches([]); setDestinationOptions([]); })
