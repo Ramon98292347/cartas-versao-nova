@@ -1,7 +1,7 @@
 ﻿import { useEffect, useMemo, useState } from "react";
 import { useNavigate, Navigate } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { CalendarDays, FileText, LineChart, Users } from "lucide-react";
+import { CalendarDays, FileText, LineChart } from "lucide-react";
 import { ManagementShell } from "@/components/layout/ManagementShell";
 import { CartasTab } from "@/components/admin/CartasTab";
 import { Button } from "@/components/ui/button";
@@ -298,13 +298,13 @@ export default function CartasDashboardPage() {
         </div>
       </section>
 
-      <section className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+      {/* Comentario: 1 col no celular, 3 no tablet/desktop — "Total de membros" removido */}
+      <section className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         <KpiCard label="Total de cartas" value={totalCartas} icon={FileText} gradient={gradients.total} />
         <KpiCard label="Cartas hoje" value={cartasHoje} icon={CalendarDays} gradient={gradients.hoje} />
         <KpiCard label="Últimos 7 dias" value={ultimos7Dias} icon={LineChart} gradient={gradients.seteDias} />
-        <KpiCard label="Total de membros" value={totalMembros} icon={Users} gradient={gradients.membros} />
       </section>
-      <section className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-3">
+      <section className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-3">
         <KpiCard label="Cartas liberadas" value={statusStats.liberadas} icon={FileText} gradient={gradients.liberadas} />
         <KpiCard label="Cartas bloqueadas" value={statusStats.bloqueadas} icon={FileText} gradient={gradients.bloqueadas} />
         <KpiCard label="Aguardando liberação" value={statusStats.aguardando} icon={FileText} gradient={gradients.aguardando} />

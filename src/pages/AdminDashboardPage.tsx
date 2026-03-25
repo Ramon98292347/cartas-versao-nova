@@ -86,36 +86,51 @@ export default function AdminDashboardPage() {
 
   return (
     <ManagementShell roleMode="admin">
-      <div className="space-y-5 bg-[#F6F8FC] p-1">
-        <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
-          <h2 className="text-4xl font-extrabold tracking-tight text-slate-900">Dashboard Administrativo</h2>
-          <p className="mt-1 text-base text-slate-600">Visao geral das igrejas e dos membros da organizacao</p>
+      {/* Comentario: padding maior em mobile, menor em desktop */}
+      <div className="space-y-5 bg-[#F6F8FC] px-2 py-2 sm:px-1 sm:py-1">
+
+        {/* ── Header ─────────────────────────────────────────────────────── */}
+        <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-6">
+          <h2 className="text-2xl font-extrabold tracking-tight text-slate-900 sm:text-4xl">
+            Dashboard Administrativo
+          </h2>
+          <p className="mt-1 text-sm text-slate-600 sm:text-base">
+            Visão geral das igrejas e dos membros da organização
+          </p>
         </section>
 
-        <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-          <h3 className="text-2xl font-bold text-slate-900">Membros</h3>
-          <p className="mt-1 text-sm text-slate-600">Indicadores de membros e cargos ministeriais.</p>
-          <div className="mt-4 grid gap-4 md:grid-cols-3 xl:grid-cols-6">
-            <StatCard title="Total de membros" value={memberCounters.total} subtitle="membros no escopo" gradient="from-blue-600 to-blue-500" icon="users" />
-            <StatCard title="Pastores" value={memberCounters.pastores} subtitle="cargo pastor" gradient="from-blue-600 to-blue-500" icon="users" />
+        {/* ── Membros — Pastor | Presbítero | Diácono | Cooperador | Membros Ativos ── */}
+        <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+          <h3 className="text-xl font-bold text-slate-900 sm:text-2xl">Membros</h3>
+          <p className="mt-1 text-sm text-slate-600">Indicadores por cargo ministerial.</p>
+          {/* Comentario: 1 col no celular | 2 no tablet | 3 no md | 5 no desktop */}
+          <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5">
+            <StatCard title="Pastor" value={memberCounters.pastores} subtitle="cargo pastor" gradient="from-blue-700 to-blue-600" icon="users" />
+            <StatCard title="Presbítero" value={memberCounters.presbiteros} subtitle="cargo presbítero" gradient="from-purple-600 to-purple-500" icon="users" />
+            <StatCard title="Diácono" value={memberCounters.diaconos} subtitle="cargo diácono" gradient="from-emerald-600 to-emerald-500" icon="users" />
             <StatCard title="Cooperador" value={memberCounters.obreiros} subtitle="cargo cooperador" gradient="from-amber-500 to-amber-400" icon="users" />
-            <StatCard title="Presbiteros" value={memberCounters.presbiteros} subtitle="cargo presbitero" gradient="from-purple-600 to-purple-500" icon="users" />
-            <StatCard title="Diaconos" value={memberCounters.diaconos} subtitle="cargo diacono" gradient="from-emerald-600 to-emerald-500" icon="users" />
-            <StatCard title="Membros ativos" value={memberCounters.membrosAtivos} subtitle="ministerio membro" gradient="from-slate-600 to-slate-500" icon="users" />
+            <StatCard title="Membros Ativos" value={memberCounters.membrosAtivos} subtitle="ministério membro" gradient="from-slate-600 to-slate-500" icon="users" />
           </div>
         </section>
 
-        <section className="grid gap-4 md:grid-cols-3 xl:grid-cols-6">
-          <StatCard title="Total de igrejas" value={churchCounters.total} subtitle="igrejas cadastradas" gradient="from-purple-600 to-purple-500" />
-          <StatCard title="Estadual" value={churchCounters.estadual} subtitle="classificacao estadual" gradient="from-blue-600 to-blue-500" />
-          <StatCard title="Setorial" value={churchCounters.setorial} subtitle="classificacao setorial" gradient="from-amber-500 to-amber-400" />
-          <StatCard title="Central" value={churchCounters.central} subtitle="classificacao central" gradient="from-orange-500 to-orange-400" />
-          <StatCard title="Regional" value={churchCounters.regional} subtitle="classificacao regional" gradient="from-emerald-600 to-emerald-500" />
-          <StatCard title="Local" value={churchCounters.local} subtitle="classificacao local" gradient="from-slate-600 to-slate-500" />
+        {/* ── Igrejas ────────────────────────────────────────────────────── */}
+        <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+          <h3 className="text-xl font-bold text-slate-900 sm:text-2xl">Igrejas</h3>
+          <p className="mt-1 text-sm text-slate-600">Indicadores por classificação.</p>
+          {/* Comentario: 2 col no celular | 3 no tablet | 6 no desktop */}
+          <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
+            <StatCard title="Total" value={churchCounters.total} subtitle="igrejas cadastradas" gradient="from-purple-600 to-purple-500" />
+            <StatCard title="Estadual" value={churchCounters.estadual} subtitle="classificação estadual" gradient="from-blue-600 to-blue-500" />
+            <StatCard title="Setorial" value={churchCounters.setorial} subtitle="classificação setorial" gradient="from-amber-500 to-amber-400" />
+            <StatCard title="Central" value={churchCounters.central} subtitle="classificação central" gradient="from-orange-500 to-orange-400" />
+            <StatCard title="Regional" value={churchCounters.regional} subtitle="classificação regional" gradient="from-emerald-600 to-emerald-500" />
+            <StatCard title="Local" value={churchCounters.local} subtitle="classificação local" gradient="from-slate-600 to-slate-500" />
+          </div>
         </section>
 
+        {/* ── Rodapé informativo ──────────────────────────────────────────── */}
         <Card className="border border-slate-200 bg-white">
-          <CardContent className="text-sm text-slate-600">
+          <CardContent className="p-4 text-sm text-slate-600 sm:p-6">
             Use os menus <b>Membros</b> e <b>Igrejas</b> para gerenciar os cadastros do sistema.
             <div className="mt-3 flex items-center gap-2 text-slate-800">
               <Building2 className="h-4 w-4" />

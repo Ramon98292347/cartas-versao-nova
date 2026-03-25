@@ -86,43 +86,49 @@ export default function PastorDashboardPage() {
 
   return (
     <ManagementShell roleMode="pastor">
-      <div className="space-y-6 bg-[#F6F8FC] p-1">
-        <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
-          <h2 className="text-4xl font-extrabold tracking-tight text-slate-900">Dashboard</h2>
-          <p className="mt-1 text-base text-slate-600">Visao geral do seu escopo (membros e igrejas)</p>
+      {/* Comentario: padding responsivo — mais folgado no celular */}
+      <div className="space-y-5 bg-[#F6F8FC] px-2 py-2 sm:px-1 sm:py-1">
+
+        {/* ── Header ─────────────────────────────────────────────────────── */}
+        <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-6">
+          <h2 className="text-2xl font-extrabold tracking-tight text-slate-900 sm:text-4xl">Dashboard</h2>
+          <p className="mt-1 text-sm text-slate-600 sm:text-base">Visão geral do seu escopo (membros e igrejas)</p>
           <div className="mt-3 flex items-center gap-2 text-sm text-slate-500">
             <ShieldCheck className="h-4 w-4 text-blue-600" />
             <span>Escopo TOTVS: {session?.root_totvs_id || session?.totvs_id || "-"}</span>
-            <span>•</span>
-            <span>Atualizado: agora</span>
+            <span className="hidden sm:inline">•</span>
+            <span className="hidden sm:inline">Atualizado: agora</span>
           </div>
         </section>
 
-        <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+        {/* ── Membros — Pastor | Presbítero | Diácono | Cooperador | Membros Ativos ── */}
+        <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
           <div className="mb-4">
             <h3 className="text-xl font-bold text-slate-900">Membros</h3>
-            <p className="text-sm text-slate-500">Indicadores de membros e cargos ministeriais.</p>
+            <p className="text-sm text-slate-500">Indicadores por cargo ministerial. Clique para filtrar.</p>
           </div>
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-3 xl:grid-cols-6">
-            <KpiCard title="Total de membros" value={counters.totalMembers} subtitle="cadastros no escopo" icon={Users} gradient="from-blue-600 to-blue-500" onClick={() => navigate("/pastor/membros?status=ativo")} />
-            <KpiCard title="Pastores" value={counters.pastors} subtitle="cargo pastor" icon={UserRound} gradient="from-blue-600 to-blue-500" onClick={() => navigate("/pastor/membros?cargo=pastor")} />
+          {/* Comentario: 1 col no celular | 2 no sm | 3 no md | 5 no desktop */}
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5">
+            <KpiCard title="Pastor" value={counters.pastors} subtitle="cargo pastor" icon={UserRound} gradient="from-blue-700 to-blue-600" onClick={() => navigate("/pastor/membros?cargo=pastor")} />
+            <KpiCard title="Presbítero" value={counters.presbiteros} subtitle="cargo presbítero" icon={UserRound} gradient="from-purple-600 to-purple-500" onClick={() => navigate("/pastor/membros?cargo=presbitero")} />
+            <KpiCard title="Diácono" value={counters.diaconos} subtitle="cargo diácono" icon={UserRound} gradient="from-emerald-600 to-emerald-500" onClick={() => navigate("/pastor/membros?cargo=diacono")} />
             <KpiCard title="Cooperador" value={counters.obreiros} subtitle="cargo cooperador" icon={Users} gradient="from-amber-500 to-amber-400" onClick={() => navigate("/pastor/membros?cargo=obreiro")} />
-            <KpiCard title="Presbiteros" value={counters.presbiteros} subtitle="cargo presbitero" icon={UserRound} gradient="from-purple-600 to-purple-500" onClick={() => navigate("/pastor/membros?cargo=presbitero")} />
-            <KpiCard title="Diaconos" value={counters.diaconos} subtitle="cargo diacono" icon={UserRound} gradient="from-emerald-600 to-emerald-500" onClick={() => navigate("/pastor/membros?cargo=diacono")} />
-            <KpiCard title="Membros ativos" value={counters.membrosAtivos} subtitle="ministerio membro" icon={Users} gradient="from-slate-600 to-slate-500" onClick={() => navigate("/pastor/membros?status=ativo")} />
+            <KpiCard title="Membros Ativos" value={counters.membrosAtivos} subtitle="ministério membro" icon={Users} gradient="from-slate-600 to-slate-500" onClick={() => navigate("/pastor/membros?status=ativo")} />
           </div>
         </section>
 
-        <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+        {/* ── Igrejas ─────────────────────────────────────────────────────── */}
+        <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
           <div className="mb-4 flex items-center gap-2">
             <Building2 className="h-5 w-5 text-blue-600" />
             <div>
               <h3 className="text-xl font-bold text-slate-900">Igrejas</h3>
-              <p className="text-sm text-slate-500">Distribuicao das igrejas no seu escopo de hierarquia.</p>
+              <p className="text-sm text-slate-500">Distribuição por classificação no seu escopo.</p>
             </div>
           </div>
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-3 xl:grid-cols-6">
-            <KpiCard title="Total de igrejas" value={totalIgrejasEscopo} subtitle="total de igrejas no escopo" icon={Church} gradient="from-purple-600 to-purple-500" onClick={() => navigate("/pastor/igrejas")} />
+          {/* Comentario: 2 col no celular | 3 no tablet | 6 no desktop */}
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
+            <KpiCard title="Total" value={totalIgrejasEscopo} subtitle="igrejas no escopo" icon={Church} gradient="from-purple-600 to-purple-500" onClick={() => navigate("/pastor/igrejas")} />
             <KpiCard title="Estadual" value={counters.byClass.estadual} subtitle="classe estadual" icon={Church} gradient="from-blue-600 to-blue-500" onClick={() => navigate("/pastor/igrejas?class=estadual")} />
             <KpiCard title="Setorial" value={counters.byClass.setorial} subtitle="classe setorial" icon={Church} gradient="from-amber-500 to-amber-400" onClick={() => navigate("/pastor/igrejas?class=setorial")} />
             <KpiCard title="Central" value={counters.byClass.central} subtitle="classe central" icon={Church} gradient="from-orange-500 to-orange-400" onClick={() => navigate("/pastor/igrejas?class=central")} />
