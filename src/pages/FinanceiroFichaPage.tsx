@@ -17,7 +17,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { ManagementShell } from "@/components/layout/ManagementShell";
-import { FileText, Download, Mail, PlusCircle, Save } from 'lucide-react';
+import { FileText, Download, Mail, PlusCircle, Save, SlidersHorizontal } from 'lucide-react';
 import { useFinance } from '@/contexts/FinanceContext';
 import RegistroDiarioCard from '@/components/financeiro/RegistroDiarioCard';
 import { toast } from '@/components/ui/use-toast';
@@ -83,6 +83,7 @@ export default function FinanceiroFichaPage() {
 
   const [selectedMonth, setSelectedMonth] = useState(currentDate.getMonth());
   const [selectedYear, setSelectedYear] = useState(currentDate.getFullYear());
+  const [showFiltersMobile, setShowFiltersMobile] = useState(false);
   const [registrosDiarios, setRegistrosDiarios] = useState<RegistroDiario[]>([]);
   const [transferenciaMesAnterior, setTransferenciaMesAnterior] = useState(0);
 
@@ -267,8 +268,18 @@ export default function FinanceiroFichaPage() {
             <p className="text-gray-600">Controle de entradas financeiras mensais</p>
           </div>
 
-          <div className="flex space-x-3 mt-4 sm:mt-0">
-            {/* Seletor de mês */}
+          {/* Comentario: botao para mostrar/recolher filtros no celular */}
+          <button
+            type="button"
+            className="mt-3 flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 shadow-sm sm:hidden"
+            onClick={() => setShowFiltersMobile((v) => !v)}
+          >
+            <SlidersHorizontal className="h-4 w-4 text-blue-600" />
+            {showFiltersMobile ? "Recolher filtros" : "Filtros"}
+          </button>
+
+          {/* Comentario: filtros e botoes — escondidos no celular, visiveis em sm+ */}
+          <div className={`${showFiltersMobile ? "flex" : "hidden"} flex-wrap gap-3 mt-3 sm:mt-0 sm:flex`}>
             <select
               value={`${selectedMonth}-${selectedYear}`}
               onChange={(e) => {
@@ -306,7 +317,7 @@ export default function FinanceiroFichaPage() {
         {/* Informações gerais da ficha */}
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
           <h2 className="text-lg font-semibold text-gray-900 mb-4">Informações Gerais</h2>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Código PDA

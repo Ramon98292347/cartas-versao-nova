@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { ManagementShell } from "@/components/layout/ManagementShell";
 import {
   TrendingUp, TrendingDown, DollarSign, Calendar,
-  ArrowUpRight, ArrowDownRight, Loader2,
+  ArrowUpRight, ArrowDownRight, Loader2, SlidersHorizontal,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { listFechamentos, listContagens } from "@/services/financeiroService";
@@ -70,14 +70,22 @@ export default function FinanceiroDashboardPage() {
       .reduce((sum, c) => sum + Number(c.saldo_contado || 0), 0);
   }, [contagens, today]);
 
-  // Comentario: valores do mes selecionado — usa o fechamento se existir, senao mostra zeros
-  const totalEntradas = Number(fechamentoSelecionado?.total_receitas || 0);
+  // Comentario: Total Entradas = soma de todas as contagens de caixa (saldo_contado) do mes selecionado
+  const totalEntradas = useMemo(() => {
+    const prefix = filtroMes; // "YYYY-MM"
+    return contagens
+      .filter((c) => c.data_contagem?.startsWith(prefix))
+      .reduce((sum, c) => sum + Number(c.saldo_contado || 0), 0);
+  }, [contagens, filtroMes]);
   const totalSaidas = Number(fechamentoSelecionado?.total_despesas || 0);
   const saldoMes = Number(fechamentoSelecionado?.saldo_final_mes || 0);
 
   // Comentario: nome legivel do mes selecionado para mostrar no subtitulo
   const [anoFiltro, mesFiltro] = filtroMes.split("-").map(Number);
   const nomeMesSelecionado = `${MESES[mesFiltro - 1]} ${anoFiltro}`;
+
+  // Comentario: estado para mostrar/recolher o filtro de mes no celular
+  const [showFiltersMobile, setShowFiltersMobile] = useState(false);
 
   const loading = loadingFechamentos || loadingContagens;
 
@@ -92,8 +100,18 @@ export default function FinanceiroDashboardPage() {
             <p className="text-gray-600">Visão geral das finanças — {nomeMesSelecionado}</p>
           </div>
 
-          {/* Comentario: filtro por mes — carregado dos fechamentos existentes */}
-          <div className="flex items-center gap-2">
+          {/* Comentario: botao para mostrar/recolher filtro no celular */}
+          <button
+            type="button"
+            className="flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 shadow-sm sm:hidden"
+            onClick={() => setShowFiltersMobile((v) => !v)}
+          >
+            <SlidersHorizontal className="h-4 w-4 text-blue-600" />
+            {showFiltersMobile ? "Recolher filtros" : "Filtros"}
+          </button>
+
+          {/* Comentario: filtro por mes — escondido no celular, visivel em sm+ */}
+          <div className={`${showFiltersMobile ? "flex" : "hidden"} items-center gap-2 sm:flex`}>
             <Calendar className="h-4 w-4 text-slate-500" />
             <Select value={filtroMes} onValueChange={setFiltroMes}>
               <SelectTrigger className="w-[200px]">
@@ -121,7 +139,7 @@ export default function FinanceiroDashboardPage() {
         )}
 
         {/* ── Cards principais ───────────────────────────────────────── */}
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
 
           {/* Total Entradas — vem de total_receitas do fin_fechamentos_mensais */}
           <div className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm">
@@ -139,7 +157,7 @@ export default function FinanceiroDashboardPage() {
             </div>
             <div className="mt-3 flex items-center gap-1 text-sm">
               <ArrowUpRight className="h-4 w-4 text-green-500" />
-              <span className="text-green-600">Fechamento de {nomeMesSelecionado}</span>
+              <span className="text-green-600">Contagens de {nomeMesSelecionado}</span>
             </div>
           </div>
 
