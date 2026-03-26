@@ -18,6 +18,8 @@ import PhoneIdentify from "./pages/PhoneIdentify";
 import CadastroRapido from "./pages/CadastroRapido";
 import { UserProvider, useUser } from "./context/UserContext";
 import { FinanceProvider } from "./contexts/FinanceContext";
+import { registerDefaultOfflineHandlers } from "@/lib/offline/registerDefaultHandlers";
+import { startOfflineSyncLoop } from "@/lib/offline/syncEngine";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -414,12 +416,22 @@ const router = createBrowserRouter(
   },
 );
 
+function AppBootstrap() {
+  useEffect(() => {
+    registerDefaultOfflineHandlers();
+    const stop = startOfflineSyncLoop();
+    return () => stop();
+  }, []);
+
+  return <RouterProvider router={router} />;
+}
+
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
       <Sonner />
       <UserProvider>
-        <RouterProvider router={router} />
+        <AppBootstrap />
       </UserProvider>
     </TooltipProvider>
   </QueryClientProvider>

@@ -1,0 +1,69 @@
+import { listPendingOperations, markOperationError, markOperationSynced } from "@/lib/offline/repository";
+
+type QueueItem = {
+  id?: number;
+  entity: string;
+  operation: "create" | "update" | "delete";
+  payload: Record<string, unknown>;
+};
+
+type SyncHandler = (item: QueueItem) => Promise<void>;
+
+const handlers = new Map<string, SyncHandler>();
+let running = false;
+let timer: number | null = null;
+
+function keyOf(entity: string, operation: string) {
+  return `${entity}:${operation}`;
+}
+
+export function registerSyncHandler(entity: string, operation: "create" | "update" | "delete", handler: SyncHandler) {
+  handlers.set(keyOf(entity, operation), handler);
+}
+
+async function processQueue() {
+  if (running) return;
+  if (typeof navigator !== "undefined" && !navigator.onLine) return;
+  running = true;
+  try {
+    const pending = await listPendingOperations();
+    for (const item of pending) {
+      const id = Number(item.id || 0);
+      if (!id) continue;
+      const handler = handlers.get(keyOf(item.entity, item.operation));
+      if (!handler) {
+        await markOperationError(id, `handler_not_found:${item.entity}:${item.operation}`);
+        continue;
+      }
+      try {
+        await handler(item);
+        await markOperationSynced(id);
+      } catch (err) {
+        await markOperationError(id, String(err));
+      }
+    }
+  } finally {
+    running = false;
+  }
+}
+
+export function startOfflineSyncLoop() {
+  const onOnline = () => {
+    void processQueue();
+  };
+  window.addEventListener("online", onOnline);
+  timer = window.setInterval(() => {
+    void processQueue();
+  }, 30000);
+
+  void processQueue();
+
+  return () => {
+    window.removeEventListener("online", onOnline);
+    if (timer) {
+      window.clearInterval(timer);
+      timer = null;
+    }
+  };
+}
+

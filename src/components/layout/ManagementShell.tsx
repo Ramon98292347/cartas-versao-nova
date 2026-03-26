@@ -9,6 +9,7 @@ import { usePushNotifications } from "@/hooks/usePushNotifications";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { listNotifications, markAllNotificationsRead, markNotificationRead } from "@/services/saasService";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { useOfflineStatus } from "@/hooks/useOfflineStatus";
 
 type RoleMode = "admin" | "pastor" | "obreiro" | "secretario" | "financeiro";
 
@@ -118,6 +119,7 @@ export function ManagementShell({
   // Comentario: hook de push notifications — ativa automaticamente se o usuario ainda nao assinou
   const { supported: pushSupported, subscribed: pushSubscribed, subscribe: subscribePush } = usePushNotifications(usuario?.id);
   const queryClient = useQueryClient();
+  const { isOnline } = useOfflineStatus();
 
   // Comentario: tenta ativar push automaticamente ao carregar se o navegador suporta e usuario ainda nao assinou
   useEffect(() => {
@@ -231,6 +233,12 @@ export function ManagementShell({
             </Button>
             {/* Comentario: avatar + nome do usuario no header */}
             <div className="hidden items-center gap-1.5 lg:flex">
+              <span
+                className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${isOnline ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-700"}`}
+                title={isOnline ? "Conectado" : "Sem internet"}
+              >
+                {isOnline ? "Online" : "Offline"}
+              </span>
               {usuario?.avatar_url ? (
                 <img src={usuario.avatar_url} alt="" className="h-7 w-7 rounded-full object-cover ring-1 ring-slate-200" />
               ) : (

@@ -1,10 +1,14 @@
-import { getRlsToken, getSession, getToken, getUser } from "@/lib/api";
+import { ApiError, getRlsToken, getSession, getToken, getUser } from "@/lib/api";
 import { api } from "@/lib/endpoints";
 import { supabase, supabaseAnon } from "@/lib/supabase";
 import { apiFetch } from "@/services/api";
 import type { AppSession, PendingChurch } from "@/context/UserContext";
 import { isValidCpf } from "@/lib/cpf";
-import { getChurchesCache, getMembersCache, saveChurchesCache, saveMembersCache } from "@/lib/offline/repository";
+import { enqueueOfflineOperation, getChurchesCache, getMembersCache, saveChurchesCache, saveMembersCache } from "@/lib/offline/repository";
+
+function isRetryableOfflineError(error: unknown) {
+  return error instanceof ApiError && (error.code === "network_error" || error.code === "request_timeout" || error.status === 0 || error.status === 408);
+}
 
 
 export type AppRole = "admin" | "pastor" | "obreiro" | "secretario" | "financeiro";
@@ -1746,8 +1750,26 @@ export async function markNotificationRead(id: string) {
     const currentSession = getSession();
     const churchTotvs = currentSession?.root_totvs_id || currentSession?.totvs_id;
     try {
+      if (typeof navigator !== "undefined" && !navigator.onLine) {
+        await enqueueOfflineOperation(
+          "notifications",
+          "update",
+          { mode: "mark-read", id, church_totvs_id: churchTotvs || null },
+          churchTotvs || undefined,
+        );
+        return;
+      }
       await api.markNotificationRead({ id, church_totvs_id: churchTotvs || undefined });
-    } catch {
+    } catch (error) {
+      if (isRetryableOfflineError(error)) {
+        await enqueueOfflineOperation(
+          "notifications",
+          "update",
+          { mode: "mark-read", id, church_totvs_id: churchTotvs || null },
+          churchTotvs || undefined,
+        );
+        return;
+      }
       // Silencioso: marcar como lida e opcional, nao pode quebrar a tela.
       // CORRECAO NECESSARIA: configurar verify_jwt=false na edge function mark-notification-read.
     }
@@ -1771,8 +1793,26 @@ export async function markAllNotificationsRead() {
     const currentSession = getSession();
     const churchTotvs = currentSession?.root_totvs_id || currentSession?.totvs_id;
     try {
+      if (typeof navigator !== "undefined" && !navigator.onLine) {
+        await enqueueOfflineOperation(
+          "notifications",
+          "update",
+          { mode: "mark-all-read", church_totvs_id: churchTotvs || null },
+          churchTotvs || undefined,
+        );
+        return;
+      }
       await api.markAllNotificationsRead({ church_totvs_id: churchTotvs || undefined });
-    } catch {
+    } catch (error) {
+      if (isRetryableOfflineError(error)) {
+        await enqueueOfflineOperation(
+          "notifications",
+          "update",
+          { mode: "mark-all-read", church_totvs_id: churchTotvs || null },
+          churchTotvs || undefined,
+        );
+        return;
+      }
       // Silencioso: marcar como lida e opcional, nao pode quebrar a tela.
       // CORRECAO NECESSARIA: configurar verify_jwt=false na edge function mark-all-notifications-read.
     }
