@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { AnnouncementCarousel } from "@/components/shared/AnnouncementCarousel";
 import { useUser } from "@/context/UserContext";
 import { clearRlsToken, setRlsToken, setToken as setStoredToken } from "@/lib/api";
 import {
@@ -17,11 +18,11 @@ import {
   listAnnouncementsPublicByScope,
   listAnnouncementsPublicByTotvs,
   listBirthdaysToday,
+  listBirthdaysTodayPublicByCpf,
   listBirthdaysTodayPublicByScope,
   listBirthdaysTodayPublicByTotvs,
   loginWithCpfPassword,
 } from "@/services/saasService";
-import { AnnouncementCarousel } from "@/components/shared/AnnouncementCarousel";
 import { getFriendlyError } from "@/lib/error-map";
 
 function isBlockedPaymentError(err: unknown) {
@@ -106,6 +107,9 @@ export default function PhoneIdentify() {
   const announcementScope = isCachedAdmin ? cachedScope : [];
   // Para pastor/obreiro usa o totvs da mae; se nao tiver, usa o proprio totvs
   const announcementTotvs = cachedRootTotvs || cachedTotvs;
+  const birthdayTotvsScope = Array.from(
+    new Set([cachedTotvs, announcementTotvs].map((v) => String(v || "").trim()).filter(Boolean)),
+  );
 
   const { data: announcements = [] } = useQuery({
     queryKey: ["announcements-login", cachedCpf, announcementTotvs, announcementScope.join(",")],
@@ -122,10 +126,16 @@ export default function PhoneIdentify() {
   });
 
   const { data: birthdays = [] } = useQuery({
-    queryKey: ["birthdays-today-login", cachedTotvs, announcementScope.join(",")],
+    queryKey: ["birthdays-today-login", announcementTotvs, announcementScope.join(","), birthdayTotvsScope.join(",")],
     queryFn: () =>
-      announcementScope.length ? listBirthdaysTodayPublicByScope(announcementScope, 20) : listBirthdaysTodayPublicByTotvs(cachedTotvs, 10),
-    enabled: Boolean(cachedTotvs) || announcementScope.length > 0,
+      cachedCpf.length === 11
+        ? listBirthdaysTodayPublicByCpf(cachedCpf, 20)
+        : announcementScope.length
+        ? listBirthdaysTodayPublicByScope(announcementScope, 20)
+        : birthdayTotvsScope.length > 1
+          ? listBirthdaysTodayPublicByScope(birthdayTotvsScope, 20)
+          : listBirthdaysTodayPublicByTotvs(birthdayTotvsScope[0] || announcementTotvs, 10),
+    enabled: cachedCpf.length === 11 || birthdayTotvsScope.length > 0 || announcementScope.length > 0,
     refetchInterval: 10000,
   });
 

@@ -55,6 +55,12 @@ export function getFriendlyErrorMessage(err: unknown): string {
   }
 
   if (status === 409) {
+    if (code === "profile_incomplete_for_letter") {
+      return detail || "Complete os seus dados (data de batismo, endereco e foto) para continuar emitindo cartas.";
+    }
+    if (code === "member_profile_incomplete_for_ficha") {
+      return detail || "Complete os dados do membro (data de batismo, endereco e foto) para emitir a ficha.";
+    }
     if (code.includes("duplicate_letter")) {
       const p = period ? ` (${period})` : "";
       return `Ja existe uma carta para este pregador nesta data e horario${p}. Altere o horario ou a data.`;

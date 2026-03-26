@@ -33,6 +33,7 @@ type LegacyUsuarioExtra = {
 type CreateLetterResult = {
   letter?: { id?: string };
   n8n?: { ok?: boolean };
+  warning?: { code?: string; detail?: string } | null;
 };
 
 type PreachPeriod = "MANHA" | "TARDE" | "NOITE" | "";
@@ -507,6 +508,10 @@ const Index = () => {
         pastor_name: pastorResponsavel || undefined,
         pastor_phone: telefonePastorResponsavel || undefined,
       })) as CreateLetterResult;
+
+      if (result?.warning?.detail) {
+        toast.warning(result.warning.detail, { duration: 9000 });
+      }
 
       if (result?.n8n?.ok === false) {
         toast.warning("Carta criada, mas houve falha ao enviar para geração do PDF.");

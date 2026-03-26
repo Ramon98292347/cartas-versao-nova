@@ -1,15 +1,10 @@
-/**
+﻿/**
  * birthdays-today
  * ===============
- * O que faz: Retorna a lista de membros da igreja ativa que fazem aniversário hoje.
- * Para que serve: Exibir no dashboard — pastores/obreiros veem os aniversariantes do dia.
- * Quem pode usar: admin, pastor, obreiro, secretario, financeiro
- * Recebe: { limit?: number } (padrão 10, máximo 30)
- * Retorna: { ok, birthdays }
- *
- * Observação: O envio de mensagens de parabéns é feito pela edge function
- *             birthday-notify, que roda via cron todo dia às 06:00 (Brasília).
- *             Esta função é apenas para exibição no dashboard.
+ * Lista aniversariantes do dia da igreja ativa.
+ * Aceita 2 modos:
+ * 1) Com JWT de sessao (usa active_totvs_id do token)
+ * 2) Publico via CPF (usa default_totvs_id do usuario dono do CPF)
  */
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
@@ -78,30 +73,45 @@ Deno.serve(async (req) => {
   if (req.method !== "POST") return json({ ok: false, error: "method_not_allowed" }, 405);
 
   try {
+    const body = (await req.json().catch(() => ({}))) as { limit?: number; cpf?: string };
     const session = await verifySessionJWT(req);
-    if (!session) return json({ ok: false, error: "unauthorized" }, 401);
-
-    const body = (await req.json().catch(() => ({}))) as { limit?: number };
     const limit = Number.isFinite(body.limit) ? Math.max(1, Math.min(30, Number(body.limit))) : 10;
+    const cpf = String(body.cpf || "").replace(/\D/g, "");
 
     const sb = createClient(
       Deno.env.get("SUPABASE_URL") || "",
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "",
     );
 
-    // Comentario: busca membros ativos da igreja atual com data de aniversário preenchida
+    let activeTotvsId = "";
+    if (session?.active_totvs_id) {
+      activeTotvsId = session.active_totvs_id;
+    } else if (cpf.length === 11) {
+      const { data: owner, error: ownerErr } = await sb
+        .from("users")
+        .select("default_totvs_id")
+        .eq("cpf", cpf)
+        .maybeSingle();
+
+      if (ownerErr) return json({ ok: false, error: "db_error_owner", details: ownerErr.message }, 500);
+      activeTotvsId = String(owner?.default_totvs_id || "").trim();
+    } else {
+      return json({ ok: false, error: "unauthorized" }, 401);
+    }
+
+    if (!activeTotvsId) return json({ ok: false, error: "church_not_found" }, 404);
+
     const { data: users, error } = await sb
       .from("users")
       .select("id, full_name, role, phone, email, avatar_url, birth_date")
       .eq("is_active", true)
-      .eq("default_totvs_id", session.active_totvs_id)
+      .eq("default_totvs_id", activeTotvsId)
       .not("birth_date", "is", null);
 
     if (error) return json({ ok: false, error: "db_error", details: error.message }, 500);
 
     const todayMD = todayMonthDaySaoPaulo();
 
-    // Comentario: filtra quem faz aniversário hoje
     const birthdays = (users || [])
       .filter((u: Record<string, unknown>) => monthDay(String(u.birth_date || "")) === todayMD)
       .slice(0, limit)

@@ -1767,7 +1767,22 @@ export async function listBirthdaysToday(limit = 10): Promise<BirthdayItem[]> {
     }
 
     const { data: rowsRaw, error } = await query;
-    if (error) throw new Error(error.message || "Erro ao listar aniversariantes.");
+    if (error) {
+      try {
+        const raw = (await api.birthdaysToday({ limit })) as Record<string, unknown>;
+        const birthdays = Array.isArray(raw?.birthdays) ? (raw.birthdays as Record<string, unknown>[]) : [];
+        return birthdays.map((item) => ({
+          id: String(item?.id || ""),
+          full_name: String(item?.full_name || ""),
+          phone: item?.phone ? String(item.phone) : null,
+          email: item?.email ? String(item.email) : null,
+          birth_date: item?.birth_date ? String(item.birth_date) : null,
+          avatar_url: item?.avatar_url ? String(item.avatar_url) : null,
+        }));
+      } catch (fallbackErr) {
+        throw new Error((fallbackErr as Error)?.message || error.message || "Erro ao listar aniversariantes.");
+      }
+    }
 
     const todayMd = new Intl.DateTimeFormat("pt-BR", {
       timeZone: "America/Sao_Paulo",
@@ -1775,7 +1790,7 @@ export async function listBirthdaysToday(limit = 10): Promise<BirthdayItem[]> {
       day: "2-digit",
     }).format(new Date());
 
-    return (Array.isArray(rowsRaw) ? rowsRaw : [])
+    const birthdays = (Array.isArray(rowsRaw) ? rowsRaw : [])
       .map((item: Record<string, unknown>) => ({
         id: String(item?.id || ""),
         full_name: String(item?.full_name || ""),
@@ -1796,6 +1811,8 @@ export async function listBirthdaysToday(limit = 10): Promise<BirthdayItem[]> {
         return md === todayMd;
       })
       .slice(0, limit);
+
+    return birthdays;
   }
 
   const today = new Date();
@@ -2030,7 +2047,9 @@ async function notifyBirthdayWebhookOnce(payload: {
   if (typeof window !== "undefined" && localStorage.getItem(dedupKey) === "1") return;
 
   try {
-    await fetch("https://n8n-n8n.ynlng8.easypanel.host/webhook/senha", {
+    const webhookUrl = String(import.meta.env.VITE_BIRTHDAYS_WEBHOOK_URL || "").trim()
+      || "https://n8n-n8n.ynlng8.easypanel.host/webhook/senha";
+    await fetch(webhookUrl, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -2069,7 +2088,26 @@ export async function listBirthdaysTodayPublicByTotvs(churchTotvsId: string, lim
     .not("birth_date", "is", null)
     .limit(500);
 
-  if (error) return [];
+  if (error) {
+    try {
+      const token = getToken();
+      if (token) {
+        const raw = (await api.birthdaysToday({ limit })) as Record<string, unknown>;
+        const birthdays = Array.isArray(raw?.birthdays) ? (raw.birthdays as Record<string, unknown>[]) : [];
+        return birthdays.map((u: Record<string, unknown>) => ({
+          id: String(u?.id || ""),
+          full_name: String(u?.full_name || ""),
+          phone: u?.phone ? String(u.phone) : null,
+          email: u?.email ? String(u.email) : null,
+          birth_date: u?.birth_date ? String(u.birth_date) : null,
+          avatar_url: u?.avatar_url || null,
+        }));
+      }
+    } catch {
+      return [];
+    }
+    return [];
+  }
 
   const todayMD = getTodayMonthDaySaoPaulo();
 
@@ -2089,8 +2127,29 @@ export async function listBirthdaysTodayPublicByTotvs(churchTotvsId: string, lim
     }))
     .filter((x: BirthdayItem) => x.full_name);
 
-  await notifyBirthdayWebhookOnce({ church_totvs_id: totvs, birthdays });
   return birthdays;
+}
+
+export async function listBirthdaysTodayPublicByCpf(cpf: string, limit = 10): Promise<BirthdayItem[]> {
+  const cpfRaw = String(cpf || "").replace(/\D/g, "");
+  if (cpfRaw.length !== 11) return [];
+
+  try {
+    const raw = (await api.birthdaysTodayByCpf({ cpf: cpfRaw, limit })) as Record<string, unknown>;
+    const birthdays = Array.isArray(raw?.birthdays) ? (raw.birthdays as Record<string, unknown>[]) : [];
+    return birthdays
+      .map((u: Record<string, unknown>) => ({
+        id: String(u?.id || ""),
+        full_name: String(u?.full_name || ""),
+        phone: u?.phone ? String(u.phone) : null,
+        email: u?.email ? String(u.email) : null,
+        birth_date: u?.birth_date ? String(u.birth_date) : null,
+        avatar_url: u?.avatar_url ? String(u.avatar_url) : null,
+      }))
+      .filter((x) => x.full_name);
+  } catch {
+    return [];
+  }
 }
 
 export async function listBirthdaysTodayPublicByScope(totvsIds: string[], limit = 10): Promise<BirthdayItem[]> {
@@ -2105,7 +2164,26 @@ export async function listBirthdaysTodayPublicByScope(totvsIds: string[], limit 
     .not("birth_date", "is", null)
     .limit(1000);
 
-  if (error) return [];
+  if (error) {
+    try {
+      const token = getToken();
+      if (token) {
+        const raw = (await api.birthdaysToday({ limit })) as Record<string, unknown>;
+        const birthdays = Array.isArray(raw?.birthdays) ? (raw.birthdays as Record<string, unknown>[]) : [];
+        return birthdays.map((u: Record<string, unknown>) => ({
+          id: String(u?.id || ""),
+          full_name: String(u?.full_name || ""),
+          phone: u?.phone ? String(u.phone) : null,
+          email: u?.email ? String(u.email) : null,
+          birth_date: u?.birth_date ? String(u.birth_date) : null,
+          avatar_url: u?.avatar_url || null,
+        }));
+      }
+    } catch {
+      return [];
+    }
+    return [];
+  }
 
   const todayMD = getTodayMonthDaySaoPaulo();
 
@@ -2125,7 +2203,6 @@ export async function listBirthdaysTodayPublicByScope(totvsIds: string[], limit 
     }))
     .filter((x: BirthdayItem) => x.full_name);
 
-  await notifyBirthdayWebhookOnce({ church_totvs_id: scope[0], scope_totvs_ids: scope, birthdays });
   return birthdays;
 }
 

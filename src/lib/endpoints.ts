@@ -129,7 +129,8 @@ export const api = {
   // Atualiza avatar apos cadastro publico (usa user_id + cpf para verificacao)
   updateMemberAvatar: (body: { user_id: string; cpf: string; avatar_url: string }) =>
     post("members-api", { action: "update-avatar", ...body }, { skipAuth: true }),
-  birthdaysToday: () => post("birthdays-today", {}),
+  birthdaysToday: (body: { limit?: number; notify?: boolean } = {}) => post("birthdays-today", body),
+  birthdaysTodayByCpf: (body: { cpf: string; limit?: number }) => post("birthdays-today", body, { skipAuth: true }),
   getPublicMinisterialMeeting: (body: { token: string }) =>
     post("meetings-api", { action: "get-public", ...body }, { skipAuth: true }),
   savePublicMinisterialAttendance: (body: {

@@ -56,6 +56,8 @@ const CODE_MAP: Record<string, string> = {
   db_error_meetings: "Não foi possível listar as reuniões ministeriais.",
   missing_identifier: "Informe CPF ou e-mail para recuperar a senha.",
   church_not_found: "Sua igreja não existe no cadastro. Peça ao pastor para cadastrar primeiro.",
+  profile_incomplete_for_letter: "Complete os seus dados (data de batismo, endereco e foto) para continuar emitindo cartas.",
+  member_profile_incomplete_for_ficha: "Complete os dados do membro (data de batismo, endereco e foto) para emitir a ficha.",
   cpf_already_registered: "CPF já cadastrado no sistema.",
   password_too_short: "A senha precisa ter pelo menos 6 caracteres.",
   invalid_or_expired_token: "Link de redefinição inválido ou expirado. Solicite um novo.",

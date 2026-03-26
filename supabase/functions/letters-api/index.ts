@@ -334,6 +334,35 @@ function todayYMD() {
   return new Date().toISOString().slice(0, 10);
 }
 
+function toTrimmed(value: unknown): string {
+  return String(value || "").trim();
+}
+
+function collectIncompleteProfileFields(row: Record<string, unknown> | null): string[] {
+  if (!row) return ["cadastro do membro"];
+
+  const checks: Array<{ key: string; label: string }> = [
+    { key: "baptism_date", label: "data de batismo" },
+    { key: "avatar_url", label: "foto" },
+    { key: "address_street", label: "rua" },
+    { key: "address_number", label: "numero" },
+    { key: "address_neighborhood", label: "bairro" },
+    { key: "address_city", label: "cidade" },
+    { key: "address_state", label: "estado" },
+  ];
+
+  const missing: string[] = [];
+  for (const check of checks) {
+    if (!toTrimmed(row[check.key])) missing.push(check.label);
+  }
+  return missing;
+}
+
+function buildIncompleteProfileDetail(missingFields: string[]): string {
+  const fields = missingFields.join(", ");
+  return `Complete os seus dados para continuar emitindo cartas. Campos pendentes: ${fields}.`;
+}
+
 // ---------------------------------------------------------------------------
 // HANDLER: create  (logica original de create-letter/index.ts)
 // ---------------------------------------------------------------------------
@@ -470,6 +499,7 @@ async function handleCreate(session: SessionClaims, body: Record<string, unknown
     let preacher_email = String(body.email || "").trim() || null;
     let preacher_ministerial_date: string | null = null;
     let preacher_registration_status: string | null = null;
+    let profileWarningDetail: string | null = null;
 
     // ─── REGRA DE LIBERAÇÃO AUTOMÁTICA ───────────────────────────────────────
     // Status inicial é sempre AGUARDANDO_LIBERACAO.
@@ -490,7 +520,7 @@ async function handleCreate(session: SessionClaims, body: Record<string, unknown
       // Obreiro cria carta para si mesmo: busca seus próprios dados na tabela users
       const { data: me, error: meErr } = await sb
         .from("users")
-        .select("id, full_name, minister_role, phone, email, can_create_released_letter, ordination_date, baptism_date, totvs_access")
+        .select("id, full_name, minister_role, phone, email, can_create_released_letter, ordination_date, baptism_date, avatar_url, address_street, address_number, address_neighborhood, address_city, address_state, totvs_access")
         .eq("id", session.user_id)
         .maybeSingle();
 
@@ -514,6 +544,11 @@ async function handleCreate(session: SessionClaims, body: Record<string, unknown
       if (!preacher_name) return json({ ok: false, error: "missing_preacher_name_in_profile" }, 400);
       if (!minister_role) return json({ ok: false, error: "missing_minister_role_in_profile" }, 400);
 
+      const missingFields = collectIncompleteProfileFields((me as Record<string, unknown>) || null);
+      if (missingFields.length > 0) {
+        profileWarningDetail = buildIncompleteProfileDetail(missingFields);
+      }
+
       // ← DECISÃO DE LIBERAÇÃO: lê can_create_released_letter do próprio obreiro
       canDirectRelease = Boolean((me as Record<string, unknown>).can_create_released_letter);
 
@@ -530,7 +565,7 @@ async function handleCreate(session: SessionClaims, body: Record<string, unknown
       if (isUuid(preacher_user_id)) {
         const targetResult = await sb
           .from("users")
-          .select("id, phone, email, can_create_released_letter, ordination_date, baptism_date, totvs_access")
+          .select("id, phone, email, can_create_released_letter, ordination_date, baptism_date, avatar_url, address_street, address_number, address_neighborhood, address_city, address_state, totvs_access")
           .eq("id", preacher_user_id)
           .maybeSingle();
 
@@ -540,6 +575,11 @@ async function handleCreate(session: SessionClaims, body: Record<string, unknown
 
       // ← DECISÃO DE LIBERAÇÃO: lê can_create_released_letter do pregador informado
       canDirectRelease = Boolean(target?.can_create_released_letter);
+
+      const missingFields = collectIncompleteProfileFields(target);
+      if (missingFields.length > 0) {
+        profileWarningDetail = buildIncompleteProfileDetail(missingFields);
+      }
 
       if (!preacher_phone) preacher_phone = String(target?.phone || "").trim() || null;
       if (!preacher_email) preacher_email = String(target?.email || "").trim() || null;
@@ -718,7 +758,17 @@ async function handleCreate(session: SessionClaims, body: Record<string, unknown
       // Comentario: notificacao nao pode quebrar criacao da carta.
     }
 
-return json({ ok: true, letter: created, n8n: { ok: n8nOk, status: n8nStatus, response: n8nResponse } }, 200);
+return json(
+  {
+    ok: true,
+    letter: created,
+    n8n: { ok: n8nOk, status: n8nStatus, response: n8nResponse },
+    warning: profileWarningDetail
+      ? { code: "profile_incomplete_for_letter", detail: profileWarningDetail }
+      : null,
+  },
+  200,
+);
 }
 
 // ---------------------------------------------------------------------------

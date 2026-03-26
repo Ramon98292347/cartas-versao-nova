@@ -74,6 +74,26 @@ function toText(value: unknown) {
   return String(value || "").trim();
 }
 
+function hasValue(value: unknown) {
+  return String(value || "").trim().length > 0;
+}
+
+function collectMissingFieldsForFicha(
+  dados: Record<string, unknown>,
+  member: Record<string, unknown>,
+) {
+  const checks: Array<{ ok: boolean; label: string }> = [
+    { ok: hasValue(dados.data_batismo) || hasValue(member.baptism_date), label: "data de batismo" },
+    { ok: hasValue(dados.foto_3x4_url) || hasValue(member.avatar_url), label: "foto" },
+    { ok: hasValue(dados.endereco) || hasValue(member.address_street), label: "rua" },
+    { ok: hasValue(dados.numero) || hasValue(member.address_number), label: "numero" },
+    { ok: hasValue(dados.bairro) || hasValue(member.address_neighborhood), label: "bairro" },
+    { ok: hasValue(dados.cidade) || hasValue(member.address_city), label: "cidade" },
+    { ok: hasValue(dados.estado) || hasValue(member.address_state), label: "estado" },
+  ];
+  return checks.filter((item) => !item.ok).map((item) => item.label);
+}
+
 async function upsertDocStatus(
   sb: ReturnType<typeof createClient>,
   documentType: "ficha_membro" | "carteirinha",
@@ -155,7 +175,7 @@ Deno.serve(async (req) => {
 
     const { data: member, error: memberErr } = await sb
       .from("users")
-      .select("id, default_totvs_id, full_name, role, phone, email, cep, address_street, address_number, address_neighborhood, address_city, address_state")
+      .select("id, default_totvs_id, full_name, role, phone, email, baptism_date, avatar_url, cep, address_street, address_number, address_neighborhood, address_city, address_state")
       .eq("id", memberId)
       .maybeSingle();
 
@@ -211,6 +231,22 @@ Deno.serve(async (req) => {
         },
         409,
       );
+    }
+
+    const mustValidateFicha = documentType === "ficha_membro" || documentType === "ficha_carteirinha" || documentType === "ficha_obreiro";
+    if (mustValidateFicha) {
+      const missingFields = collectMissingFieldsForFicha(dados, (member as Record<string, unknown>) || {});
+      if (missingFields.length > 0) {
+        return json(
+          {
+            ok: false,
+            error: "member_profile_incomplete_for_ficha",
+            missing_fields: missingFields,
+            detail: `Complete os dados do membro para emitir a ficha. Campos pendentes: ${missingFields.join(", ")}.`,
+          },
+          409,
+        );
+      }
     }
 
     const churchAddressParts = [
