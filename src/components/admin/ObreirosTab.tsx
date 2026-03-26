@@ -352,6 +352,11 @@ export function ObreirosTab({
       toast.error("Cargo ministerial e obrigatorio.");
       return;
     }
+    // Comentario: foto 3x4 é obrigatória
+    if (!pendingAvatarFile && !form.avatar_url) {
+      toast.error("A foto 3x4 é obrigatória.");
+      return;
+    }
 
     setSaving(true);
     try {

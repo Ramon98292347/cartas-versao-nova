@@ -997,13 +997,17 @@ async function handleGetPdfUrl(session: SessionClaims, body: Record<string, unkn
 // ---------------------------------------------------------------------------
 async function handleSetStatus(session: SessionClaims, body: Record<string, unknown>): Promise<Response> {
 
-    if (session.role === "obreiro") return json({ ok: false, error: "forbidden" }, 403);
     const letter_id = String(body.letter_id || "").trim();
     const status = String(body.status || "").trim().toUpperCase();
 
     if (!letter_id) return json({ ok: false, error: "missing_letter_id" }, 400);
     if (!["LIBERADA", "BLOQUEADO", "EXCLUIDA", "AUTORIZADO", "AGUARDANDO_LIBERACAO", "ENVIADA"].includes(status)) {
       return json({ ok: false, error: "invalid_status" }, 400);
+    }
+
+    // Comentario: obreiro so pode excluir suas proprias cartas, nenhuma outra acao
+    if (session.role === "obreiro" && status !== "EXCLUIDA") {
+      return json({ ok: false, error: "forbidden" }, 403);
     }
 
     const sb = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
@@ -1016,6 +1020,11 @@ async function handleSetStatus(session: SessionClaims, body: Record<string, unkn
 
     if (lErr) return json({ ok: false, error: "db_error_letter", details: lErr.message }, 500);
     if (!letter) return json({ ok: false, error: "letter_not_found" }, 404);
+
+    // Comentario: obreiro so pode excluir carta que ele mesmo criou
+    if (session.role === "obreiro" && String(letter.preacher_user_id || "") !== session.user_id) {
+      return json({ ok: false, error: "forbidden" }, 403);
+    }
 
     // Admin pode tudo. Pastor só no escopo (igreja ativa + filhas).
     if (session.role === "pastor") {

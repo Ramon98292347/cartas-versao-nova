@@ -93,16 +93,16 @@ export function PastorLetterDialog({ open, onOpenChange, letterTarget, onSuccess
     return own?.parentTotvsId || "";
   }, [letterTarget, ownScopeChurches]);
 
-  const { data: parentScopeChurches = [] } = useQuery({
+  // Comentario: mantemos dados brutos (parentScopeRaw) para ordenar por church_class
+  // diretamente — mesmo formato usado no obreiro (UsuarioDashboard).
+  const { data: parentScopeRaw = [] } = useQuery<ChurchInScopeItem[]>({
     queryKey: ["churches-dialog-parent", targetParentTotvs],
-    queryFn: async () => {
-      const rows = await listChurchesInScope(1, 1000, targetParentTotvs || undefined);
-      return rows.map(apiToChurch);
-    },
+    queryFn: () => listChurchesInScope(1, 1000, targetParentTotvs || undefined),
     enabled: open && Boolean(targetParentTotvs),
     staleTime: 60_000,
     refetchInterval: 10000,
   });
+  const parentScopeChurches = useMemo(() => parentScopeRaw.map(apiToChurch), [parentScopeRaw]);
 
   // ─── Ancestrais acima da igreja do alvo (para mae mais alta no campo Outros) ─
   // ancestor_chain retorna [pai, avo, bisavo, ...] — o ULTIMO com pastor e o mais alto.
@@ -182,15 +182,19 @@ export function PastorLetterDialog({ open, onOpenChange, letterTarget, onSuccess
   const destinationSourceChurches = useMemo(() => {
     // Comentario: ordena pela hierarquia (estadual > setorial > central > regional > local)
     // e dentro de cada nível, pelo TOTVS numérico crescente.
+    // Usa dados brutos (ChurchInScopeItem com church_class) para ordenar — mesmo formato
+    // que o obreiro (UsuarioDashboard) que funciona corretamente.
     const classOrder: Record<string, number> = { estadual: 0, setorial: 1, central: 2, regional: 3, local: 4 };
-    const base = parentScopeChurches.length ? parentScopeChurches : ownScopeChurches;
-    return [...base].sort((a, b) => {
-      const oA = classOrder[String(a.classificacao || "").toLowerCase()] ?? 99;
-      const oB = classOrder[String(b.classificacao || "").toLowerCase()] ?? 99;
-      if (oA !== oB) return oA - oB;
-      return Number(a.codigoTotvs || 0) - Number(b.codigoTotvs || 0);
-    });
-  }, [parentScopeChurches, ownScopeChurches]);
+    const baseRaw = parentScopeRaw.length ? parentScopeRaw : ownScopeRaw;
+    return [...baseRaw]
+      .sort((a, b) => {
+        const oA = classOrder[String(a.church_class || "").toLowerCase().trim()] ?? 99;
+        const oB = classOrder[String(b.church_class || "").toLowerCase().trim()] ?? 99;
+        if (oA !== oB) return oA - oB;
+        return Number(a.totvs_id || 0) - Number(b.totvs_id || 0);
+      })
+      .map(apiToChurch);
+  }, [parentScopeRaw, ownScopeRaw]);
 
   // Comentario: verifica se um destino esta na sub-arvore de uma igreja raiz,
   // subindo pelos parent_totvs_id (codigoTotvs/parentTotvsId) ate encontrar a raiz.
@@ -397,7 +401,7 @@ export function PastorLetterDialog({ open, onOpenChange, letterTarget, onSuccess
               <div className="space-y-2">
                 <Label>Igreja que vai pregar (destino)</Label>
 
-                {/* Seletor rapido (todas do escopo da mae) */}
+                {/* Comentario: seletor rapido (todas do escopo da mae) — mesmo formato do obreiro */}
                 <Select
                   value=""
                   onValueChange={(value) => {

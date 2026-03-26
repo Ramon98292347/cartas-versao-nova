@@ -6,7 +6,7 @@ import { post } from "@/lib/api";
 // A chave privada correspondente deve ser configurada como variável de ambiente
 // VAPID_PRIVATE_KEY na Edge Function "send-push".
 const VAPID_PUBLIC_KEY =
-  "BCL79BMzLEMZQ27ywC1VC0Ya6I78gJAOdougXxpxUnIKbvneOnzMWu7hxjoTy1VAAkQiXCdmND8fD5xI18asdns";
+  "BGdzvSnIMmH2PJUwTuDI9msG6Gfo2pR8EwVRj_echdF3xXXqEC4DABymgV8odBskaEr6-EgylrJFWZTx2x5WWro";
 
 function urlBase64ToUint8Array(base64String: string): Uint8Array {
   const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
@@ -58,10 +58,14 @@ export function usePushNotifications(userId?: string) {
         });
       }
 
+      // Comentario: marca como inscrito localmente (browser ja tem a subscription)
+      setSubscribed(true);
+
+      // Comentario: salva no backend em background — se falhar, nao impede o botao de sumir
       if (userId) {
         const p256dh = sub.getKey("p256dh");
         const auth = sub.getKey("auth");
-        await post("notifications-api", {
+        post("notifications-api", {
           action: "subscribe-push",
           subscription: {
             endpoint: sub.endpoint,
@@ -70,10 +74,8 @@ export function usePushNotifications(userId?: string) {
               auth: auth ? btoa(String.fromCharCode(...new Uint8Array(auth))) : "",
             },
           },
-        });
+        }).catch((err) => console.warn("[push] falha ao salvar no backend:", err));
       }
-
-      setSubscribed(true);
     } finally {
       setLoading(false);
     }

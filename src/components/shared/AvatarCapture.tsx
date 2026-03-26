@@ -231,7 +231,8 @@ export function AvatarCapture({ onFileReady, disabled = false, currentUrl }: Ava
     const dentro =
       Math.pow((fx - cx) / (DISPLAY_WIDTH * 0.35), 2) +
       Math.pow((fy - cy) / (DISPLAY_HEIGHT * 0.40), 2) <= 1;
-    return dentro && box.width > DISPLAY_WIDTH * 0.18;
+    // Comentario: rosto deve ocupar pelo menos 38% da largura (cabeça+pescoço+ombros, formato 3x4)
+    return dentro && box.width > DISPLAY_WIDTH * 0.38;
   }
 
   // ── Capturar foto ───────────────────────────────────────────────────────────
@@ -278,10 +279,43 @@ export function AvatarCapture({ onFileReady, disabled = false, currentUrl }: Ava
   }
 
   // ── Galeria ─────────────────────────────────────────────────────────────────
-  function handleGaleria(e: React.ChangeEvent<HTMLInputElement>) {
+  // Comentario: valida se a foto da galeria tem um rosto visível antes de aceitar
+  async function handleGaleria(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     e.target.value = "";
-    if (file) void processarFoto(file);
+    if (!file) return;
+
+    // Comentario: se modelos carregaram, valida rosto na imagem da galeria
+    if (modelsLoaded) {
+      setProcessing(true);
+      setStatusMsg("Verificando rosto na imagem...");
+      setProgress(20);
+      try {
+        const img = await carregarImagem(file);
+        const detections = await faceapi.detectAllFaces(
+          img,
+          new faceapi.TinyFaceDetectorOptions({ inputSize: 224, scoreThreshold: 0.5 })
+        );
+        if (detections.length === 0) {
+          setProcessing(false);
+          setStatusMsg("Nenhum rosto detectado. Use uma foto 3x4 com o rosto visível.");
+          setProgress(0);
+          return;
+        }
+        // Comentario: verifica se o rosto é grande o suficiente (pelo menos 25% da largura da imagem)
+        const det = detections[0].box;
+        const rostoPercentual = det.width / img.naturalWidth;
+        if (rostoPercentual < 0.25) {
+          setProcessing(false);
+          setStatusMsg("Rosto muito pequeno. Aproxime mais ou use uma foto 3x4.");
+          setProgress(0);
+          return;
+        }
+      } catch {
+        // Comentario: se falhar a detecção, permite continuar
+      }
+    }
+    void processarFoto(file);
   }
 
   // ── Processar imagem (fundo branco + proporção 3x4) ──────────────────────

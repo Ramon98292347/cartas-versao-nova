@@ -441,6 +441,7 @@ export type LetterCreatePayload = {
   preach_period?: "MANHA" | "TARDE" | "NOITE";
   church_origin: string;
   church_destination: string;
+  destination_totvs_id?: string;
   manual_destination?: boolean;
   preacher_user_id?: string;
   phone?: string;
@@ -3100,6 +3101,40 @@ export async function getMemberDocsStatus(payload: { member_id?: string; church_
     carteirinha: null,
     rules: { ficha_pronta: false, carteirinha_pronta: false, can_generate_carteirinha: false },
   } as MemberDocsStatusResponse;
+}
+
+// Comentario: tipo de item da listagem de carteirinhas prontas para impressao em lote
+export type ReadyCarteirinhaItem = {
+  id: string;
+  member_id: string;
+  final_url: string | null;
+  ficha_url_qr: string | null;
+  printed_at: string | null;
+  finished_at: string | null;
+  request_payload: Record<string, unknown>;
+  member_name: string;
+  member_cpf: string;
+  member_minister_role: string;
+  member_avatar_url: string;
+};
+
+// Comentario: busca carteirinhas com status PRONTO prontas para impressao em lote
+export async function listReadyCarteirinhas(churchTotvsId: string): Promise<ReadyCarteirinhaItem[]> {
+  if (!isMockMode()) {
+    const res = (await api.listReadyCarteirinhas({ church_totvs_id: churchTotvsId })) as {
+      ok: boolean;
+      items: ReadyCarteirinhaItem[];
+    };
+    return res.items || [];
+  }
+  return [];
+}
+
+// Comentario: marca carteirinhas como impressas (atualiza printed_at no banco)
+export async function markCarteirinhasPrinted(ids: string[]): Promise<void> {
+  if (!isMockMode()) {
+    await api.markCarteirinhasPrinted({ ids });
+  }
 }
 
 export async function createLetterByPastor(payload: LetterCreatePayload) {

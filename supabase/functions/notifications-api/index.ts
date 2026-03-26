@@ -381,6 +381,127 @@ async function actionNotify(sb: ReturnType<typeof createClient>, req: Request, b
   return json({ ok: true, sent, failed });
 }
 
+// ─── action birthday — cron diário de aniversariantes ────────────────────────
+// Comentario: busca membros que fazem aniversario hoje e envia push para
+// os pastores/secretarios da igreja de cada aniversariante.
+
+function todayMonthDaySaoPaulo(): string {
+  const parts = new Intl.DateTimeFormat("pt-BR", {
+    timeZone: "America/Sao_Paulo",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(new Date());
+  const mm = parts.find((p) => p.type === "month")?.value || "01";
+  const dd = parts.find((p) => p.type === "day")?.value || "01";
+  return `${mm}-${dd}`;
+}
+
+function monthDay(dateStr: string): string | null {
+  const m = String(dateStr || "").match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!m) return null;
+  return `${m[2]}-${m[3]}`;
+}
+
+async function actionBirthday(sb: ReturnType<typeof createClient>, req: Request) {
+  // Comentario: valida segredo do cron ou chave interna
+  const cronSecret = String(Deno.env.get("CRON_SECRET") || "").trim();
+  const internalKey = String(Deno.env.get("INTERNAL_KEY") || "").trim();
+  const providedCron = String(req.headers.get("x-cron-secret") || "").trim();
+  const providedInternal = String(req.headers.get("x-internal-key") || "").trim();
+
+  const authorized =
+    (cronSecret && providedCron === cronSecret) ||
+    (internalKey && providedInternal === internalKey);
+  if (!authorized) return json({ ok: false, error: "unauthorized" }, 401);
+
+  // Comentario: busca todos os membros ativos com data de nascimento
+  const { data: users, error } = await sb
+    .from("users")
+    .select("id, full_name, phone, email, birth_date, default_totvs_id")
+    .eq("is_active", true)
+    .not("birth_date", "is", null);
+
+  if (error) return json({ ok: false, error: "db_error", details: error.message }, 500);
+
+  const todayMD = todayMonthDaySaoPaulo();
+  const today = new Date().toISOString().slice(0, 10);
+
+  // Comentario: filtra aniversariantes de hoje e agrupa por igreja
+  const byChurch = new Map<string, Array<{ id: string; full_name: string; phone: string | null; email: string | null; birth_date: string | null }>>();
+
+  for (const user of (users || [])) {
+    if (monthDay(String(user.birth_date || "")) !== todayMD) continue;
+    const church = String(user.default_totvs_id || "");
+    if (!church) continue;
+    if (!byChurch.has(church)) byChurch.set(church, []);
+    byChurch.get(church)!.push(user as { id: string; full_name: string; phone: string | null; email: string | null; birth_date: string | null });
+  }
+
+  if (byChurch.size === 0) {
+    return json({ ok: true, message: "Nenhum aniversariante hoje.", churches: 0, notifications: 0 });
+  }
+
+  let notifications = 0;
+
+  // Comentario: para cada igreja com aniversariante, cria notificação no banco
+  // e envia push para os pastores/secretarios dessa igreja
+  for (const [churchTotvsId, birthdays] of byChurch) {
+    const nomes = birthdays.map((b) => b.full_name).join(", ");
+    const title = birthdays.length === 1
+      ? `Aniversário: ${birthdays[0].full_name}`
+      : `${birthdays.length} aniversariantes hoje`;
+    const message = birthdays.length === 1
+      ? `${birthdays[0].full_name} faz aniversário hoje! Envie parabéns.`
+      : `Aniversariantes: ${nomes}`;
+
+    // Comentario: busca pastores e secretarios da igreja para notificar
+    const { data: leaders } = await sb
+      .from("users")
+      .select("id")
+      .eq("default_totvs_id", churchTotvsId)
+      .in("role", ["pastor", "secretario"])
+      .eq("is_active", true);
+
+    const leaderIds = (leaders || []).map((l) => String((l as Record<string, unknown>).id || "")).filter(Boolean);
+
+    // Comentario: insere notificação na tabela para cada pastor/secretario
+    for (const leaderId of leaderIds) {
+      await sb.from("notifications").insert({
+        church_totvs_id: churchTotvsId,
+        user_id: leaderId,
+        type: "birthday",
+        title,
+        message,
+        read_at: null,
+      });
+      notifications++;
+    }
+
+    // Comentario: envia push notification para os pastores/secretarios
+    if (leaderIds.length > 0) {
+      const vapidPublic = String(Deno.env.get("VAPID_PUBLIC_KEY") || "").trim();
+      const vapidPrivate = String(Deno.env.get("VAPID_PRIVATE_KEY") || "").trim();
+      const vapidSubject = String(Deno.env.get("VAPID_SUBJECT") || "mailto:admin@ipda.org.br").trim();
+      if (vapidPublic && vapidPrivate) {
+        const { data: subs } = await sb
+          .from("push_subscriptions")
+          .select("endpoint,p256dh,auth")
+          .in("user_id", leaderIds);
+
+        const payload = JSON.stringify({ title, body: message, url: "/pastor/membros" });
+        for (const raw of (subs || [])) {
+          const sub = raw as { endpoint: string; p256dh: string; auth: string };
+          if (sub.endpoint && sub.p256dh && sub.auth) {
+            await sendPush(sub, payload, vapidPublic, vapidPrivate, vapidSubject);
+          }
+        }
+      }
+    }
+  }
+
+  return json({ ok: true, churches: byChurch.size, notifications, date: today });
+}
+
 // ─── handler principal ────────────────────────────────────────────────────────
 
 Deno.serve(async (req) => {
@@ -396,7 +517,9 @@ Deno.serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "",
     );
 
+    // Comentario: actions que nao precisam de JWT do usuario
     if (action === "notify") return await actionNotify(sb, req, body);
+    if (action === "birthday") return await actionBirthday(sb, req);
 
     const session = await verifySessionJWT(req);
     if (!session) return json({ ok: false, error: "unauthorized" }, 401);
@@ -407,7 +530,7 @@ Deno.serve(async (req) => {
     if (action === "mark-all-read") return await actionMarkAllRead(sb, session);
     if (action === "subscribe-push") return await actionSubscribePush(sb, session, body);
 
-    return json({ ok: false, error: "invalid_action", message: `Ação desconhecida: "${action}". Use: list, mark-read, mark-all-read, subscribe-push, notify` }, 400);
+    return json({ ok: false, error: "invalid_action", message: `Ação desconhecida: "${action}". Use: list, mark-read, mark-all-read, subscribe-push, notify, birthday` }, 400);
   } catch (err) {
     return json({ ok: false, error: "exception" }, 500);
   }

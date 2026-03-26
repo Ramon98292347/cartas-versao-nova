@@ -174,11 +174,15 @@ export function AdminChurchesTab({
   }, [roleLower, isAdmin, userChurchClass]);
   const canCreateChurch = allowedCreateClasses.length > 0;
 
+  // Comentario: ordena pela hierarquia (estadual > setorial > central > regional > local)
+  // e dentro de cada nível, pelo TOTVS numérico crescente — mesmo formato do obreiro.
   const sortedRows = useMemo(() => {
+    const classOrder: Record<string, number> = { estadual: 0, setorial: 1, central: 2, regional: 3, local: 4 };
     return [...rows].sort((a, b) => {
-      const aName = String(a.church_name || "").toLowerCase();
-      const bName = String(b.church_name || "").toLowerCase();
-      return aName.localeCompare(bName);
+      const oA = classOrder[String(a.church_class || "").toLowerCase().trim()] ?? 99;
+      const oB = classOrder[String(b.church_class || "").toLowerCase().trim()] ?? 99;
+      if (oA !== oB) return oA - oB;
+      return Number(a.totvs_id || 0) - Number(b.totvs_id || 0);
     });
   }, [rows]);
 

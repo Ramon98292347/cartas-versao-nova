@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { FileText, Grid2X2, IdCard, List, Loader2, MoreVertical, Save, Send, Users } from "lucide-react";
+import { CheckSquare, FileText, Grid2X2, IdCard, List, Loader2, MoreVertical, Printer, Save, Send, Square, Users } from "lucide-react";
+import { supabaseRealtime } from "@/lib/supabaseRealtime";
 import { AvatarCapture } from "@/components/shared/AvatarCapture";
 import { supabase } from "@/lib/supabase";
 import { toast } from "sonner";
@@ -15,7 +16,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { listChurchesInScope, listMembers, type UserListItem, generateMemberDocs, getMemberDocsStatus, deleteUserPermanently } from "@/services/saasService";
+import { listChurchesInScope, listMembers, type UserListItem, generateMemberDocs, getMemberDocsStatus, deleteUserPermanently, listReadyCarteirinhas, markCarteirinhasPrinted, type ReadyCarteirinhaItem } from "@/services/saasService";
 import { useUser } from "@/context/UserContext";
 import { useDebounce } from "@/hooks/useDebounce";
 import { fetchAddressByCep, maskCep, onlyDigits } from "@/lib/cep";
@@ -23,7 +24,7 @@ import { PageLoading } from "@/components/shared/PageLoading";
 import { MobileFiltersCard } from "@/components/shared/MobileFiltersCard";
 import { formatCepBr, formatCpfBr, formatDateBr as formatDateBrValue, formatPhoneBr as formatPhoneBrValue } from "@/lib/br-format";
 
-type MemberTab = "lista" | "ficha_membro" | "carteirinha" | "ficha_obreiro" | "presenca";
+type MemberTab = "lista" | "ficha_membro" | "carteirinha" | "ficha_obreiro" | "presenca" | "impressao";
 type MemberView = "lista" | "grid";
 type CarteirinhaTemplate = "padrao";
 type FichaTemplate = "padrao";
@@ -519,6 +520,7 @@ function memberToForm(member: UserListItem, churchName: string, pastorSignature:
 function tabLabel(tab: MemberTab) {
   if (tab === "ficha_membro") return "Ficha do membro";
   if (tab === "carteirinha") return "Carteirinha";
+  if (tab === "impressao") return "Impressão";
   if (tab === "presenca") return "Presença";
   return "Ficha de obreiro";
 }
@@ -680,6 +682,38 @@ export default function PastorMembrosPage() {
   const carteirinhaHtml = useMemo(() => buildCarteirinhaHtml(form), [form]);
   const fichaMembroHtml = useMemo(() => buildFichaMembroHtml(form), [form]);
 
+  // ── Aba Impressão em lote ──────────────────────────────────────────────────
+  // Comentario: selectedPrintIds guarda os IDs das carteirinhas selecionadas para imprimir
+  const [selectedPrintIds, setSelectedPrintIds] = useState<Set<string>>(new Set());
+  // Comentario: filterPrint controla se mostra todas ou só as não impressas
+  const [filterPrint, setFilterPrint] = useState<"all" | "pending">("pending");
+  const [sendingBatch, setSendingBatch] = useState(false);
+
+  // Comentario: busca carteirinhas prontas para impressao da igreja ativa
+  const { data: readyCarteirinhas = [], isLoading: loadingReady, refetch: refetchReady } = useQuery({
+    queryKey: ["ready-carteirinhas", activeTotvsId],
+    queryFn: () => listReadyCarteirinhas(activeTotvsId),
+    enabled: tab === "impressao" && !!activeTotvsId,
+  });
+
+  // Comentario: filtra carteirinhas baseado no filtro selecionado
+  const filteredCarteirinhas = useMemo(() => {
+    if (filterPrint === "pending") return readyCarteirinhas.filter((c) => !c.printed_at);
+    return readyCarteirinhas;
+  }, [readyCarteirinhas, filterPrint]);
+
+  // Comentario: realtime para atualizar lista de carteirinhas prontas na aba de impressao
+  useEffect(() => {
+    if (tab !== "impressao") return;
+    const channel = supabaseRealtime
+      .channel("print-carteirinhas-realtime")
+      .on("postgres_changes", { event: "*", schema: "public", table: "member_carteirinha_documents" }, () => {
+        void refetchReady();
+      })
+      .subscribe();
+    return () => { void supabaseRealtime.removeChannel(channel); };
+  }, [tab, refetchReady]);
+
   const { data, isLoading: loadingMembers, isFetching: fetchingMembers, refetch: refetchMembers } = useQuery({
     queryKey: ["pastor-members-page", membersPage, membersPageSize, filterTotvs, filterActive],
     queryFn: () =>
@@ -807,17 +841,20 @@ export default function PastorMembrosPage() {
     queryKey: ["pastor-member-docs-status", selectedMemberId, memberChurchTotvsId],
     queryFn: () => getMemberDocsStatus({ member_id: selectedMemberId, church_totvs_id: memberChurchTotvsId }),
     enabled: Boolean(docsTabOpen && selectedMemberId && memberChurchTotvsId),
-    // Comentario: polling a cada 10 segundos enquanto ficha ou carteirinha ainda nao estiver pronta.
-    // Quando ambas estiverem prontas, refetchInterval retorna false e o polling para automaticamente.
-    refetchInterval: (query) => {
-      const d = query.state.data as typeof docsStatus;
-      const fichaOk = Boolean(d?.ficha && String(d?.ficha?.final_url || "").trim().length > 0);
-      const cartOk =
-        String(d?.carteirinha?.status || "").toUpperCase() === "PRONTO" ||
-        Boolean(d?.carteirinha && String(d?.carteirinha?.final_url || "").trim().length > 0);
-      return fichaOk && cartOk ? false : 10000;
-    },
   });
+
+  // Comentario: Realtime — escuta mudancas nas tabelas de ficha e carteirinha
+  // Substitui o polling de 10s. Quando o webhook atualiza o status, o frontend reage instantaneamente.
+  const refetchDocsStatusCb = useCallback(() => { void refetchDocsStatus(); }, [refetchDocsStatus]);
+  useEffect(() => {
+    if (!selectedMemberId || !docsTabOpen) return;
+    const channel = supabaseRealtime
+      .channel(`member-docs-${selectedMemberId}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "member_ficha_documents" }, refetchDocsStatusCb)
+      .on("postgres_changes", { event: "*", schema: "public", table: "member_carteirinha_documents" }, refetchDocsStatusCb)
+      .subscribe();
+    return () => { void supabaseRealtime.removeChannel(channel); };
+  }, [selectedMemberId, docsTabOpen, refetchDocsStatusCb]);
   const fichaPronta = Boolean(
     docsStatus?.ficha &&
       String(docsStatus?.ficha?.final_url || "").trim().length > 0,
@@ -954,6 +991,82 @@ export default function PastorMembrosPage() {
       toast.error("Não foi possível salvar o rascunho.");
     } finally {
       setSavingDraft(false);
+    }
+  }
+
+  // ── Impressão em lote: envia carteirinhas selecionadas ao webhook n8n ──────
+  const WEBHOOK_URL = String(import.meta.env.VITE_WEBHOOK_CARTA_PREGACAO || "").trim();
+
+  async function enviarLoteImpressao() {
+    if (selectedPrintIds.size === 0) {
+      toast.error("Selecione pelo menos uma carteirinha para imprimir.");
+      return;
+    }
+    // Comentario: monta payload com dados de cada carteirinha selecionada
+    const selecionadas = filteredCarteirinhas.filter((c) => selectedPrintIds.has(c.id));
+    if (selecionadas.length === 0) return;
+
+    setSendingBatch(true);
+    try {
+      // Comentario: monta array de carteirinhas com os dados do membro
+      const carteirinhas = selecionadas.map((c) => ({
+        carteirinha_id: c.id,
+        member_id: c.member_id,
+        nome: c.member_name,
+        cpf: c.member_cpf,
+        funcao_ministerial: c.member_minister_role,
+        foto_url: c.member_avatar_url,
+        carteirinha_url: c.final_url,
+        qr_code_url: c.ficha_url_qr,
+        // Comentario: inclui o payload original que foi usado para gerar a carteirinha
+        ...(c.request_payload || {}),
+      }));
+
+      // Comentario: envia ao mesmo webhook n8n com action especifica de impressao em lote
+      if (WEBHOOK_URL) {
+        await fetch(WEBHOOK_URL, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "print_batch_carteirinhas",
+            layout: "4_per_a4",
+            total: carteirinhas.length,
+            igreja_totvs_id: activeTotvsId,
+            igreja_nome: String(session?.church_name || ""),
+            carteirinhas,
+            source: "ipda-letter-creator",
+          }),
+        });
+      }
+
+      // Comentario: marca como impressas no banco
+      await markCarteirinhasPrinted(Array.from(selectedPrintIds));
+      setSelectedPrintIds(new Set());
+      await refetchReady();
+      toast.success(`${selecionadas.length} carteirinha(s) enviada(s) para impressão.`);
+    } catch {
+      toast.error("Falha ao enviar para impressão.");
+    } finally {
+      setSendingBatch(false);
+    }
+  }
+
+  // Comentario: seleciona/desmarca uma carteirinha individualmente
+  function togglePrintSelection(id: string) {
+    setSelectedPrintIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  // Comentario: seleciona/desmarca todas as carteirinhas filtradas
+  function toggleSelectAll() {
+    if (selectedPrintIds.size === filteredCarteirinhas.length) {
+      setSelectedPrintIds(new Set());
+    } else {
+      setSelectedPrintIds(new Set(filteredCarteirinhas.map((c) => c.id)));
     }
   }
 
@@ -1192,6 +1305,7 @@ export default function PastorMembrosPage() {
             <Button className="rounded-none border-b-2 border-transparent px-2" variant="ghost" style={{ borderBottomColor: tab === "lista" ? "#2563EB" : "transparent", color: tab === "lista" ? "#2563EB" : "#6B7280" }} onClick={() => setTab("lista")}>Lista de membros</Button>
             <Button className="rounded-none border-b-2 border-transparent px-2" variant="ghost" style={{ borderBottomColor: tab === "ficha_membro" ? "#2563EB" : "transparent", color: tab === "ficha_membro" ? "#2563EB" : "#6B7280" }} onClick={() => setTab("ficha_membro")}>Ficha do membro</Button>
             <Button className="rounded-none border-b-2 border-transparent px-2" variant="ghost" style={{ borderBottomColor: tab === "carteirinha" ? "#2563EB" : "transparent", color: tab === "carteirinha" ? "#2563EB" : "#6B7280" }} onClick={() => setTab("carteirinha")}>Carteirinha</Button>
+            <Button className="rounded-none border-b-2 border-transparent px-2" variant="ghost" style={{ borderBottomColor: tab === "impressao" ? "#2563EB" : "transparent", color: tab === "impressao" ? "#2563EB" : "#6B7280" }} onClick={() => setTab("impressao")}>Impressão</Button>
             <Button variant="ghost" disabled className="text-slate-400">Ficha de obreiro (bloqueada)</Button>
             <Button className="rounded-none border-b-2 border-transparent px-2" variant="ghost" style={{ borderBottomColor: tab === "presenca" ? "#2563EB" : "transparent", color: tab === "presenca" ? "#2563EB" : "#6B7280" }} onClick={() => setTab("presenca")}>Presença</Button>
           </div>
@@ -1226,6 +1340,141 @@ export default function PastorMembrosPage() {
           activeTotvsId={activeTotvsId}
           initialChurchTotvsId={filterTotvs === "all" ? activeTotvsId : filterTotvs}
         />
+      ) : null}
+
+      {/* ── Aba Impressão em lote ───────────────────────────────────────── */}
+      {tab === "impressao" ? (
+        <Card className="rounded-2xl border border-slate-200 bg-white shadow-sm">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Printer className="h-5 w-5 text-slate-500" />
+              Impressão de carteirinhas em lote
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {/* Comentario: filtro e acoes */}
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <Select value={filterPrint} onValueChange={(v) => { setFilterPrint(v as "all" | "pending"); setSelectedPrintIds(new Set()); }}>
+                  <SelectTrigger className="w-48">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="pending">Não impressas</SelectItem>
+                    <SelectItem value="all">Todas (prontas)</SelectItem>
+                  </SelectContent>
+                </Select>
+                <span className="text-sm text-slate-500">
+                  {filteredCarteirinhas.length} carteirinha(s)
+                </span>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <Button variant="outline" size="sm" onClick={toggleSelectAll}>
+                  {selectedPrintIds.size === filteredCarteirinhas.length && filteredCarteirinhas.length > 0
+                    ? <><CheckSquare className="mr-1 h-4 w-4" /> Desmarcar todas</>
+                    : <><Square className="mr-1 h-4 w-4" /> Selecionar todas</>}
+                </Button>
+                <Button
+                  onClick={() => void enviarLoteImpressao()}
+                  disabled={sendingBatch || selectedPrintIds.size === 0}
+                  className="bg-blue-600 hover:bg-blue-700"
+                >
+                  {sendingBatch
+                    ? <><Loader2 className="mr-1 h-4 w-4 animate-spin" /> Enviando...</>
+                    : <><Printer className="mr-1 h-4 w-4" /> Imprimir {selectedPrintIds.size > 0 ? `(${selectedPrintIds.size})` : ""}</>}
+                </Button>
+              </div>
+            </div>
+
+            {/* Comentario: loading */}
+            {loadingReady ? (
+              <div className="flex justify-center py-8">
+                <Loader2 className="h-6 w-6 animate-spin text-slate-400" />
+              </div>
+            ) : filteredCarteirinhas.length === 0 ? (
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-6 text-center text-sm text-slate-500">
+                {filterPrint === "pending"
+                  ? "Todas as carteirinhas prontas já foram impressas."
+                  : "Nenhuma carteirinha pronta encontrada para esta igreja."}
+              </div>
+            ) : (
+              /* Comentario: tabela de carteirinhas prontas */
+              <div className="overflow-x-auto rounded-xl border border-slate-200">
+                <table className="w-full text-sm">
+                  <thead className="bg-slate-50 text-left text-xs font-semibold text-slate-600">
+                    <tr>
+                      <th className="px-3 py-2 w-10"></th>
+                      <th className="px-3 py-2">Foto</th>
+                      <th className="px-3 py-2">Nome</th>
+                      <th className="px-3 py-2">CPF</th>
+                      <th className="px-3 py-2">Cargo</th>
+                      <th className="px-3 py-2">Status</th>
+                      <th className="px-3 py-2">Ações</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {filteredCarteirinhas.map((c) => (
+                      <tr
+                        key={c.id}
+                        className={`cursor-pointer hover:bg-slate-50 ${selectedPrintIds.has(c.id) ? "bg-blue-50" : ""}`}
+                        onClick={() => togglePrintSelection(c.id)}
+                      >
+                        <td className="px-3 py-2 text-center">
+                          {selectedPrintIds.has(c.id)
+                            ? <CheckSquare className="h-4 w-4 text-blue-600" />
+                            : <Square className="h-4 w-4 text-slate-300" />}
+                        </td>
+                        <td className="px-3 py-2">
+                          {c.member_avatar_url ? (
+                            <img src={c.member_avatar_url} alt="" className="h-10 w-8 rounded border border-slate-200 object-cover" />
+                          ) : (
+                            <div className="flex h-10 w-8 items-center justify-center rounded bg-slate-100 text-xs text-slate-400">—</div>
+                          )}
+                        </td>
+                        <td className="px-3 py-2 font-medium text-slate-900">{c.member_name || "—"}</td>
+                        <td className="px-3 py-2 text-slate-600">{c.member_cpf || "—"}</td>
+                        <td className="px-3 py-2 text-slate-600">{c.member_minister_role || "—"}</td>
+                        <td className="px-3 py-2">
+                          {c.printed_at ? (
+                            <Badge variant="outline" className="border-emerald-200 bg-emerald-50 text-emerald-700">
+                              Impressa
+                            </Badge>
+                          ) : (
+                            <Badge variant="outline" className="border-amber-200 bg-amber-50 text-amber-700">
+                              Pendente
+                            </Badge>
+                          )}
+                        </td>
+                        <td className="px-3 py-2">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-7 text-xs"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (c.final_url) window.open(c.final_url, "_blank", "noopener,noreferrer");
+                            }}
+                            disabled={!c.final_url}
+                          >
+                            Ver
+                          </Button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            {/* Comentario: info sobre o layout */}
+            <div className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800">
+              <b>Como funciona:</b> Selecione as carteirinhas e clique em "Imprimir".
+              O sistema envia os dados ao n8n que gera um PDF com <b>4 carteirinhas por A4</b>.
+              Após o envio, as carteirinhas são marcadas como "Impressa".
+            </div>
+          </CardContent>
+        </Card>
       ) : null}
 
       {tab === "lista" && view === "grid" ? (

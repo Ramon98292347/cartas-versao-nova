@@ -704,6 +704,11 @@ async function openPdf(letter: PastorLetter) {
   }
 
   async function salvarPerfil() {
+    // Comentario: foto é obrigatória — verifica se já tem foto ou está enviando nova
+    if (!avatarFile && !profileForm.avatar_url) {
+      toast.error("A foto 3x4 é obrigatória. Tire uma foto ou envie da galeria.");
+      return;
+    }
     setSavingProfile(true);
     try {
       let avatarUrl = profileForm.avatar_url || undefined;
@@ -753,7 +758,7 @@ async function openPdf(letter: PastorLetter) {
   }
 
   return (
-    <ManagementShell roleMode="obreiro">
+    <ManagementShell roleMode={usuario?.role === "pastor" ? "pastor" : usuario?.role === "secretario" ? "secretario" : "obreiro"}>
       <div className="space-y-5">
         <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
           <h2 className="text-4xl font-extrabold tracking-tight text-slate-900">Dashboard</h2>
@@ -1269,7 +1274,11 @@ async function openPdf(letter: PastorLetter) {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={openUpdateModal} onOpenChange={setOpenUpdateModal}>
+      <Dialog open={openUpdateModal} onOpenChange={(open) => {
+        setOpenUpdateModal(open);
+        // Comentario: se o usuario não é obreiro e fechou o modal, volta para a pagina anterior (ex: Configurações)
+        if (!open && usuario?.role !== "obreiro") nav(-1);
+      }}>
         <DialogContent className="max-h-[90vh] max-w-4xl overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Atualizar cadastro</DialogTitle>

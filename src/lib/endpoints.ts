@@ -166,4 +166,10 @@ export const api = {
   generateMemberDocs: (body: JsonBody) => post("member-docs-api", { action: "generate", ...body }),
   getMemberDocsStatus: (body: { member_id?: string; church_totvs_id?: string } = {}) =>
     post("member-docs-api", { action: "status", ...body }),
+  // Comentario: lista carteirinhas prontas para impressao em lote
+  listReadyCarteirinhas: (body: { church_totvs_id: string }) =>
+    post("member-docs-api", { action: "list-ready", ...body }),
+  // Comentario: marca carteirinhas como impressas (atualiza printed_at)
+  markCarteirinhasPrinted: (body: { ids: string[] }) =>
+    post("member-docs-api", { action: "mark-printed", ...body }),
 };

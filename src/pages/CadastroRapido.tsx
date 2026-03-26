@@ -207,6 +207,11 @@ export default function CadastroRapido() {
       toast.error("As senhas não conferem.");
       return;
     }
+    // Comentario: foto 3x4 é obrigatória no cadastro
+    if (!avatarFile) {
+      toast.error("A foto 3x4 é obrigatória. Tire uma foto ou envie da galeria.");
+      return;
+    }
 
     setLoading(true);
     try {

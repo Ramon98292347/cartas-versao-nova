@@ -5,6 +5,7 @@ import { useUser } from "@/context/UserContext";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { usePwaInstall } from "@/hooks/usePwaInstall";
+import { usePushNotifications } from "@/hooks/usePushNotifications";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { listNotifications, markAllNotificationsRead, markNotificationRead } from "@/services/saasService";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
@@ -114,7 +115,16 @@ export function ManagementShell({
   const [openInstallPrompt, setOpenInstallPrompt] = useState(false);
   const [pendingRoute, setPendingRoute] = useState<string | null>(null);
   const { canInstall, install, isInstalled } = usePwaInstall();
+  // Comentario: hook de push notifications — ativa automaticamente se o usuario ainda nao assinou
+  const { supported: pushSupported, subscribed: pushSubscribed, subscribe: subscribePush } = usePushNotifications(usuario?.id);
   const queryClient = useQueryClient();
+
+  // Comentario: tenta ativar push automaticamente ao carregar se o navegador suporta e usuario ainda nao assinou
+  useEffect(() => {
+    if (pushSupported && !pushSubscribed && usuario?.id && Notification.permission === "granted") {
+      void subscribePush();
+    }
+  }, [pushSupported, pushSubscribed, usuario?.id]);
 
   const { data: notificationsData } = useQuery({
     queryKey: ["topbar-notifications", 1, 30],
@@ -199,6 +209,18 @@ export function ManagementShell({
               <Button variant="outline" size="sm" onClick={onInstallApp} className="hover:border-blue-600 hover:bg-blue-50">
                 <Download className="mr-1 h-3.5 w-3.5 xl:mr-2 xl:h-4 xl:w-4" />
                 <span className="hidden xl:inline">Baixar app</span>
+              </Button>
+            ) : null}
+            {/* Comentario: botao para ativar notificacoes push se o navegador suporta e nao esta ativado */}
+            {pushSupported && !pushSubscribed ? (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => void subscribePush()}
+                className="hover:border-green-600 hover:bg-green-50 text-green-700 border-green-300"
+              >
+                <Bell className="mr-1 h-3.5 w-3.5" />
+                <span className="hidden xl:inline">Ativar alertas</span>
               </Button>
             ) : null}
             <Button
