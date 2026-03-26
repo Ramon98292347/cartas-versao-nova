@@ -192,17 +192,68 @@ export function PastorLetterDialog({ open, onOpenChange, letterTarget, onSuccess
     });
   }, [parentScopeChurches, ownScopeChurches]);
 
-  // ─── Origem calculada diretamente (sem depender de originTotvs) ─────────────
-  // Comentario: como telas-cartas — calcula nome e totvs da origem direto de signerChurch
-  // e highestSignerForOthers, sem passar por estado intermediario. Elimina o problema
-  // de exibir a propria igreja do obreiro enquanto as queries carregam.
-  const manualFilled = !!destinoOutros.trim();
-  const displayOriginName = manualFilled
-    ? (highestSignerForOthers?.church_name || signerChurch?.church_name || "")
-    : (signerChurch?.church_name || "");
-  const displayOriginTotvs = manualFilled
-    ? (highestSignerForOthers?.totvs_id || signerChurch?.totvs_id || letterTarget?.churchTotvsId || "")
-    : (signerChurch?.totvs_id || letterTarget?.churchTotvsId || "");
+  // Comentario: verifica se um destino esta na sub-arvore de uma igreja raiz,
+  // subindo pelos parent_totvs_id (codigoTotvs/parentTotvsId) ate encontrar a raiz.
+  function isInSubtreeDialog(destinoTotvs: string, raizTotvs: string): boolean {
+    if (!destinoTotvs || !raizTotvs) return false;
+    if (destinoTotvs === raizTotvs) return true;
+    // Comentario: monta mapa com igrejas do escopo + ancestorChain para subir
+    const byId = new Map<string, { parent?: string }>();
+    for (const c of ownScopeChurches) byId.set(String(c.codigoTotvs || ""), { parent: String(c.parentTotvsId || "") });
+    for (const c of parentScopeChurches) byId.set(String(c.codigoTotvs || ""), { parent: String(c.parentTotvsId || "") });
+    for (const a of ancestorChain) byId.set(String(a.totvs_id || ""), { parent: String(a.parent_totvs_id || "") });
+    let cur = byId.get(destinoTotvs);
+    const visited = new Set<string>();
+    while (cur) {
+      const parentId = cur.parent || "";
+      if (!parentId || visited.has(parentId)) break;
+      if (parentId === raizTotvs) return true;
+      visited.add(parentId);
+      cur = byId.get(parentId);
+    }
+    return false;
+  }
+
+  // ─── Origem calculada baseada no destino selecionado ──────────────────────
+  // Comentario: se o destino esta na sub-arvore da mae (signerChurch), usa a mae.
+  // Se nao, sobe pela ancestorChain ate achar ancestral cuja sub-arvore inclua o destino.
+  const computedOrigin = useMemo(() => {
+    const manualFilled = !!destinoOutros.trim();
+    // Comentario: campo "Outros" sempre usa a mae mais alta
+    if (manualFilled) {
+      return {
+        name: highestSignerForOthers?.church_name || signerChurch?.church_name || "",
+        totvs: highestSignerForOthers?.totvs_id || signerChurch?.totvs_id || letterTarget?.churchTotvsId || "",
+      };
+    }
+    // Comentario: destino selecionado da lista
+    const destId = String(destino?.codigoTotvs || "");
+    if (!destId || !signerChurch) {
+      return {
+        name: signerChurch?.church_name || "",
+        totvs: signerChurch?.totvs_id || letterTarget?.churchTotvsId || "",
+      };
+    }
+    // Comentario: se destino esta na sub-arvore da mae, usa a mae
+    if (isInSubtreeDialog(destId, signerChurch.totvs_id)) {
+      return { name: signerChurch.church_name, totvs: signerChurch.totvs_id };
+    }
+    // Comentario: sobe pela ancestorChain ate achar ancestral que englobe o destino
+    for (const ancestor of ancestorChain) {
+      if (ancestor.pastor?.full_name && isInSubtreeDialog(destId, ancestor.totvs_id)) {
+        return { name: ancestor.church_name, totvs: ancestor.totvs_id };
+      }
+    }
+    // Comentario: fallback — mae mais alta
+    return {
+      name: highestSignerForOthers?.church_name || signerChurch?.church_name || "",
+      totvs: highestSignerForOthers?.totvs_id || signerChurch?.totvs_id || letterTarget?.churchTotvsId || "",
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [destino, destinoOutros, signerChurch, highestSignerForOthers, ancestorChain, ownScopeChurches, parentScopeChurches, letterTarget]);
+
+  const displayOriginName = computedOrigin.name;
+  const displayOriginTotvs = computedOrigin.totvs;
 
   // ─── Opcoes de destino filtradas pelo texto digitado ────────────────────────
   const filteredDestinoOptions = useMemo(() => {
@@ -230,11 +281,14 @@ export function PastorLetterDialog({ open, onOpenChange, letterTarget, onSuccess
     ? `${destino.codigoTotvs} - ${destino.nome}`
     : destinoOutros.trim() || "-";
 
-  // Comentario: aviso mostrado quando "Outros" esta preenchido — indica que a origem
-  // subiu para a mae mais alta com pastor (estadual > setorial > central).
-  const originAdjustedMessage = destinoOutros.trim() && highestSignerForOthers
-    ? `Destino fora do escopo. Carta assinada pela mae mais alta: ${highestSignerForOthers.totvs_id} - ${highestSignerForOthers.church_name}.`
-    : null;
+  // Comentario: aviso quando a origem subiu na hierarquia (diferente da mae direta)
+  const originAdjustedMessage = useMemo(() => {
+    if (!signerChurch) return null;
+    if (displayOriginTotvs !== signerChurch.totvs_id) {
+      return `Origem ajustada para: ${displayOriginTotvs} - ${displayOriginName}.`;
+    }
+    return null;
+  }, [displayOriginTotvs, displayOriginName, signerChurch]);
 
   // ─── Submit ──────────────────────────────────────────────────────────────────
   const handleSubmit = async () => {

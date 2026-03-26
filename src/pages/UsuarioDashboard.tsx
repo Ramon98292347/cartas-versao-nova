@@ -476,14 +476,78 @@ async function openPdf(letter: PastorLetter) {
     return null;
   }, [ancestorChain]);
 
-  // Calcula nome/totvs da origem diretamente (sem estado intermediario)
-  const manualFilled = !!letterForm.igreja_destino_manual.trim();
-  const displayOriginName = manualFilled
-    ? (highestSignerForOthers?.church_name || signerChurch?.church_name || session?.church_name || "")
-    : (signerChurch?.church_name || session?.church_name || "");
-  const displayOriginTotvs = manualFilled
-    ? (highestSignerForOthers?.totvs_id || String(signerChurch?.totvs_id || "") || String(session?.totvs_id || ""))
-    : (String(signerChurch?.totvs_id || "") || String(session?.totvs_id || ""));
+  // Comentario: verifica se um destino esta na sub-arvore de uma igreja raiz,
+  // subindo pelos parent_totvs_id ate encontrar a raiz ou esgotar a cadeia.
+  function isInSubtree(destinoTotvs: string, raizTotvs: string): boolean {
+    if (!destinoTotvs || !raizTotvs) return false;
+    if (destinoTotvs === raizTotvs) return true;
+    const byId = new Map(rawScopeChurches.map((c) => [String(c.totvs_id || ""), c]));
+    // Comentario: tambem inclui ancestorChain no mapa para subir alem do escopo
+    for (const a of ancestorChain) byId.set(String(a.totvs_id || ""), { totvs_id: a.totvs_id, church_name: a.church_name, parent_totvs_id: a.parent_totvs_id } as ChurchInScopeItem);
+    let cur = byId.get(destinoTotvs);
+    const visited = new Set<string>();
+    while (cur) {
+      const id = String(cur.totvs_id || "");
+      if (visited.has(id)) break;
+      visited.add(id);
+      if (id === raizTotvs) return true;
+      const parentId = String(cur.parent_totvs_id || "");
+      if (!parentId) break;
+      cur = byId.get(parentId);
+    }
+    return false;
+  }
+
+  // Comentario: calcula a origem correta baseada no destino selecionado.
+  // Regra: se o destino esta na sub-arvore do signerChurch (mae), usa a mae.
+  // Se nao, sobe pela ancestorChain ate achar um ancestral cuja sub-arvore inclua o destino.
+  // Exemplo: central X quer pregar em central Y (mae setorial B) → origem = estadual E (avo comum).
+  const computedOrigin = useMemo(() => {
+    const manualFilled = !!letterForm.igreja_destino_manual.trim();
+    // Comentario: campo "Outros" sempre usa a mae mais alta (estadual/setorial)
+    if (manualFilled) {
+      return {
+        name: highestSignerForOthers?.church_name || signerChurch?.church_name || session?.church_name || "",
+        totvs: highestSignerForOthers?.totvs_id || String(signerChurch?.totvs_id || "") || String(session?.totvs_id || ""),
+      };
+    }
+    // Comentario: destino selecionado da lista — verifica se esta no escopo da mae
+    const destTotvs = String(letterForm.igreja_destino || "").trim();
+    const destMatch = destinationOptions.find(
+      (o) => o.totvs_id === destTotvs || `${o.totvs_id} - ${o.church_name}`.trim().toUpperCase() === destTotvs.toUpperCase()
+    );
+    const destId = destMatch?.totvs_id || "";
+    // Comentario: se nao tem destino selecionado, usa a mae direta
+    if (!destId || !signerChurch) {
+      return {
+        name: signerChurch?.church_name || session?.church_name || "",
+        totvs: String(signerChurch?.totvs_id || "") || String(session?.totvs_id || ""),
+      };
+    }
+    // Comentario: se destino esta na sub-arvore da mae (signerChurch), usa a mae
+    if (isInSubtree(destId, String(signerChurch.totvs_id || ""))) {
+      return {
+        name: signerChurch.church_name || session?.church_name || "",
+        totvs: String(signerChurch.totvs_id || "") || String(session?.totvs_id || ""),
+      };
+    }
+    // Comentario: destino fora da sub-arvore da mae — sobe pela ancestorChain
+    // ate achar o primeiro ancestral com pastor cuja sub-arvore inclua o destino
+    for (const ancestor of ancestorChain) {
+      if (ancestor.pastor?.full_name && isInSubtree(destId, String(ancestor.totvs_id || ""))) {
+        return { name: ancestor.church_name, totvs: ancestor.totvs_id };
+      }
+    }
+    // Comentario: fallback — mae mais alta com pastor
+    return {
+      name: highestSignerForOthers?.church_name || signerChurch?.church_name || session?.church_name || "",
+      totvs: highestSignerForOthers?.totvs_id || String(signerChurch?.totvs_id || "") || String(session?.totvs_id || ""),
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [letterForm.igreja_destino, letterForm.igreja_destino_manual, signerChurch, highestSignerForOthers, ancestorChain, destinationOptions, rawScopeChurches, session]);
+
+  const displayOriginName = computedOrigin.name;
+  const displayOriginTotvs = computedOrigin.totvs;
 
   // ─── Debounce e busca publica para o campo "Outros" ─────────────────────────
   useEffect(() => {

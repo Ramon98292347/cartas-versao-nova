@@ -214,15 +214,17 @@ export function ManagementShell({
                 </span>
               ) : null}
             </Button>
-            {/* Comentario: para o role financeiro, exibe card com nome e totvs da igreja */}
-            {roleMode === "financeiro" && usuario?.church_name ? (
-              <div className="flex flex-col items-end rounded-lg border border-blue-200 bg-blue-50 px-2 py-1 xl:px-3">
-                <span className="max-w-[140px] truncate text-xs font-semibold text-blue-800 xl:max-w-[200px]">{usuario.church_name}</span>
-                <span className="text-[10px] text-blue-500">TOTVS: {usuario.default_totvs_id || usuario.totvs}</span>
-              </div>
-            ) : (
-              <span className="hidden max-w-[140px] truncate text-xs text-slate-500 xl:block xl:max-w-[200px] xl:text-sm">{usuario?.email || usuario?.nome || "Usuario"}</span>
-            )}
+            {/* Comentario: avatar + nome do usuario no header */}
+            <div className="hidden items-center gap-1.5 lg:flex">
+              {usuario?.avatar_url ? (
+                <img src={usuario.avatar_url} alt="" className="h-7 w-7 rounded-full object-cover ring-1 ring-slate-200" />
+              ) : (
+                <div className="flex h-7 w-7 items-center justify-center rounded-full bg-blue-100 text-xs font-bold text-blue-700">
+                  {(usuario?.nome || usuario?.full_name || "U").charAt(0).toUpperCase()}
+                </div>
+              )}
+              <span className="hidden max-w-[120px] truncate text-xs text-slate-700 xl:block">{usuario?.nome || usuario?.full_name || "Usuario"}</span>
+            </div>
             <Button variant="outline" size="sm" onClick={onLogout} className="hover:border-blue-600 hover:bg-blue-50">
               <LogOut className="mr-1 h-3.5 w-3.5 xl:mr-2 xl:h-4 xl:w-4" />
               <span className="hidden xl:inline">Sair</span>
