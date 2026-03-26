@@ -173,4 +173,7 @@ export const api = {
   // Comentario: marca carteirinhas como impressas (atualiza printed_at)
   markCarteirinhasPrinted: (body: { ids: string[] }) =>
     post("member-docs-api", { action: "mark-printed", ...body }),
+  // Comentario: gera documento unico em lote para impressao de carteirinhas
+  generatePrintBatchCarteirinhas: (body: { church_totvs_id: string; ids: string[] }) =>
+    post("member-docs-api", { action: "generate-print-batch", ...body }),
 };

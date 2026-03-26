@@ -121,7 +121,7 @@ function buildFichaMembroHtml(params: {
   rodapeIgreja: string;
 }) {
   const rodape = escapeHtml(params.rodapeIgreja || "");
-  return `<!doctype html><html lang="pt-br"><head><meta charset="utf-8"><style>
+  return `<!doctype html><html lang="pt-br"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><style>
   @page{size:A4;margin:15mm}body{margin:0;font-family:Montserrat,Arial,sans-serif;color:#111}.page{width:210mm;height:297mm;box-sizing:border-box}
   .header{display:flex;align-items:center;justify-content:center;gap:12mm;margin-top:2mm}.header-photo{width:25mm;height:32mm;border:.35mm solid rgba(0,0,0,.25);border-radius:2mm;overflow:hidden;background:rgba(0,0,0,.04)}
   .header-photo img{width:100%;height:100%;object-fit:cover}.logo{height:45mm;width:auto}.title{text-align:center;margin:10mm 0 8mm 0;line-height:1.15}
@@ -130,6 +130,23 @@ function buildFichaMembroHtml(params: {
   .value{font-weight:500;border-bottom:.25mm solid rgba(0,0,0,.25);padding:0 1mm .6mm 1mm;min-width:40mm;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .w-70{min-width:70mm}.w-60{min-width:60mm}.w-50{min-width:50mm}.w-45{min-width:45mm}.w-40{min-width:40mm}.w-35{min-width:35mm}.w-30{min-width:30mm}.w-25{min-width:25mm}
   .section-title{text-align:center;margin:22mm 0 8mm 0;font-size:14pt;font-weight:900}.footer{margin-top:14mm;text-align:center;font-weight:800;font-size:11pt;line-height:1.35;white-space:normal;word-break:break-word}
+  @media screen and (max-width: 768px){
+    body{padding:0}
+    .page{width:100%;height:auto;min-height:100%;padding:12px;box-sizing:border-box}
+    .header{gap:12px;margin-top:0}
+    .header-photo{width:92px;height:120px}
+    .logo{height:132px;max-width:58%}
+    .title{margin:14px 0 12px 0}
+    .title h1{font-size:20px}
+    .title h2{font-size:17px}
+    .content{margin-top:0;font-size:14px}
+    .row{display:grid;grid-template-columns:1fr;gap:8px;margin:8px 0}
+    .field{display:grid;grid-template-columns:auto 1fr;align-items:end;gap:8px}
+    .value{min-width:0 !important;width:100%;padding:0 4px 4px 4px;white-space:normal;overflow:visible;text-overflow:clip;word-break:break-word}
+    .w-70,.w-60,.w-50,.w-45,.w-40,.w-35,.w-30,.w-25{min-width:0 !important;width:100%}
+    .section-title{margin:18px 0 10px 0;font-size:22px;line-height:1.2}
+    .footer{margin-top:18px;font-size:13px}
+  }
   </style></head><body><div class="page"><div class="header"><div class="header-photo"><img src="${escapeHtml(params.foto || svgPlaceholder("Foto 3x4", 300, 400))}" alt="Foto"></div><img class="logo" src="https://idipilrcaqittmnapmbq.supabase.co/storage/v1/object/public/banner/logo/logo%20d.png" alt="Logo"></div>
   <div class="title"><h1>Ficha de cadastro de Membros</h1><h2>${escapeHtml(params.subtitulo)}</h2></div><div class="content">
   <div class="row"><div class="field"><div class="label">Nome:</div><div class="value w-70">${escapeHtml(params.nome)}</div></div></div>

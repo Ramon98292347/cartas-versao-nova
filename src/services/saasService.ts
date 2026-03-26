@@ -3214,6 +3214,19 @@ export async function markCarteirinhasPrinted(ids: string[]): Promise<void> {
   }
 }
 
+export async function generatePrintBatchCarteirinhas(
+  churchTotvsId: string,
+  ids: string[],
+): Promise<{ document_url?: string | null }> {
+  if (!isMockMode()) {
+    return (await api.generatePrintBatchCarteirinhas({
+      church_totvs_id: churchTotvsId,
+      ids,
+    })) as { document_url?: string | null };
+  }
+  return { document_url: null };
+}
+
 export async function createLetterByPastor(payload: LetterCreatePayload) {
   if (!payload.preacher_name.trim()) throw new Error("preacher-required");
   if (!payload.minister_role.trim()) throw new Error("minister-role-required");
