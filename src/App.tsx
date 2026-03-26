@@ -89,11 +89,11 @@ const App = () => (
             <Route
               path="/obreiro"
               element={
-                <RequireRole role="obreiro">
+                <RequireAnyRole roles={["obreiro", "pastor", "admin", "secretario", "financeiro"]}>
                   <Suspense fallback={pageFallback}>
                     <UsuarioDashboardPage />
                   </Suspense>
-                </RequireRole>
+                </RequireAnyRole>
               }
             />
             <Route
