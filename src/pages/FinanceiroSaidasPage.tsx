@@ -1,578 +1,498 @@
-/**
- * FinanceiroSaidasPage
- * ====================
- * O que faz: Tela de gestão de saídas (despesas) financeiras.
- *            Lista as despesas do mês e permite criar, editar e excluir.
- * Quem acessa: Usuários com role "financeiro"
- */
-import { useState } from "react";
-import { ManagementShell } from "@/components/layout/ManagementShell";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import {
-  listTransacoes,
-  listCategorias,
-  saveTransacao,
-  deleteTransacao,
-  saveCategoria,
-  type Transacao,
-  type Categoria,
-} from "@/services/financeiroService";
-import { toast } from "sonner";
-import { Loader2, Plus, Pencil, Trash2, AlertCircle, X, Tag, TrendingDown } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { MobileFiltersCard } from "@/components/shared/MobileFiltersCard";
 
-// Comentario: formata numero como moeda brasileira
-function formatarMoeda(valor: number): string {
-  return valor.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
-}
+import React, { useMemo, useState } from 'react';
+import { Plus, Edit2, Trash2, ArrowDownLeft, Save, X, Tag } from 'lucide-react';
+import { useFinance } from '@/contexts/FinanceContext';
+import { getCurrentDateBrazil } from '@/lib/dateUtils';
+import { toast } from '@/components/ui/use-toast';
 
-// Comentario: formata data do formato ISO (YYYY-MM-DD) para DD/MM/YYYY
-function formatarData(dataIso: string): string {
-  if (!dataIso) return "";
-  const partes = dataIso.split("-");
-  if (partes.length !== 3) return dataIso;
-  return `${partes[2]}/${partes[1]}/${partes[0]}`;
-}
+// Cores disponíveis para as categorias
+const CORES_DISPONIVEIS = [
+  { label: 'Cinza',    value: '#6B7280' },
+  { label: 'Vermelho', value: '#EF4444' },
+  { label: 'Laranja',  value: '#F97316' },
+  { label: 'Amarelo',  value: '#EAB308' },
+  { label: 'Verde',    value: '#22C55E' },
+  { label: 'Azul',     value: '#3B82F6' },
+  { label: 'Roxo',     value: '#8B5CF6' },
+  { label: 'Rosa',     value: '#EC4899' },
+];
 
-// Comentario: retorna a data de hoje no formato YYYY-MM-DD
-function hojeISO(): string {
-  return new Date().toISOString().split("T")[0];
-}
-
-// Comentario: estado inicial de um formulário de saída (despesa) vazio
-function salidaVazia(): Omit<Transacao, "id" | "church_totvs_id" | "created_at"> & { id?: string } {
-  return {
-    descricao: "",
-    valor: 0,
-    tipo: "despesa",
-    data_transacao: hojeISO(),
-    categoria_id: undefined,
-    observacoes: "",
-  };
-}
-
-// Comentario: estado inicial de um formulário de categoria vazio
-function categoriaVazia(): Omit<Categoria, "id"> & { id?: string } {
-  return {
-    nome: "",
-    tipo: "despesa",
-    cor: "#EF4444",
-    descricao: "",
-  };
-}
-
-export default function FinanceiroSaidasPage() {
-  const queryClient = useQueryClient();
-
-  // Comentario: mes e ano selecionados para filtro da lista (começa com o mes atual)
-  const agora = new Date();
-  const [mesFiltro, setMesFiltro] = useState(agora.getMonth() + 1);
-  const [anoFiltro, setAnoFiltro] = useState(agora.getFullYear());
-
-  // Comentario: estado do modal de saída (despesa)
-  const [modalSaidaAberto, setModalSaidaAberto] = useState(false);
-  const [formSaida, setFormSaida] = useState(salidaVazia());
-
-  // Comentario: estado do modal de categoria
-  const [modalCategoriaAberto, setModalCategoriaAberto] = useState(false);
-  const [formCategoria, setFormCategoria] = useState(categoriaVazia());
-
-  // Comentario: busca a lista de transações do mês selecionado
+const CadastroSaidas: React.FC = () => {
   const {
-    data: transacoes = [],
-    isLoading: carregandoTransacoes,
-    isError: erroTransacoes,
-  } = useQuery({
-    queryKey: ["fin-transacoes", mesFiltro, anoFiltro],
-    queryFn: () => listTransacoes(mesFiltro, anoFiltro),
+    transactions,
+    categories,
+    addTransaction,
+    updateTransaction,
+    deleteTransaction,
+    addCategory,
+    updateCategory,
+    deleteCategory,
+  } = useFinance();
+
+  // ── Estado do modal de Nova/Editar Saída ──────────────────────────────────
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingTransaction, setEditingTransaction] = useState<string | null>(null);
+  const [formData, setFormData] = useState({
+    description: '',
+    amount: '',
+    category: '',
+    date: getCurrentDateBrazil(),
   });
+  const [isCustomDescription, setIsCustomDescription] = useState(false);
+  const [customDescription, setCustomDescription] = useState('');
 
-  // Comentario: busca as categorias para preencher o select do formulário
-  const { data: categorias = [] } = useQuery({
-    queryKey: ["fin-categorias"],
-    queryFn: listCategorias,
-  });
+  // ── Estado do modal de Nova/Editar Categoria ──────────────────────────────
+  const [isCatModalOpen, setIsCatModalOpen] = useState(false);
+  const [editingCatId, setEditingCatId] = useState<string | null>(null);
+  const [catForm, setCatForm] = useState({ nome: '', cor: '#6B7280' });
+  const [isSavingCat, setIsSavingCat] = useState(false);
 
-  // Comentario: filtra para mostrar apenas despesas na tabela
-  const despesas = transacoes.filter((t) => t.tipo === "despesa");
+  // Somente categorias de despesa
+  const categoriasDespesa = useMemo(
+    () => categories.filter((c) => true), // a API já filtra pelo tipo ao listar
+    [categories],
+  );
 
-  // Comentario: soma o total de despesas do mês
-  const totalDespesas = despesas.reduce((acc, t) => acc + Number(t.valor), 0);
+  const saidas = useMemo(() => transactions.filter((t) => t.type === 'saida'), [transactions]);
+  const totalSaidas = saidas.length;
+  const totalValorSaidas = useMemo(() => saidas.reduce((sum, t) => sum + t.amount, 0), [saidas]);
+  const mediaSaida = totalSaidas > 0 ? totalValorSaidas / totalSaidas : 0;
 
-  // =============================================================================
-  // MUTATIONS — operações de escrita no banco
-  // =============================================================================
+  // ── Handlers de Saída ─────────────────────────────────────────────────────
 
-  // Comentario: salva (cria ou atualiza) uma despesa
-  const salvarSaidaMutation = useMutation({
-    mutationFn: saveTransacao,
-    onSuccess: () => {
-      toast.success(formSaida.id ? "Saída atualizada!" : "Saída cadastrada!");
-      setModalSaidaAberto(false);
-      setFormSaida(salidaVazia());
-      void queryClient.invalidateQueries({ queryKey: ["fin-transacoes"] });
-      void queryClient.invalidateQueries({ queryKey: ["financeiro-dashboard"] });
-    },
-    onError: (err: Error) => {
-      toast.error(`Erro ao salvar: ${err.message}`);
-    },
-  });
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const finalDescription = isCustomDescription ? customDescription : formData.description;
+    if (!finalDescription.trim() || !formData.amount) {
+      toast({ title: 'Campos obrigatórios', description: 'Preencha todos os campos.', variant: 'destructive' });
+      return;
+    }
+    const parsedAmount = parseFloat(formData.amount);
+    if (Number.isNaN(parsedAmount) || parsedAmount <= 0) {
+      toast({ title: 'Valor inválido', description: 'Informe um valor maior que zero.', variant: 'destructive' });
+      return;
+    }
 
-  // Comentario: exclui uma despesa por ID
-  const deletarSaidaMutation = useMutation({
-    mutationFn: deleteTransacao,
-    onSuccess: () => {
-      toast.success("Saída excluída!");
-      void queryClient.invalidateQueries({ queryKey: ["fin-transacoes"] });
-      void queryClient.invalidateQueries({ queryKey: ["financeiro-dashboard"] });
-    },
-    onError: (err: Error) => {
-      toast.error(`Erro ao excluir: ${err.message}`);
-    },
-  });
+    const transactionData = {
+      type: 'saida' as const,
+      description: finalDescription.trim(),
+      amount: parsedAmount,
+      category: finalDescription.trim(),
+      date: formData.date,
+    };
 
-  // Comentario: salva uma nova categoria
-  const salvarCategoriaMutation = useMutation({
-    mutationFn: saveCategoria,
-    onSuccess: () => {
-      toast.success("Categoria salva!");
-      setModalCategoriaAberto(false);
-      setFormCategoria(categoriaVazia());
-      void queryClient.invalidateQueries({ queryKey: ["fin-categorias"] });
-    },
-    onError: (err: Error) => {
-      toast.error(`Erro ao salvar categoria: ${err.message}`);
-    },
-  });
+    if (editingTransaction) {
+      updateTransaction(editingTransaction, transactionData);
+      toast({ title: 'Saída atualizada', description: 'Saída atualizada com sucesso.' });
+    } else {
+      addTransaction(transactionData);
+      toast({ title: 'Saída cadastrada', description: 'Saída cadastrada com sucesso.' });
+    }
+    resetForm();
+  };
 
-  // =============================================================================
-  // HANDLERS — funções de interação do usuário
-  // =============================================================================
+  const resetForm = () => {
+    setFormData({ description: '', amount: '', category: '', date: getCurrentDateBrazil() });
+    setIsCustomDescription(false);
+    setCustomDescription('');
+    setIsModalOpen(false);
+    setEditingTransaction(null);
+  };
 
-  // Comentario: abre o modal para criar uma nova saída
-  function abrirNovaSaida() {
-    setFormSaida(salidaVazia());
-    setModalSaidaAberto(true);
-  }
-
-  // Comentario: abre o modal preenchido para editar uma saída existente
-  function abrirEditarSaida(t: Transacao) {
-    setFormSaida({
-      id: t.id,
-      descricao: t.descricao,
-      valor: t.valor,
-      tipo: "despesa",
-      data_transacao: t.data_transacao,
-      categoria_id: t.categoria_id,
-      observacoes: t.observacoes || "",
+  const handleEdit = (transaction: any) => {
+    const isKnown = categoriasDespesa.some((c) => c.name === transaction.description);
+    setFormData({
+      description: isKnown ? transaction.description : '',
+      amount: transaction.amount.toString(),
+      category: transaction.category,
+      date: transaction.date,
     });
-    setModalSaidaAberto(true);
-  }
+    setIsCustomDescription(!isKnown);
+    setCustomDescription(!isKnown ? transaction.description : '');
+    setEditingTransaction(transaction.id);
+    setIsModalOpen(true);
+  };
 
-  // Comentario: confirma a exclusão com uma mensagem para o usuário
-  function confirmarDeletar(id: string, descricao: string) {
-    if (window.confirm(`Excluir a saída "${descricao}"? Esta ação não pode ser desfeita.`)) {
-      deletarSaidaMutation.mutate(id);
+  const handleDelete = (id: string) => {
+    if (window.confirm('Tem certeza que deseja excluir esta saída?')) {
+      deleteTransaction(id);
+      toast({ title: 'Saída excluída', description: 'Saída removida com sucesso.' });
     }
-  }
+  };
 
-  // Comentario: salva o formulário de saída — valida os campos obrigatorios
-  function handleSalvarSaida() {
-    if (!formSaida.descricao.trim()) {
-      toast.error("Informe a descrição da saída.");
+  // ── Handlers de Categoria ─────────────────────────────────────────────────
+
+  const openNovaCat = () => {
+    setEditingCatId(null);
+    setCatForm({ nome: '', cor: '#6B7280' });
+    setIsCatModalOpen(true);
+  };
+
+  const openEditCat = (cat: any) => {
+    setEditingCatId(cat.id);
+    setCatForm({ nome: cat.name, cor: cat.color || '#6B7280' });
+    setIsCatModalOpen(true);
+  };
+
+  const handleSaveCat = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!catForm.nome.trim()) {
+      toast({ title: 'Nome obrigatório', description: 'Informe o nome da categoria.', variant: 'destructive' });
       return;
     }
-    if (!formSaida.valor || formSaida.valor <= 0) {
-      toast.error("Informe um valor válido.");
-      return;
+    setIsSavingCat(true);
+    try {
+      if (editingCatId) {
+        await updateCategory(editingCatId, { name: catForm.nome.trim(), color: catForm.cor });
+        toast({ title: 'Categoria atualizada' });
+      } else {
+        await addCategory({ name: catForm.nome.trim(), color: catForm.cor, description: undefined });
+        toast({ title: 'Categoria criada' });
+      }
+      setIsCatModalOpen(false);
+    } catch {
+      toast({ title: 'Erro ao salvar categoria', variant: 'destructive' });
+    } finally {
+      setIsSavingCat(false);
     }
-    if (!formSaida.data_transacao) {
-      toast.error("Informe a data.");
-      return;
+  };
+
+  const handleDeleteCat = async (id: string) => {
+    if (window.confirm('Excluir esta categoria?')) {
+      await deleteCategory(id);
+      toast({ title: 'Categoria excluída' });
     }
-    salvarSaidaMutation.mutate(formSaida);
-  }
+  };
 
-  // Comentario: salva o formulário de categoria
-  function handleSalvarCategoria() {
-    if (!formCategoria.nome.trim()) {
-      toast.error("Informe o nome da categoria.");
-      return;
-    }
-    salvarCategoriaMutation.mutate(formCategoria);
-  }
-
-  // Comentario: helper para achar o nome da categoria pelo ID
-  function nomeDaCategoria(categoriaId?: string): string {
-    if (!categoriaId) return "—";
-    const cat = categorias.find((c) => c.id === categoriaId);
-    return cat?.nome ?? "—";
-  }
-
-  // Comentario: anos disponíveis para o filtro (3 anos para trás e o atual)
-  const anosDisponiveis = [anoFiltro - 2, anoFiltro - 1, anoFiltro, anoFiltro + 1];
+  // ── Render ────────────────────────────────────────────────────────────────
 
   return (
-    <ManagementShell roleMode="financeiro">
-      <div className="space-y-6">
-        {/* Cabeçalho — card com fundo vermelho */}
-        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-red-600 px-6 py-5 shadow-md">
-          <div>
-            <h1 className="text-2xl font-bold text-white">Saídas</h1>
-            <p className="text-red-100">Gerencie as despesas da sua igreja</p>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            {/* Botão: Nova Categoria */}
-            <Button
-              variant="outline"
-              onClick={() => {
-                setFormCategoria(categoriaVazia());
-                setModalCategoriaAberto(true);
-              }}
-              className="border-white text-white hover:bg-red-700 hover:text-white bg-transparent"
-            >
-              <Tag className="mr-2 h-4 w-4" />
-              Nova Categoria
-            </Button>
-            {/* Botão: Nova Saída */}
-            <Button onClick={abrirNovaSaida} className="bg-white text-red-700 hover:bg-red-50 font-semibold">
-              <Plus className="mr-2 h-4 w-4" />
-              Nova Saída
-            </Button>
-          </div>
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900 flex items-center">
+            <ArrowDownLeft className="w-6 h-6 mr-2 text-red-600" />
+            Cadastro de Saídas
+          </h1>
+          <p className="text-gray-600">Gerencie suas despesas e saídas financeiras</p>
+        </div>
+        <div className="mt-4 sm:mt-0">
+          <button
+            onClick={() => setIsModalOpen(true)}
+            className="flex items-center px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+          >
+            <Plus className="w-4 h-4 mr-2" />
+            Nova Saída
+          </button>
+        </div>
+      </div>
+
+      {/* Statistics Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+          <h3 className="text-sm font-medium text-gray-600">Total de Saídas</h3>
+          <p className="text-2xl font-bold text-red-600">{totalSaidas}</p>
+        </div>
+        <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+          <h3 className="text-sm font-medium text-gray-600">Valor Total</h3>
+          <p className="text-2xl font-bold text-red-600">
+            R$ {totalValorSaidas.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+          </p>
+        </div>
+        <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+          <h3 className="text-sm font-medium text-gray-600">Média por Saída</h3>
+          <p className="text-2xl font-bold text-[#1A237E]">
+            R$ {mediaSaida.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+          </p>
+        </div>
+      </div>
+
+      {/* ── Seção de Categorias ────────────────────────────────────────────── */}
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200">
+        <div className="p-6 border-b border-gray-200 flex items-center justify-between">
+          <h2 className="text-lg font-semibold text-gray-900 flex items-center">
+            <Tag className="w-5 h-5 mr-2 text-[#1A237E]" />
+            Categorias de Despesas
+          </h2>
+          <button
+            onClick={openNovaCat}
+            className="flex items-center px-3 py-1.5 bg-[#1A237E] text-white text-sm rounded-lg hover:bg-[#0D47A1] transition-colors"
+          >
+            <Plus className="w-4 h-4 mr-1" />
+            Nova Categoria
+          </button>
         </div>
 
-        <MobileFiltersCard
-          title="Filtros de sa?das"
-          description="Escolha o m?s e o ano para listar as despesas."
-          headerRight={!carregandoTransacoes ? <span className="text-sm font-semibold text-red-700">Total: {formatarMoeda(totalDespesas)}</span> : null}
-        >
-          <div className="flex flex-wrap items-center gap-3">
-            <span className="text-sm font-medium text-slate-700">Filtrar por per?odo:</span>
-            <select
-              value={mesFiltro}
-              onChange={(e) => setMesFiltro(Number(e.target.value))}
-              className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none"
-            >
-              {["Janeiro","Fevereiro","Mar?o","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"].map((nome, i) => (
-                <option key={i + 1} value={i + 1}>{nome}</option>
-              ))}
-            </select>
-            <select
-              value={anoFiltro}
-              onChange={(e) => setAnoFiltro(Number(e.target.value))}
-              className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none"
-            >
-              {anosDisponiveis.map((ano) => (
-                <option key={ano} value={ano}>{ano}</option>
-              ))}
-            </select>
-            {!carregandoTransacoes && (
-              <span className="text-sm font-semibold text-red-700 md:hidden">
-                Total: {formatarMoeda(totalDespesas)}
-              </span>
-            )}
-          </div>
-        </MobileFiltersCard>
-
-        {/* Card de total do mês — fundo vermelho */}
-        {!carregandoTransacoes && despesas.length > 0 && (
-          <div className="rounded-xl bg-red-500 p-5 shadow-md text-white">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-red-100">Total de Saídas do Mês</p>
-                <p className="mt-1 text-2xl font-bold">{formatarMoeda(totalDespesas)}</p>
-              </div>
-              <div className="rounded-full bg-red-400 bg-opacity-50 p-3">
-                <TrendingDown className="h-6 w-6 text-white" />
-              </div>
-            </div>
-            <p className="mt-2 text-xs text-red-100">{despesas.length} despesa(s) registrada(s)</p>
-          </div>
-        )}
-
-        {/* Mensagem de erro */}
-        {erroTransacoes && (
-          <div className="flex items-center gap-3 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
-            <AlertCircle className="h-5 w-5 flex-shrink-0" />
-            <span>Erro ao carregar as saídas. Tente novamente.</span>
-          </div>
-        )}
-
-        {/* Tabela de despesas */}
-        <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
-          {carregandoTransacoes ? (
-            <div className="flex items-center justify-center gap-2 p-10 text-slate-500">
-              <Loader2 className="h-5 w-5 animate-spin" />
-              <span>Carregando saídas...</span>
-            </div>
-          ) : despesas.length === 0 ? (
-            <div className="p-10 text-center text-slate-500">
-              <p className="text-base font-medium">Nenhuma saída registrada neste período.</p>
-              <p className="mt-1 text-sm">Clique em "Nova Saída" para adicionar.</p>
-            </div>
+        <div className="p-6">
+          {categoriasDespesa.length === 0 ? (
+            <p className="text-gray-500 text-sm text-center py-4">
+              Nenhuma categoria cadastrada. Crie a primeira!
+            </p>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-slate-200 bg-slate-50 text-left">
-                    <th className="px-4 py-3 font-semibold text-slate-600">Data</th>
-                    <th className="px-4 py-3 font-semibold text-slate-600">Descrição</th>
-                    <th className="px-4 py-3 font-semibold text-slate-600">Categoria</th>
-                    <th className="px-4 py-3 text-right font-semibold text-slate-600">Valor</th>
-                    <th className="px-4 py-3 text-right font-semibold text-slate-600">Ações</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {despesas.map((t) => (
-                    <tr key={t.id} className="border-b border-slate-100 hover:bg-slate-50">
-                      <td className="px-4 py-3 text-slate-600">{formatarData(t.data_transacao)}</td>
-                      <td className="px-4 py-3 font-medium text-slate-900">
-                        {t.descricao}
-                        {t.observacoes && (
-                          <p className="text-xs font-normal text-slate-400">{t.observacoes}</p>
-                        )}
-                      </td>
-                      <td className="px-4 py-3 text-slate-600">{nomeDaCategoria(t.categoria_id)}</td>
-                      <td className="px-4 py-3 text-right font-semibold text-red-700">
-                        {formatarMoeda(Number(t.valor))}
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="flex items-center justify-end gap-2">
-                          {/* Botão editar */}
-                          <button
-                            onClick={() => abrirEditarSaida(t)}
-                            className="rounded p-1.5 text-slate-400 hover:bg-blue-50 hover:text-blue-600"
-                            title="Editar"
-                          >
-                            <Pencil className="h-4 w-4" />
-                          </button>
-                          {/* Botão excluir */}
-                          <button
-                            onClick={() => confirmarDeletar(t.id, t.descricao)}
-                            disabled={deletarSaidaMutation.isPending}
-                            className="rounded p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-600 disabled:opacity-50"
-                            title="Excluir"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-                {/* Rodapé com total */}
-                <tfoot>
-                  <tr className="bg-red-50">
-                    <td colSpan={3} className="px-4 py-3 font-semibold text-slate-700">Total do Período</td>
-                    <td className="px-4 py-3 text-right font-bold text-red-700">{formatarMoeda(totalDespesas)}</td>
-                    <td />
-                  </tr>
-                </tfoot>
-              </table>
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+              {categoriasDespesa.map((cat) => (
+                <div
+                  key={cat.id}
+                  className="flex items-center justify-between p-3 rounded-lg border border-gray-200 bg-gray-50"
+                >
+                  <div className="flex items-center gap-2 min-w-0">
+                    {/* Comentario: bolinha colorida mostra a cor da categoria */}
+                    <span
+                      className="w-3 h-3 rounded-full flex-shrink-0"
+                      style={{ backgroundColor: cat.color || '#6B7280' }}
+                    />
+                    <span className="text-sm font-medium text-gray-800 truncate">{cat.name}</span>
+                  </div>
+                  <div className="flex gap-1 ml-2 flex-shrink-0">
+                    <button
+                      onClick={() => openEditCat(cat)}
+                      className="text-[#1A237E] hover:text-[#0D47A1] transition-colors"
+                    >
+                      <Edit2 className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      onClick={() => handleDeleteCat(cat.id)}
+                      className="text-red-500 hover:text-red-700 transition-colors"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+              ))}
             </div>
           )}
         </div>
       </div>
 
-      {/* =====================================================================
-          MODAL: Nova/Editar Saída
-          ===================================================================== */}
-      <Dialog open={modalSaidaAberto} onOpenChange={setModalSaidaAberto}>
-        <DialogContent className="max-w-lg">
-          <DialogHeader>
-            <DialogTitle>{formSaida.id ? "Editar Saída" : "Nova Saída"}</DialogTitle>
-            <DialogDescription>
-              {formSaida.id ? "Atualize os dados da despesa." : "Preencha os dados da nova despesa."}
-            </DialogDescription>
-          </DialogHeader>
+      {/* Transactions Table */}
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200">
+        <div className="p-6 border-b border-gray-200">
+          <h2 className="text-lg font-semibold text-gray-900">Histórico de Saídas</h2>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Descrição</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Valor</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Data</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Ações</th>
+              </tr>
+            </thead>
+            <tbody className="bg-white divide-y divide-gray-200">
+              {saidas.length > 0 ? (
+                saidas.map((transaction) => (
+                  <tr key={transaction.id} className="hover:bg-gray-50">
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="text-sm font-medium text-gray-900">{transaction.description}</div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="text-sm font-semibold text-red-600">
+                        R$ {transaction.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="text-sm text-gray-900">
+                        {(() => {
+                          const [year, month, day] = transaction.date.split('-');
+                          return new Date(parseInt(year), parseInt(month) - 1, parseInt(day))
+                            .toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+                        })()}
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                      <div className="flex space-x-2">
+                        <button onClick={() => handleEdit(transaction)} className="text-[#1A237E] hover:text-[#0D47A1] transition-colors">
+                          <Edit2 className="w-4 h-4" />
+                        </button>
+                        <button onClick={() => handleDelete(transaction.id)} className="text-red-600 hover:text-red-700 transition-colors">
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan={4} className="px-6 py-4 text-center text-gray-500">
+                    Nenhuma saída cadastrada
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
 
-          <div className="space-y-4">
-            {/* Descrição */}
-            <div>
-              <label className="mb-1 block text-sm font-medium text-slate-700">
-                Descrição *
-              </label>
-              <input
-                type="text"
-                value={formSaida.descricao}
-                onChange={(e) => setFormSaida((p) => ({ ...p, descricao: e.target.value }))}
-                placeholder="Ex: Conta de água"
-                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-              />
+      {/* ── Modal Nova/Editar Saída ─────────────────────────────────────────── */}
+      {isModalOpen && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg p-6 w-full max-w-md">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-gray-900">
+                {editingTransaction ? 'Editar Saída' : 'Nova Saída'}
+              </h3>
+              <button onClick={resetForm} className="text-gray-400 hover:text-gray-600 transition-colors">
+                <X className="w-5 h-5" />
+              </button>
             </div>
 
-            {/* Valor e Data na mesma linha */}
-            <div className="grid grid-cols-2 gap-3">
+            <form onSubmit={handleSubmit} className="space-y-4">
               <div>
-                <label className="mb-1 block text-sm font-medium text-slate-700">
-                  Valor (R$) *
-                </label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Descrição *</label>
+                <select
+                  value={isCustomDescription ? 'outro' : formData.description}
+                  onChange={(e) => {
+                    if (e.target.value === 'outro') {
+                      setIsCustomDescription(true);
+                      setFormData({ ...formData, description: '' });
+                    } else {
+                      setIsCustomDescription(false);
+                      setCustomDescription('');
+                      setFormData({ ...formData, description: e.target.value });
+                    }
+                  }}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#1A237E] focus:border-transparent outline-none transition-colors"
+                  required
+                >
+                  <option value="">Selecione a descrição</option>
+                  {/* Comentario: categorias vêm do banco (fin_categorias) via FinanceContext */}
+                  {categoriasDespesa.map((cat) => (
+                    <option key={cat.id} value={cat.name}>
+                      {cat.name}
+                    </option>
+                  ))}
+                  <option value="outro">Outro (inserir manualmente)</option>
+                </select>
+              </div>
+
+              {isCustomDescription && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Descrição Personalizada *</label>
+                  <input
+                    type="text"
+                    value={customDescription}
+                    onChange={(e) => setCustomDescription(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#1A237E] focus:border-transparent outline-none transition-colors"
+                    placeholder="Digite a descrição"
+                    required
+                  />
+                </div>
+              )}
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Valor *</label>
                 <input
                   type="number"
                   step="0.01"
                   min="0"
-                  value={formSaida.valor || ""}
-                  onChange={(e) => setFormSaida((p) => ({ ...p, valor: parseFloat(e.target.value) || 0 }))}
+                  value={formData.amount}
+                  onChange={(e) => setFormData({ ...formData, amount: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#1A237E] focus:border-transparent outline-none transition-colors"
                   placeholder="0,00"
-                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  required
                 />
               </div>
+
               <div>
-                <label className="mb-1 block text-sm font-medium text-slate-700">
-                  Data *
-                </label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Data *</label>
                 <input
                   type="date"
-                  value={formSaida.data_transacao}
-                  onChange={(e) => setFormSaida((p) => ({ ...p, data_transacao: e.target.value }))}
-                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  value={formData.date}
+                  onChange={(e) => setFormData({ ...formData, date: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#1A237E] focus:border-transparent outline-none transition-colors"
+                  required
                 />
               </div>
-            </div>
 
-            {/* Categoria */}
-            <div>
-              <label className="mb-1 block text-sm font-medium text-slate-700">
-                Categoria
-              </label>
-              <select
-                value={formSaida.categoria_id || ""}
-                onChange={(e) => setFormSaida((p) => ({ ...p, categoria_id: e.target.value || undefined }))}
-                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-              >
-                <option value="">Sem categoria</option>
-                {categorias
-                  .filter((c) => c.tipo === "despesa")
-                  .map((c) => (
-                    <option key={c.id} value={c.id}>{c.nome}</option>
-                  ))}
-              </select>
-            </div>
-
-            {/* Observações */}
-            <div>
-              <label className="mb-1 block text-sm font-medium text-slate-700">
-                Observações
-              </label>
-              <textarea
-                value={formSaida.observacoes || ""}
-                onChange={(e) => setFormSaida((p) => ({ ...p, observacoes: e.target.value }))}
-                placeholder="Opcional..."
-                rows={2}
-                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-              />
-            </div>
-
-            {/* Botões do modal */}
-            <div className="flex justify-end gap-2 pt-2">
-              <Button variant="outline" onClick={() => setModalSaidaAberto(false)}>
-                <X className="mr-2 h-4 w-4" />
-                Cancelar
-              </Button>
-              <Button
-                onClick={handleSalvarSaida}
-                disabled={salvarSaidaMutation.isPending}
-                className="bg-red-600 hover:bg-red-700"
-              >
-                {salvarSaidaMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                {formSaida.id ? "Atualizar" : "Salvar"}
-              </Button>
-            </div>
+              <div className="flex space-x-3 pt-4">
+                <button type="button" onClick={resetForm} className="flex-1 px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors">
+                  Cancelar
+                </button>
+                <button type="submit" className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors flex items-center justify-center">
+                  <Save className="w-4 h-4 mr-2" />
+                  Salvar
+                </button>
+              </div>
+            </form>
           </div>
-        </DialogContent>
-      </Dialog>
+        </div>
+      )}
 
-      {/* =====================================================================
-          MODAL: Nova Categoria
-          ===================================================================== */}
-      <Dialog open={modalCategoriaAberto} onOpenChange={setModalCategoriaAberto}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>Nova Categoria</DialogTitle>
-            <DialogDescription>Crie uma categoria para organizar as despesas.</DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-4">
-            {/* Nome */}
-            <div>
-              <label className="mb-1 block text-sm font-medium text-slate-700">
-                Nome *
-              </label>
-              <input
-                type="text"
-                value={formCategoria.nome}
-                onChange={(e) => setFormCategoria((p) => ({ ...p, nome: e.target.value }))}
-                placeholder="Ex: Contas fixas"
-                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-              />
+      {/* ── Modal Nova/Editar Categoria ─────────────────────────────────────── */}
+      {isCatModalOpen && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg p-6 w-full max-w-sm">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-gray-900">
+                {editingCatId ? 'Editar Categoria' : 'Nova Categoria'}
+              </h3>
+              <button onClick={() => setIsCatModalOpen(false)} className="text-gray-400 hover:text-gray-600 transition-colors">
+                <X className="w-5 h-5" />
+              </button>
             </div>
 
-            {/* Tipo */}
-            <div>
-              <label className="mb-1 block text-sm font-medium text-slate-700">
-                Tipo
-              </label>
-              <select
-                value={formCategoria.tipo}
-                onChange={(e) => setFormCategoria((p) => ({ ...p, tipo: e.target.value as "receita" | "despesa" }))}
-                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-              >
-                <option value="despesa">Despesa</option>
-                <option value="receita">Receita</option>
-              </select>
-            </div>
-
-            {/* Cor */}
-            <div>
-              <label className="mb-1 block text-sm font-medium text-slate-700">
-                Cor da categoria
-              </label>
-              <div className="flex items-center gap-3">
+            <form onSubmit={handleSaveCat} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Nome *</label>
                 <input
-                  type="color"
-                  value={formCategoria.cor}
-                  onChange={(e) => setFormCategoria((p) => ({ ...p, cor: e.target.value }))}
-                  className="h-9 w-14 cursor-pointer rounded border border-slate-300"
+                  type="text"
+                  value={catForm.nome}
+                  onChange={(e) => setCatForm({ ...catForm, nome: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#1A237E] focus:border-transparent outline-none transition-colors"
+                  placeholder="Ex: Aluguel, Energia Elétrica..."
+                  required
                 />
-                <span className="text-sm text-slate-500">{formCategoria.cor}</span>
               </div>
-            </div>
 
-            {/* Descrição */}
-            <div>
-              <label className="mb-1 block text-sm font-medium text-slate-700">
-                Descrição
-              </label>
-              <input
-                type="text"
-                value={formCategoria.descricao || ""}
-                onChange={(e) => setFormCategoria((p) => ({ ...p, descricao: e.target.value }))}
-                placeholder="Opcional..."
-                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-              />
-            </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Cor</label>
+                {/* Comentario: seletor de cor por bolinhas — fácil de entender */}
+                <div className="flex flex-wrap gap-2">
+                  {CORES_DISPONIVEIS.map((cor) => (
+                    <button
+                      key={cor.value}
+                      type="button"
+                      title={cor.label}
+                      onClick={() => setCatForm({ ...catForm, cor: cor.value })}
+                      className={`w-8 h-8 rounded-full border-2 transition-all ${
+                        catForm.cor === cor.value ? 'border-gray-900 scale-110' : 'border-transparent'
+                      }`}
+                      style={{ backgroundColor: cor.value }}
+                    />
+                  ))}
+                </div>
+                {/* Comentario: mostra preview da cor escolhida */}
+                <div className="mt-2 flex items-center gap-2 text-sm text-gray-600">
+                  <span className="w-4 h-4 rounded-full" style={{ backgroundColor: catForm.cor }} />
+                  Cor selecionada
+                </div>
+              </div>
 
-            {/* Botões */}
-            <div className="flex justify-end gap-2 pt-2">
-              <Button variant="outline" onClick={() => setModalCategoriaAberto(false)}>
-                <X className="mr-2 h-4 w-4" />
-                Cancelar
-              </Button>
-              <Button
-                onClick={handleSalvarCategoria}
-                disabled={salvarCategoriaMutation.isPending}
-                className="bg-blue-600 hover:bg-blue-700"
-              >
-                {salvarCategoriaMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Salvar Categoria
-              </Button>
-            </div>
+              <div className="flex space-x-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setIsCatModalOpen(false)}
+                  className="flex-1 px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSavingCat}
+                  className="flex-1 px-4 py-2 bg-[#1A237E] text-white rounded-lg hover:bg-[#0D47A1] disabled:opacity-50 transition-colors flex items-center justify-center"
+                >
+                  <Save className="w-4 h-4 mr-2" />
+                  {isSavingCat ? 'Salvando...' : 'Salvar'}
+                </button>
+              </div>
+            </form>
           </div>
-        </DialogContent>
-      </Dialog>
-    </ManagementShell>
+        </div>
+      )}
+    </div>
   );
-}
+};
+
+export default CadastroSaidas;

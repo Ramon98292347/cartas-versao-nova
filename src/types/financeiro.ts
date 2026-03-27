@@ -1,63 +1,46 @@
 /**
- * financeiro.ts
- * =============
- * O que faz: Define os tipos de dados usados no módulo financeiro do sistema principal.
- *            Esses tipos foram adaptados dos tipos originais do financeiro-novo.
- * Para que serve: Garantir consistência dos dados em todas as páginas financeiras.
- *
- * NOTA: Os tipos aqui são do módulo de contagem (dízimos/ofertas por forma de pagamento).
- *       Os tipos de transação do banco (Transacao, Categoria, etc.) ficam em financeiroService.ts
+ * financeiro.ts — Tipos do módulo financeiro.
+ * Adaptado do financeiro-novo para funcionar dentro do ipda-letter-creator.
+ * As funções do FinanceContextType são assíncronas pois chamam o banco via API.
  */
 
-/**
- * Transaction — representa uma transação financeira local.
- * Usada pelo FinanceContext para gerenciar dados em memória.
- */
 export interface Transaction {
   id: string;
-  /** 'entrada' = receita, 'saida' = despesa */
   type: 'entrada' | 'saida';
   category: string;
   amount: number;
   description: string;
-  /** Data no formato YYYY-MM-DD */
   date: string;
-  /** ID do usuário que criou o registro */
   userId: string;
 }
 
-/**
- * CashCount — contagem de caixa com notas e moedas físicas.
- * Cada entrada do objeto 'notes' é uma denominação (ex: "R$ 50,00") e a quantidade.
- */
 export interface CashCount {
   id: string;
-  /** Data da contagem no formato YYYY-MM-DD */
   date: string;
-  /** Mapa de denominação → quantidade (ex: { "R$ 50,00": 3 }) */
   notes: {
     [key: string]: number;
   };
-  /** Total calculado da contagem */
   total: number;
   userId: string;
+  // Comentario: responsáveis que assinam/testemunham a contagem do caixa
+  responsavel_1?: string;
+  responsavel_2?: string;
+  responsavel_3?: string;
+  // Comentario: tipo da coleta e valores por forma de pagamento
+  tipo_coleta?: 'dizimos' | 'ofertas' | 'ofertas-missionarias';
+  valor_dinheiro?: number;
+  valor_pix?: number;
+  valor_cartao?: number;
 }
 
-/**
- * ExpenseCategory — categoria de despesa para classificar transações.
- */
 export interface ExpenseCategory {
   id: string;
   name: string;
   description?: string;
-  /** Cor em hexadecimal, ex: "#FF6F00" */
   color: string;
   userId: string;
 }
 
-/**
- * DailyReport — relatório diário consolidado.
- */
 export interface DailyReport {
   id: string;
   date: string;
@@ -68,26 +51,16 @@ export interface DailyReport {
   userId: string;
 }
 
-/**
- * FinanceContextType — interface do contexto financeiro.
- * Define todas as funções e estados disponíveis via useFinance().
- */
+// Comentario: funções assíncronas pois chamam o banco real via edge function fin-api.
 export interface FinanceContextType {
   transactions: Transaction[];
   cashCounts: CashCount[];
   categories: ExpenseCategory[];
-  /** Adiciona uma nova transação (entrada ou saída) */
-  addTransaction: (transaction: Omit<Transaction, 'id' | 'userId'>) => void;
-  /** Atualiza parcialmente uma transação existente pelo ID */
-  updateTransaction: (id: string, transaction: Partial<Transaction>) => void;
-  /** Remove uma transação pelo ID */
-  deleteTransaction: (id: string) => void;
-  /** Salva uma contagem de caixa */
-  saveCashCount: (cashCount: Omit<CashCount, 'id' | 'userId'>) => void;
-  /** Adiciona uma nova categoria de despesa */
-  addCategory: (category: Omit<ExpenseCategory, 'id' | 'userId'>) => void;
-  /** Atualiza parcialmente uma categoria pelo ID */
-  updateCategory: (id: string, category: Partial<ExpenseCategory>) => void;
-  /** Remove uma categoria pelo ID */
-  deleteCategory: (id: string) => void;
+  addTransaction: (transaction: Omit<Transaction, 'id' | 'userId'>) => Promise<void>;
+  updateTransaction: (id: string, transaction: Partial<Transaction>) => Promise<void>;
+  deleteTransaction: (id: string) => Promise<void>;
+  saveCashCount: (cashCount: Omit<CashCount, 'id' | 'userId'>) => Promise<void>;
+  addCategory: (category: Omit<ExpenseCategory, 'id' | 'userId'>) => Promise<void>;
+  updateCategory: (id: string, category: Partial<ExpenseCategory>) => Promise<void>;
+  deleteCategory: (id: string) => Promise<void>;
 }
