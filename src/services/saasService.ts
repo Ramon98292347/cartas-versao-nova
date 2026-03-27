@@ -2022,35 +2022,7 @@ export async function listAnnouncementsPublicByTotvs(churchTotvsId: string, limi
     }
   }
 
-  // Tentativa 2: edge function com token de sessao salvo (funciona para usuarios que ja logaram antes)
-  try {
-    const storedToken = getToken();
-    if (storedToken) {
-      const raw = (await api.listAnnouncements({ limit: safeLimit })) as Record<string, unknown>;
-      const rows = Array.isArray(raw?.announcements)
-        ? (raw.announcements as Record<string, unknown>[])
-        : Array.isArray(raw)
-          ? (raw as Record<string, unknown>[])
-          : [];
-      if (rows.length > 0) {
-        return rows.map((item) => ({
-          id: String(item?.id || ""),
-          title: String(item?.title || "Aviso"),
-          type: (item?.type || "text") as "text" | "image" | "video",
-          body_text: item?.body_text ? String(item.body_text) : null,
-          media_url: toAnnouncementMediaUrl(item?.media_url),
-          link_url: item?.link_url ? String(item.link_url) : null,
-          position: typeof item?.position === "number" ? item.position : null,
-          starts_at: item?.starts_at ? String(item.starts_at) : null,
-          ends_at: item?.ends_at ? String(item.ends_at) : null,
-          is_active: typeof item?.is_active === "boolean" ? item.is_active : true,
-        }));
-      }
-    }
-  } catch {
-    // Silencioso: sem divulgacoes na tela de login nao e critico.
-  }
-
+  // Sem fallback por token aqui: evita vazamento de divulgacao de outra igreja.
   return [];
 }
 

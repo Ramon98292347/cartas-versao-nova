@@ -100,13 +100,12 @@ export default function PhoneIdentify() {
         })()
       : {};
   const cachedTotvs = typeof window !== "undefined" ? localStorage.getItem("ipda_last_totvs") || "" : "";
-  // Totvs da mae (root): salvo apos login para mostrar divulgacoes da mae na proxima abertura
-  const cachedRootTotvs = typeof window !== "undefined" ? localStorage.getItem("ipda_root_totvs") || "" : "";
   const isCachedAdmin = String(cachedUser?.role || "").toLowerCase() === "admin";
   const cachedScope = Array.isArray(cachedSession?.scope_totvs_ids) ? cachedSession.scope_totvs_ids.filter(Boolean).map(String) : [];
   const announcementScope = isCachedAdmin ? cachedScope : [];
-  // Para pastor/obreiro usa o totvs da mae; se nao tiver, usa o proprio totvs
-  const announcementTotvs = cachedRootTotvs || cachedTotvs;
+  // Comentario: divulgacao da tela de login deve respeitar a igreja do proprio usuario.
+  // Nao usar totvs da mae para evitar mostrar divulgacao de outra igreja.
+  const announcementTotvs = cachedTotvs;
   const birthdayTotvsScope = Array.from(
     new Set([cachedTotvs, announcementTotvs].map((v) => String(v || "").trim()).filter(Boolean)),
   );

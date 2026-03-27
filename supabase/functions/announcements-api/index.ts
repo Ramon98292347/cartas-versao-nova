@@ -37,7 +37,6 @@ import { jwtVerify } from "https://esm.sh/jose@5.2.4";
 
 type Role = "admin" | "pastor" | "obreiro";
 type SessionClaims = { user_id: string; role: Role; active_totvs_id: string };
-type ChurchRow = { totvs_id: string; parent_totvs_id: string | null };
 type AnnouncementType = "text" | "image" | "video";
 type Action =
   | "list"
@@ -149,21 +148,6 @@ async function verifySessionJWT(req: Request): Promise<SessionClaims | null> {
   }
 }
 
-function computeRootTotvs(activeTotvs: string, churches: ChurchRow[]): string {
-  const parentById = new Map<string, string | null>();
-  for (const church of churches) parentById.set(String(church.totvs_id), church.parent_totvs_id ? String(church.parent_totvs_id) : null);
-
-  let current = activeTotvs;
-  const guard = new Set<string>();
-  while (true) {
-    if (guard.has(current)) return activeTotvs;
-    guard.add(current);
-    const parent = parentById.get(current) ?? null;
-    if (!parent) return current;
-    current = parent;
-  }
-}
-
 function isValidISODate(value: string) {
   const date = new Date(value);
   return !Number.isNaN(date.getTime());
@@ -193,16 +177,10 @@ async function actionList(sb: ReturnType<typeof createClient>, req: Request, bod
     activeTotvs = String(userRow.default_totvs_id);
   }
 
-  const { data: allChurches, error: churchesErr } = await sb.from("churches").select("totvs_id, parent_totvs_id");
-  if (churchesErr) return json({ ok: false, error: "db_error_churches", details: churchesErr.message }, 500);
-
-  const rootTotvs = computeRootTotvs(activeTotvs, (allChurches || []) as ChurchRow[]);
-  const totvsList = rootTotvs === activeTotvs ? [activeTotvs] : [activeTotvs, rootTotvs];
-
   const { data, error } = await sb
     .from("announcements")
     .select("id, church_totvs_id, title, type, body_text, media_url, link_url, position, starts_at, ends_at, is_active, created_at")
-    .in("church_totvs_id", totvsList)
+    .eq("church_totvs_id", activeTotvs)
     .eq("is_active", true);
 
   if (error) return json({ ok: false, error: "db_error_list_announcements", details: error.message }, 500);
@@ -215,16 +193,13 @@ async function actionList(sb: ReturnType<typeof createClient>, req: Request, bod
   });
 
   const sorted = inWindow.sort((a: Record<string, unknown>, b: Record<string, unknown>) => {
-    const aPri = a.church_totvs_id === activeTotvs ? 0 : 1;
-    const bPri = b.church_totvs_id === activeTotvs ? 0 : 1;
-    if (aPri !== bPri) return aPri - bPri;
     const posA = Number(a.position ?? 999);
     const posB = Number(b.position ?? 999);
     if (posA !== posB) return posA - posB;
     return new Date(String(b.created_at || 0)).getTime() - new Date(String(a.created_at || 0)).getTime();
   });
 
-  return json({ ok: true, active_totvs_id: activeTotvs, root_totvs_id: rootTotvs, announcements: sorted.slice(0, limit) });
+  return json({ ok: true, active_totvs_id: activeTotvs, root_totvs_id: activeTotvs, announcements: sorted.slice(0, limit) });
 }
 
 async function actionUpsert(sb: ReturnType<typeof createClient>, req: Request, body: Body) {
