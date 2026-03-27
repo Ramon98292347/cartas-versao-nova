@@ -106,7 +106,7 @@ Deno.serve(async (req) => {
     let notifications = 0;
     const today = new Date().toISOString().slice(0, 10);
 
-    // Comentario: para cada igreja com aniversariante, dispara o webhook do n8n
+    // Comentario: para cada igreja com aniversariante, cria notificacoes internas
     for (const [churchTotvsId, birthdays] of byChurch) {
       const existing = await sb
         .from("notifications")
@@ -159,6 +159,29 @@ Deno.serve(async (req) => {
         }
       }
 
+    }
+
+    // Comentario: webhook deve disparar UMA UNICA VEZ por dia (lote global).
+    const todayStartUtc = `${today}T00:00:00.000Z`;
+    const { data: alreadySent } = await sb
+      .from("notifications")
+      .select("id")
+      .eq("type", "birthday_webhook_sent")
+      .gte("created_at", todayStartUtc)
+      .limit(1);
+
+    if ((alreadySent || []).length === 0) {
+      const globalBirthdays = Array.from(byChurch.entries()).flatMap(([churchTotvsId, birthdays]) =>
+        birthdays.map((b) => ({
+          id: b.id,
+          full_name: b.full_name,
+          phone: b.phone || null,
+          email: b.email || null,
+          birth_date: b.birth_date || null,
+          church_totvs_id: churchTotvsId,
+        }))
+      );
+
       try {
         const resp = await fetch(N8N_WEBHOOK, {
           method: "POST",
@@ -167,18 +190,27 @@ Deno.serve(async (req) => {
             action: "aniversario",
             event_type: "aniversario",
             requested_at: new Date().toISOString(),
-            church_totvs_id: churchTotvsId,
-            birthdays: birthdays.map((b) => ({
-              id: b.id,
-              full_name: b.full_name,
-              phone: b.phone || null,
-              email: b.email || null,
-              birth_date: b.birth_date || null,
-            })),
             date: today,
+            churches: byChurch.size,
+            birthdays: globalBirthdays,
           }),
         });
-        if (resp.ok) sent++; else failed++;
+
+        if (resp.ok) {
+          sent++;
+          await sb.from("notifications").insert({
+            church_totvs_id: "GLOBAL",
+            user_id: null,
+            type: "birthday_webhook_sent",
+            title: `Webhook aniversario enviado em ${today}`,
+            message: `${globalBirthdays.length} aniversariantes enviados em lote unico.`,
+            is_read: true,
+            read_at: new Date().toISOString(),
+            data: { date: today, total_birthdays: globalBirthdays.length, churches: byChurch.size },
+          });
+        } else {
+          failed++;
+        }
       } catch {
         failed++;
       }
