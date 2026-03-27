@@ -15,10 +15,13 @@ import { toast } from "sonner";
 import { useUser } from "@/context/UserContext";
 import {
   listMembers,
+  listChurchesInScope,
   resetWorkerPassword,
   setUserRegistrationStatus,
   setUserPaymentStatus,
   setWorkerActive,
+  setMemberRoleAccess,
+  setMemberChurchAccess,
   setWorkerDirectRelease,
   deleteUserPermanently,
   upsertWorkerByPastor,
@@ -223,6 +226,14 @@ export function ObreirosTab({
   const [selectedWorker, setSelectedWorker] = useState<UserListItem | null>(null);
   const [newPassword, setNewPassword] = useState("");
   const [resetting, setResetting] = useState(false);
+  const [openChurchModal, setOpenChurchModal] = useState(false);
+  const [openAccessModal, setOpenAccessModal] = useState(false);
+  const [actionWorker, setActionWorker] = useState<UserListItem | null>(null);
+  const [churchSearch, setChurchSearch] = useState("");
+  const [selectedChurchTotvs, setSelectedChurchTotvs] = useState("");
+  const [accessRole, setAccessRole] = useState<"obreiro" | "secretario" | "financeiro">("obreiro");
+  const [savingChurch, setSavingChurch] = useState(false);
+  const [savingAccess, setSavingAccess] = useState(false);
 
   const { data, isLoading } = useQuery({
     queryKey: ["workers", activeTotvsId, debouncedSearch, ministerRole, activeFilter, page, pageSize],
@@ -242,6 +253,13 @@ export function ObreirosTab({
         page_size: pageSize,
       }),
     refetchInterval: 10000,
+  });
+
+  const { data: churchesInScope = [], isLoading: loadingChurchesInScope } = useQuery({
+    queryKey: ["members-transfer-churches", activeTotvsId, roleLower],
+    queryFn: () => listChurchesInScope(1, 1000, activeTotvsId || undefined),
+    enabled: Boolean(activeTotvsId && (openChurchModal || openAccessModal) && (roleLower === "admin" || roleLower === "pastor")),
+    staleTime: 60_000,
   });
 
   const workers = useMemo(() => data?.workers || [], [data?.workers]);
@@ -307,6 +325,42 @@ export function ObreirosTab({
     setSelectedWorker(worker);
     setOpenViewModal(true);
   }
+
+  function openChangeChurch(worker: UserListItem) {
+    setActionWorker(worker);
+    setChurchSearch("");
+    const current = String(worker.default_totvs_id || "").trim();
+    setSelectedChurchTotvs(current);
+    setOpenChurchModal(true);
+  }
+
+  function openChangeAccess(worker: UserListItem) {
+    setActionWorker(worker);
+    const currentRole = String(worker.role || "").toLowerCase();
+    if (currentRole === "secretario" || currentRole === "financeiro") {
+      setAccessRole(currentRole);
+    } else {
+      setAccessRole("obreiro");
+    }
+    setOpenAccessModal(true);
+  }
+
+  const filteredChurches = useMemo(() => {
+    const q = churchSearch.trim().toLowerCase();
+    if (!q) return churchesInScope;
+    return churchesInScope.filter((c) => {
+      const name = String(c.church_name || "").toLowerCase();
+      const totvs = String(c.totvs_id || "").toLowerCase();
+      return name.includes(q) || totvs.includes(q);
+    });
+  }, [churchesInScope, churchSearch]);
+
+  const currentWorkerChurchName = useMemo(() => {
+    if (!actionWorker) return "";
+    const current = String(actionWorker.default_totvs_id || "").trim();
+    const found = churchesInScope.find((c) => String(c.totvs_id) === current);
+    return found?.church_name || current;
+  }, [actionWorker, churchesInScope]);
 
   async function lookupCep(force = false) {
     const cep = onlyDigits(form.cep);
@@ -549,6 +603,79 @@ export function ObreirosTab({
     }
   }
 
+  async function confirmChangeChurch() {
+    if (!actionWorker) return;
+    if (!selectedChurchTotvs) {
+      toast.error("Selecione a igreja de destino.");
+      return;
+    }
+    if (String(actionWorker.id || "") === String(usuario?.id || "")) {
+      toast.error("Você não pode mover o seu próprio cadastro.");
+      return;
+    }
+    if (String(actionWorker.default_totvs_id || "") === selectedChurchTotvs) {
+      toast.message("O membro já está nessa igreja.");
+      return;
+    }
+
+    setSavingChurch(true);
+    try {
+      await setMemberChurchAccess(String(actionWorker.id), selectedChurchTotvs);
+      toast.success("Igreja do membro atualizada com sucesso.");
+      addAuditLog("member_church_changed", {
+        user_id: String(actionWorker.id || ""),
+        from_totvs: String(actionWorker.default_totvs_id || ""),
+        to_totvs: selectedChurchTotvs,
+      });
+      setOpenChurchModal(false);
+      setActionWorker(null);
+      await refresh();
+    } catch (err: unknown) {
+      toast.error(getFriendlyError(err, "workers"));
+    } finally {
+      setSavingChurch(false);
+    }
+  }
+
+  async function confirmChangeAccess() {
+    if (!actionWorker) return;
+    if (!accessRole) {
+      toast.error("Selecione o nível de acesso.");
+      return;
+    }
+    if (String(actionWorker.id || "") === String(usuario?.id || "")) {
+      toast.error("Você não pode alterar o seu próprio acesso.");
+      return;
+    }
+    const currentRole = String(actionWorker.role || "").toLowerCase();
+    if (currentRole === "pastor") {
+      toast.error("Pastor é definido pela troca de pastor da igreja.");
+      return;
+    }
+    if (currentRole === accessRole) {
+      toast.message("Este membro já está com esse acesso.");
+      return;
+    }
+
+    setSavingAccess(true);
+    try {
+      await setMemberRoleAccess(String(actionWorker.id), accessRole);
+      toast.success("Acesso do membro atualizado.");
+      addAuditLog("member_access_changed", {
+        user_id: String(actionWorker.id || ""),
+        from_role: currentRole,
+        to_role: accessRole,
+      });
+      setOpenAccessModal(false);
+      setActionWorker(null);
+      await refresh();
+    } catch (err: unknown) {
+      toast.error(getFriendlyError(err, "workers"));
+    } finally {
+      setSavingAccess(false);
+    }
+  }
+
   async function confirmResetPassword() {
     if (!selectedWorker) return;
     if (newPassword.length < 8) {
@@ -593,6 +720,9 @@ export function ObreirosTab({
     const isObreiroTarget = String(worker.role || "").toLowerCase() === "obreiro";
     const blockDangerActions = worker.can_manage === false || isSelf;
     const blockDirectRelease = blockDangerActions || !isObreiroTarget;
+    const blockMemberManagement = blockDangerActions || !["admin", "pastor"].includes(roleLower);
+    const targetRole = String(worker.role || "").toLowerCase();
+    const blockAccessChange = blockMemberManagement || targetRole === "pastor" || targetRole === "admin";
     const canPaymentAction = isAdminUser && !isSelf;
     return (
       <DropdownMenu>
@@ -622,6 +752,12 @@ export function ObreirosTab({
           </DropdownMenuItem>
           <DropdownMenuItem onClick={() => openResetPassword(worker)} disabled={blockDangerActions}>
             Resetar senha
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => openChangeChurch(worker)} disabled={blockMemberManagement}>
+            Trocar de igreja
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => openChangeAccess(worker)} disabled={blockAccessChange}>
+            Mudar acesso
           </DropdownMenuItem>
           <DropdownMenuItem onClick={() => deleteWorker(worker)} disabled={blockDangerActions} className="text-rose-600 focus:text-rose-700">
             Deletar usuario
@@ -924,6 +1060,22 @@ export function ObreirosTab({
                       <DropdownMenuItem onClick={() => toggleDirectRelease(selectedWorker)} disabled={selectedWorker.can_manage === false}>
                         {selectedWorker.can_create_released_letter ? "Desativar liberação direta" : "Ativar liberação direta"}
                       </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={() => openChangeChurch(selectedWorker)}
+                        disabled={selectedWorker.can_manage === false || String(selectedWorker.id || "") === String(usuario?.id || "")}
+                      >
+                        Trocar de igreja
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={() => openChangeAccess(selectedWorker)}
+                        disabled={
+                          selectedWorker.can_manage === false ||
+                          String(selectedWorker.id || "") === String(usuario?.id || "") ||
+                          ["pastor", "admin"].includes(String(selectedWorker.role || "").toLowerCase())
+                        }
+                      >
+                        Mudar acesso
+                      </DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>
                 </div>
@@ -1055,6 +1207,152 @@ export function ObreirosTab({
                 </section>
               </CardContent>
             </Card>
+          ) : null}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={openChurchModal}
+        onOpenChange={(next) => {
+          setOpenChurchModal(next);
+          if (!next) {
+            setActionWorker(null);
+            setChurchSearch("");
+            setSelectedChurchTotvs("");
+          }
+        }}
+      >
+        <DialogContent className="max-h-[88vh] max-w-3xl overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Trocar membro de igreja</DialogTitle>
+            <DialogDescription>Selecione a igreja de destino para mover o membro.</DialogDescription>
+          </DialogHeader>
+
+          {actionWorker ? (
+            <div className="space-y-4">
+              <div className="rounded-xl border bg-slate-50 p-4">
+                <p className="text-sm font-semibold text-slate-900">{actionWorker.full_name}</p>
+                <p className="mt-1 text-xs text-slate-600">
+                  Igreja atual: <span className="font-medium">{currentWorkerChurchName || viewValue(actionWorker.default_totvs_id)}</span>
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <Label>Buscar igreja</Label>
+                <Input
+                  value={churchSearch}
+                  onChange={(e) => setChurchSearch(e.target.value)}
+                  placeholder="Digite nome da igreja ou TOTVS..."
+                />
+              </div>
+
+              <div className="max-h-72 overflow-auto rounded-xl border">
+                {loadingChurchesInScope ? <div className="p-4 text-sm text-slate-500">Carregando igrejas...</div> : null}
+                {!loadingChurchesInScope && filteredChurches.length === 0 ? (
+                  <div className="p-4 text-sm text-slate-500">Nenhuma igreja encontrada para selecionar.</div>
+                ) : null}
+                {!loadingChurchesInScope && filteredChurches.length > 0 ? (
+                  <ul className="divide-y">
+                    {filteredChurches.map((church) => {
+                      const selected = selectedChurchTotvs === String(church.totvs_id);
+                      return (
+                        <li key={String(church.totvs_id)}>
+                          <button
+                            type="button"
+                            className={`w-full px-4 py-3 text-left transition ${
+                              selected
+                                ? "border-l-4 border-emerald-500 bg-emerald-50 text-emerald-900"
+                                : "border-l-4 border-transparent hover:bg-slate-50"
+                            }`}
+                            onClick={() => setSelectedChurchTotvs(String(church.totvs_id))}
+                          >
+                            <div className="text-sm font-semibold text-slate-900">
+                              {church.church_name || "-"} (TOTVS {church.totvs_id})
+                            </div>
+                            <div className="mt-0.5 text-xs text-slate-600 capitalize">Classe: {church.church_class || "-"}</div>
+                          </button>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                ) : null}
+              </div>
+
+              <div className="flex justify-end gap-2">
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setOpenChurchModal(false);
+                    setActionWorker(null);
+                  }}
+                  disabled={savingChurch}
+                >
+                  Cancelar
+                </Button>
+                <Button onClick={confirmChangeChurch} disabled={savingChurch || !selectedChurchTotvs}>
+                  {savingChurch ? "Salvando..." : "Salvar"}
+                </Button>
+              </div>
+            </div>
+          ) : null}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={openAccessModal}
+        onOpenChange={(next) => {
+          setOpenAccessModal(next);
+          if (!next) {
+            setActionWorker(null);
+          }
+        }}
+      >
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Mudar acesso do membro</DialogTitle>
+            <DialogDescription>Defina o tipo de acesso do membro no sistema.</DialogDescription>
+          </DialogHeader>
+
+          {actionWorker ? (
+            <div className="space-y-4">
+              <div className="rounded-xl border bg-slate-50 p-4 text-sm">
+                <p className="font-semibold text-slate-900">{actionWorker.full_name}</p>
+                <p className="mt-1 text-slate-600">
+                  Acesso atual: <span className="font-medium capitalize">{String(actionWorker.role || "obreiro")}</span>
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <Label>Novo acesso</Label>
+                <Select value={accessRole} onValueChange={(value) => setAccessRole(value as "obreiro" | "secretario" | "financeiro")}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecione o acesso" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="obreiro">Obreiro</SelectItem>
+                    <SelectItem value="secretario">Secretário</SelectItem>
+                    <SelectItem value="financeiro">Financeiro</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-slate-500">Observação: acesso de pastor é definido na troca de pastor da igreja.</p>
+              </div>
+
+              <div className="flex justify-end gap-2">
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setOpenAccessModal(false);
+                    setActionWorker(null);
+                  }}
+                  disabled={savingAccess}
+                >
+                  Cancelar
+                </Button>
+                <Button onClick={confirmChangeAccess} disabled={savingAccess}>
+                  {savingAccess ? "Salvando..." : "Salvar"}
+                </Button>
+              </div>
+            </div>
           ) : null}
         </DialogContent>
       </Dialog>

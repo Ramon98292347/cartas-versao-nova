@@ -2830,6 +2830,35 @@ export async function setWorkerDirectRelease(workerId: string, enabled: boolean)
   }
 }
 
+export async function setMemberChurchAccess(userId: string, targetTotvsId: string) {
+  if (!isMockMode()) {
+    await api.changeMemberChurch({
+      user_id: userId,
+      target_totvs_id: targetTotvsId,
+    });
+    return;
+  }
+  const user = MOCK_USERS.find((u) => u.id === userId);
+  if (user) {
+    (user as AuthSessionData).default_totvs_id = targetTotvsId;
+    (user as AuthSessionData).totvs_access = [targetTotvsId];
+  }
+}
+
+export async function setMemberRoleAccess(userId: string, role: "obreiro" | "secretario" | "financeiro") {
+  if (!isMockMode()) {
+    await api.changeMemberAccess({
+      user_id: userId,
+      role,
+    });
+    return;
+  }
+  const user = MOCK_USERS.find((u) => u.id === userId);
+  if (user) {
+    (user as AuthSessionData).role = role;
+  }
+}
+
 export async function setUserRegistrationStatus(userId: string, registrationStatus: RegistrationStatus) {
   if (!isMockMode()) {
     await api.setUserRegistrationStatus({

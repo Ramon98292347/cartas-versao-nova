@@ -84,6 +84,16 @@ type ListWorkersBody = {
   page_size?: number;
 };
 
+type ChangeMemberChurchBody = {
+  user_id?: string;
+  target_totvs_id?: string;
+};
+
+type ChangeMemberAccessBody = {
+  user_id?: string;
+  role?: "obreiro" | "secretario" | "financeiro";
+};
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Verificação de JWT de sessão
 // ─────────────────────────────────────────────────────────────────────────────
@@ -227,7 +237,7 @@ function normalizeTotvsAccess(input: unknown, fallbackRole: Role): TotvsAccessIt
     const id = String((item as Record<string, unknown>).totvs_id || "").trim();
     const roleRaw = String((item as Record<string, unknown>).role || fallbackRole).toLowerCase();
     const role: Role =
-      roleRaw === "admin" || roleRaw === "pastor" || roleRaw === "obreiro"
+      roleRaw === "admin" || roleRaw === "pastor" || roleRaw === "obreiro" || roleRaw === "secretario" || roleRaw === "financeiro"
         ? roleRaw
         : fallbackRole;
     if (id) out.push({ totvs_id: id, role });
@@ -992,6 +1002,142 @@ async function handleListWorkers(session: SessionClaims, body: ListWorkersBody):
 // Entrada principal — roteamento por campo "action"
 // ─────────────────────────────────────────────────────────────────────────────
 
+
+async function handleChangeMemberChurch(session: SessionClaims, body: ChangeMemberChurchBody): Promise<Response> {
+  if (session.role !== "admin" && session.role !== "pastor") return json({ ok: false, error: "forbidden" }, 403);
+
+  const userId = String(body.user_id || "").trim();
+  const targetTotvsId = String(body.target_totvs_id || "").trim();
+  if (!userId) return json({ ok: false, error: "missing_user_id" }, 400);
+  if (!targetTotvsId) return json({ ok: false, error: "missing_target_totvs_id" }, 400);
+  if (userId === session.user_id) return json({ ok: false, error: "cannot_change_self" }, 403);
+
+  const sb = createClient(Deno.env.get("SUPABASE_URL") || "", Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "");
+
+  const { data: targetUser, error: targetErr } = await sb
+    .from("users")
+    .select("id, role, full_name, default_totvs_id")
+    .eq("id", userId)
+    .maybeSingle();
+  if (targetErr) return json({ ok: false, error: "db_error_target_user", details: targetErr.message }, 500);
+  if (!targetUser) return json({ ok: false, error: "target_user_not_found" }, 404);
+
+  const currentRole = String((targetUser as Record<string, unknown>).role || "").toLowerCase();
+  if (currentRole === "pastor") return json({ ok: false, error: "pastor_change_requires_set_pastor" }, 409);
+  if (currentRole === "admin") return json({ ok: false, error: "cannot_change_admin_user" }, 403);
+
+  const currentTotvs = String((targetUser as Record<string, unknown>).default_totvs_id || "").trim();
+  if (currentTotvs === targetTotvsId) return json({ ok: true, unchanged: true }, 200);
+
+  const { data: churches, error: churchesErr } = await sb.from("churches").select("totvs_id,parent_totvs_id,class");
+  if (churchesErr) return json({ ok: false, error: "db_error_churches", details: churchesErr.message }, 500);
+
+  const churchRows = (churches || []) as ChurchRow[];
+  const churchSet = new Set(churchRows.map((church) => String(church.totvs_id)));
+  if (!churchSet.has(targetTotvsId)) return json({ ok: false, error: "target_church_not_found" }, 404);
+
+  let scopeRootTotvs = session.active_totvs_id;
+  let scope: Set<string>;
+  if (session.role === "admin") {
+    scope = churchSet;
+  } else {
+    scopeRootTotvs = await resolveScopeRootTotvs(sb, session);
+    scope = computeScope(scopeRootTotvs, churchRows);
+    if (!currentTotvs || !scope.has(currentTotvs)) return json({ ok: false, error: "forbidden_member_out_of_scope" }, 403);
+    if (!scope.has(targetTotvsId)) return json({ ok: false, error: "forbidden_target_out_of_scope" }, 403);
+
+    const sessionChurchClass = normalizeChurchClass(churchRows.find((church) => church.totvs_id === scopeRootTotvs)?.class);
+    const memberChurchClass = normalizeChurchClass(churchRows.find((church) => church.totvs_id === currentTotvs)?.class);
+    const canManage = canManageMember(session.role, scopeRootTotvs, currentTotvs, sessionChurchClass, memberChurchClass, scope);
+    if (!canManage) return json({ ok: false, error: "forbidden_member_not_manageable" }, 403);
+  }
+
+  const accessRole: Role = currentRole === "secretario" || currentRole === "financeiro" ? (currentRole as Role) : "obreiro";
+  const { error: updateErr } = await sb
+    .from("users")
+    .update({
+      default_totvs_id: targetTotvsId,
+      totvs_access: [{ totvs_id: targetTotvsId, role: accessRole }],
+    })
+    .eq("id", userId);
+  if (updateErr) return json({ ok: false, error: "db_error_change_member_church", details: updateErr.message }, 500);
+
+  return json({
+    ok: true,
+    user_id: userId,
+    full_name: String((targetUser as Record<string, unknown>).full_name || ""),
+    from_totvs_id: currentTotvs || null,
+    to_totvs_id: targetTotvsId,
+  }, 200);
+}
+
+async function handleChangeMemberAccess(session: SessionClaims, body: ChangeMemberAccessBody): Promise<Response> {
+  if (session.role !== "admin" && session.role !== "pastor") return json({ ok: false, error: "forbidden" }, 403);
+
+  const userId = String(body.user_id || "").trim();
+  const nextRole = String(body.role || "").toLowerCase().trim() as Role;
+  if (!userId) return json({ ok: false, error: "missing_user_id" }, 400);
+  if (!["obreiro", "secretario", "financeiro"].includes(nextRole)) {
+    return json({ ok: false, error: "invalid_target_role" }, 400);
+  }
+  if (userId === session.user_id) return json({ ok: false, error: "cannot_change_self" }, 403);
+
+  const sb = createClient(Deno.env.get("SUPABASE_URL") || "", Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "");
+
+  const { data: targetUser, error: targetErr } = await sb
+    .from("users")
+    .select("id, role, full_name, default_totvs_id, totvs_access")
+    .eq("id", userId)
+    .maybeSingle();
+  if (targetErr) return json({ ok: false, error: "db_error_target_user", details: targetErr.message }, 500);
+  if (!targetUser) return json({ ok: false, error: "target_user_not_found" }, 404);
+
+  const currentRole = String((targetUser as Record<string, unknown>).role || "").toLowerCase();
+  if (currentRole === "pastor") return json({ ok: false, error: "pastor_change_requires_set_pastor" }, 409);
+  if (currentRole === "admin") return json({ ok: false, error: "cannot_change_admin_user" }, 403);
+  if (currentRole === nextRole) return json({ ok: true, unchanged: true }, 200);
+
+  const currentTotvs = String((targetUser as Record<string, unknown>).default_totvs_id || "").trim();
+  if (!currentTotvs) return json({ ok: false, error: "target_user_without_church" }, 409);
+
+  const { data: churches, error: churchesErr } = await sb.from("churches").select("totvs_id,parent_totvs_id,class");
+  if (churchesErr) return json({ ok: false, error: "db_error_churches", details: churchesErr.message }, 500);
+  const churchRows = (churches || []) as ChurchRow[];
+
+  if (session.role !== "admin") {
+    const scopeRootTotvs = await resolveScopeRootTotvs(sb, session);
+    const scope = computeScope(scopeRootTotvs, churchRows);
+    if (!scope.has(currentTotvs)) return json({ ok: false, error: "forbidden_member_out_of_scope" }, 403);
+
+    const sessionChurchClass = normalizeChurchClass(churchRows.find((church) => church.totvs_id === scopeRootTotvs)?.class);
+    const memberChurchClass = normalizeChurchClass(churchRows.find((church) => church.totvs_id === currentTotvs)?.class);
+    const canManage = canManageMember(session.role, scopeRootTotvs, currentTotvs, sessionChurchClass, memberChurchClass, scope);
+    if (!canManage) return json({ ok: false, error: "forbidden_member_not_manageable" }, 403);
+  }
+
+  const currentAccess = normalizeTotvsAccess((targetUser as Record<string, unknown>).totvs_access, nextRole);
+  const nextAccess = currentAccess.length > 0
+    ? currentAccess.map((access) => ({ ...access, role: nextRole }))
+    : [{ totvs_id: currentTotvs, role: nextRole }];
+
+  const { error: updateErr } = await sb
+    .from("users")
+    .update({
+      role: nextRole,
+      totvs_access: nextAccess,
+    })
+    .eq("id", userId);
+  if (updateErr) return json({ ok: false, error: "db_error_change_member_access", details: updateErr.message }, 500);
+
+  return json({
+    ok: true,
+    user_id: userId,
+    full_name: String((targetUser as Record<string, unknown>).full_name || ""),
+    from_role: currentRole,
+    to_role: nextRole,
+  }, 200);
+}
+
 Deno.serve(async (req) => {
   // Comentario: responde ao preflight do CORS sem processar nada.
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders() });
@@ -1061,6 +1207,16 @@ Deno.serve(async (req) => {
       case "list-workers": {
         if (!session) return json({ ok: false, error: "unauthorized" }, 401);
         return await handleListWorkers(session, body as ListWorkersBody);
+      }
+
+      case "change-member-church": {
+        if (!session) return json({ ok: false, error: "unauthorized" }, 401);
+        return await handleChangeMemberChurch(session, body as ChangeMemberChurchBody);
+      }
+
+      case "change-member-access": {
+        if (!session) return json({ ok: false, error: "unauthorized" }, 401);
+        return await handleChangeMemberAccess(session, body as ChangeMemberAccessBody);
       }
 
       default:

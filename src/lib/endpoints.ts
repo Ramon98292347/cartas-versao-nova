@@ -72,6 +72,10 @@ export const api = {
     page?: number;
     page_size?: number;
   }) => post("members-api", { action: "list-members", ...body }),
+  changeMemberChurch: (body: { user_id: string; target_totvs_id: string }) =>
+    post("members-api", { action: "change-member-church", ...body }),
+  changeMemberAccess: (body: { user_id: string; role: "obreiro" | "secretario" | "financeiro" }) =>
+    post("members-api", { action: "change-member-access", ...body }),
   listPastors: (body: JsonBody) => post("churches-api", { action: "list-pastors", ...body }),
   setChurchPastor: (body: { church_totvs_id: string; pastor_user_id: string }) =>
     post("churches-api", { action: "set-pastor", ...body }),
