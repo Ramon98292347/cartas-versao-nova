@@ -171,8 +171,8 @@ const emptyForm: MemberDocForm = {
   qr_code_url: "",
   igreja_nome: "",
   ficha_titulo: "Ficha de cadastro de Membros",
-  ficha_subtitulo: "Setorial de VitÃ³ria",
-  ficha_rodape: "Av Santo Antonio NÂ° 366, Caratoira, VitÃ³ria ES",
+  ficha_subtitulo: "Setorial de Vitória",
+  ficha_rodape: "Av Santo Antonio N° 366, Caratoira, Vitória ES",
   compromisso_funcao: "",
   congregacao_endereco: "",
   congregacao_numero: "",
@@ -310,15 +310,15 @@ function toInputDate(value: string | null | undefined) {
 }
 
 function maskCpf(cpf: string | null | undefined) {
-  return formatCpfBr(cpf) || "â€”";
+  return formatCpfBr(cpf) || "—";
 }
 
 function formatPhone(phone: string | null | undefined) {
-  return formatPhoneBrValue(phone) || "â€”";
+  return formatPhoneBrValue(phone) || "—";
 }
 
 function formatDateBr(value: string | null | undefined) {
-  return formatDateBrValue(value) || "â€”";
+  return formatDateBrValue(value) || "—";
 }
 
 function normalizeMinisterRole(value: string | null | undefined) {
@@ -429,7 +429,7 @@ function memberToForm(member: UserListItem, churchName: string, pastorSignature:
     qr_code_url: "",
     igreja_nome: churchName,
     ficha_titulo: "Ficha de cadastro de Membros",
-    ficha_subtitulo: churchName || "Setorial de VitÃ³ria",
+    ficha_subtitulo: churchName || "Setorial de Vitória",
     ficha_rodape: churchFooter,
     compromisso_funcao: member.minister_role || "",
     congregacao_endereco: member.address_street || "",
@@ -594,7 +594,7 @@ body{margin:0;font-family:Montserrat,Arial,sans-serif;background:#fff}
 <body><div class="page"><div class="wrap">
 <div class="side front">
 <div class="photo"><img src="${foto}" alt="Foto"></div>
-<div class="text-center"><p class="name">${nome}</p><p class="role">${funcao}</p><p class="info">ESTE DOCUMENTO Ã‰ PESSOAL E INTRANSFERÃVEL</p></div>
+<div class="text-center"><p class="name">${nome}</p><p class="role">${funcao}</p><p class="info">ESTE DOCUMENTO É PESSOAL E INTRANSFERÍVEL</p></div>
 </div>
 <div class="side back">
 <div class="title">CARTEIRINHA DE MEMBRO</div>
@@ -611,7 +611,7 @@ function buildFichaMembroHtml(form: MemberDocForm) {
   const foto = escapeHtml(form.foto_3x4_url || svgPlaceholder("Foto 3x4", 300, 400));
   const logo = "https://idipilrcaqittmnapmbq.supabase.co/storage/v1/object/public/banner/logo/logo%20d.png";
   const titulo = escapeHtml(form.ficha_titulo || "Ficha de cadastro de Membros");
-  const subtitulo = escapeHtml(form.ficha_subtitulo || "Setorial de VitÃ³ria");
+  const subtitulo = escapeHtml(form.ficha_subtitulo || "Setorial de Vitória");
   const rodape = escapeHtml(form.ficha_rodape || "");
 
   const nasc = escapeHtml(formatDateBrValue(form.data_nascimento || ""));
@@ -658,16 +658,16 @@ function buildFichaMembroHtml(form: MemberDocForm) {
 <div class="title"><h1>${titulo}</h1><h2>${subtitulo}</h2></div>
 <div class="content">
 <div class="row"><div class="field"><div class="label">Nome:</div><div class="value w-70">${escapeHtml(form.nome_completo)}</div></div></div>
-<div class="row"><div class="field"><div class="label">EndereÃ§o:</div><div class="value w-70">${escapeHtml(form.endereco)}</div></div><div class="field"><div class="label">NÃºmero da casa:</div><div class="value w-30">${escapeHtml(form.numero)}</div></div></div>
+<div class="row"><div class="field"><div class="label">Endereço:</div><div class="value w-70">${escapeHtml(form.endereco)}</div></div><div class="field"><div class="label">Número da casa:</div><div class="value w-30">${escapeHtml(form.numero)}</div></div></div>
 <div class="row"><div class="field"><div class="label">Bairro:</div><div class="value w-45">${escapeHtml(form.bairro)}</div></div><div class="field"><div class="label">Cidade:</div><div class="value w-45">${escapeHtml(form.cidade)}</div></div><div class="field"><div class="label">Estado:</div><div class="value w-25">${escapeHtml(form.estado)}</div></div><div class="field"><div class="label">Cep:</div><div class="value w-25">${escapeHtml(formatCepBr(form.cep_congregacao || ""))}</div></div></div>
 <div class="row"><div class="field"><div class="label">RG:</div><div class="value w-35">${escapeHtml(form.rg)}</div></div><div class="field"><div class="label">CPF:</div><div class="value w-35">${escapeHtml(formatCpfBr(form.cpf))}</div></div><div class="field"><div class="label">Data de Nascimento:</div><div class="value w-45">${nasc}</div></div></div>
 <div class="row"><div class="field"><div class="label">Cidade de Nascimento:</div><div class="value w-60">${escapeHtml(form.cidade_nascimento)}</div></div><div class="field"><div class="label">Estado:</div><div class="value w-35">${escapeHtml(form.uf_nascimento)}</div></div></div>
 <div class="row"><div class="field"><div class="label">Estado Civil:</div><div class="value w-40">${escapeHtml(form.estado_civil)}</div></div><div class="field"><div class="label">Telefone:</div><div class="value w-45">${escapeHtml(formatPhoneBrValue(form.telefone))}</div></div></div>
-<div class="row"><div class="field"><div class="label">EndereÃ§o de email:</div><div class="value w-70">${escapeHtml(form.email)}</div></div></div>
-<div class="row"><div class="field"><div class="label">ProfissÃ£o:</div><div class="value w-60">${escapeHtml(form.profissao)}</div></div><div class="field"><div class="label">Idade:</div><div class="value w-25">${escapeHtml(calcularIdadeBr(form.data_nascimento))}</div></div></div>
+<div class="row"><div class="field"><div class="label">Endereço de email:</div><div class="value w-70">${escapeHtml(form.email)}</div></div></div>
+<div class="row"><div class="field"><div class="label">Profissão:</div><div class="value w-60">${escapeHtml(form.profissao)}</div></div><div class="field"><div class="label">Idade:</div><div class="value w-25">${escapeHtml(calcularIdadeBr(form.data_nascimento))}</div></div></div>
 <div class="section-title">Dados Ministeriais do Membro e do Obreiro (a)</div>
-<div class="row"><div class="field"><div class="label">Data de Batismo:</div><div class="value w-45">${bat}</div></div><div class="field"><div class="label">FunÃ§Ã£o Ministerial:</div><div class="value w-50">${escapeHtml(form.funcao_ministerial)}</div></div></div>
-<div class="row"><div class="field"><div class="label">Data da OrdenaÃ§Ã£o:</div><div class="value w-45">${ord}</div></div></div>
+<div class="row"><div class="field"><div class="label">Data de Batismo:</div><div class="value w-45">${bat}</div></div><div class="field"><div class="label">Função Ministerial:</div><div class="value w-50">${escapeHtml(form.funcao_ministerial)}</div></div></div>
+<div class="row"><div class="field"><div class="label">Data da Ordenação:</div><div class="value w-45">${ord}</div></div></div>
 </div>
 <div class="footer">${rodape}</div>
 </div></body></html>`;
@@ -689,7 +689,7 @@ export default function PastorMembrosPage() {
   const [membersPage, setMembersPage] = useState(1);
   const [membersPageSize, setMembersPageSize] = useState(50);
   const [filterTotvs, setFilterTotvs] = useState("all");
-  // Comentario: filtro de membros ativos/inativos â€” undefined = todos ativos, false = so inativos
+  // Comentario: filtro de membros ativos/inativos — undefined = todos ativos, false = so inativos
   const [filterActive, setFilterActive] = useState<boolean | undefined>(undefined);
   // Comentario: searchChurch e o texto digitado no combobox de busca de igreja.
   const [searchChurch, setSearchChurch] = useState("");
@@ -716,10 +716,10 @@ export default function PastorMembrosPage() {
       ? undefined
       : activeTotvsId || undefined;
 
-  // â”€â”€ Aba ImpressÃ£o em lote â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Aba Impressão em lote ──────────────────────────────────────────────────
   // Comentario: selectedPrintIds guarda os IDs das carteirinhas selecionadas para imprimir
   const [selectedPrintIds, setSelectedPrintIds] = useState<Set<string>>(new Set());
-  // Comentario: filterPrint controla se mostra todas ou sÃ³ as nÃ£o impressas
+  // Comentario: filterPrint controla se mostra todas ou só as não impressas
   const [filterPrint, setFilterPrint] = useState<"all" | "pending">("pending");
   const [sendingBatch, setSendingBatch] = useState(false);
   const [printBatchUrl, setPrintBatchUrl] = useState("");
@@ -950,7 +950,7 @@ export default function PastorMembrosPage() {
     enabled: Boolean(docsTabOpen && selectedMemberId && memberChurchTotvsId),
   });
 
-  // Comentario: Realtime â€” escuta mudancas nas tabelas de ficha e carteirinha
+  // Comentario: Realtime — escuta mudancas nas tabelas de ficha e carteirinha
   // Substitui o polling de 10s. Quando o webhook atualiza o status, o frontend reage instantaneamente.
   const refetchDocsStatusCb = useCallback(() => { void refetchDocsStatus(); }, [refetchDocsStatus]);
   useEffect(() => {
@@ -1008,7 +1008,7 @@ export default function PastorMembrosPage() {
       setLastCepLookup(cepDigits);
     } catch (err) {
       if (force) {
-        toast.error(String((err as Error)?.message || "") === "cep_not_found" ? "CEP nÃ£o encontrado." : "Falha ao buscar CEP.");
+        toast.error(String((err as Error)?.message || "") === "cep_not_found" ? "CEP não encontrado." : "Falha ao buscar CEP.");
       }
     } finally {
       setCepLookupLoading(false);
@@ -1093,7 +1093,7 @@ export default function PastorMembrosPage() {
 
   // Comentario: faz upload da foto para o bucket "avatars" e salva a URL no formulario.
   async function uploadFoto(file: File) {
-    if (!supabase) { toast.error("Supabase nÃ£o configurado."); return; }
+    if (!supabase) { toast.error("Supabase não configurado."); return; }
     setUploadingFoto(true);
     try {
       const cpfRaw = onlyDigits(form.cpf);
@@ -1127,13 +1127,13 @@ export default function PastorMembrosPage() {
       localStorage.setItem(`ipda_member_doc_draft_${selectedMemberId}`, JSON.stringify(form));
       toast.success("Rascunho salvo localmente.");
     } catch {
-      toast.error("NÃ£o foi possÃ­vel salvar o rascunho.");
+      toast.error("Não foi possível salvar o rascunho.");
     } finally {
       setSavingDraft(false);
     }
   }
 
-  // â”€â”€ ImpressÃ£o em lote: envia carteirinhas selecionadas ao webhook n8n â”€â”€â”€â”€â”€â”€
+  // ── Impressão em lote: envia carteirinhas selecionadas ao webhook n8n ──────
   async function enviarLoteImpressao() {
     if (selectedPrintIds.size === 0) {
       toast.error("Selecione pelo menos uma carteirinha para imprimir.");
@@ -1227,9 +1227,9 @@ export default function PastorMembrosPage() {
         },
       });
       await refetchDocsStatus();
-      toast.success("Documento enviado para confecÃ§Ã£o.");
+      toast.success("Documento enviado para confecção.");
     } catch {
-      toast.error("Falha ao enviar para confecÃ§Ã£o.");
+      toast.error("Falha ao enviar para confecção.");
     } finally {
       setSending(false);
     }
@@ -1292,7 +1292,7 @@ export default function PastorMembrosPage() {
         dados,
       });
 
-      toast.success("Ficha enviada para confecÃ§Ã£o! Aguarde o processamento.");
+      toast.success("Ficha enviada para confecção! Aguarde o processamento.");
       await refetchDocsStatus();
     } catch (err) {
       toast.error(`Falha ao gerar ficha: ${String((err as Error)?.message || err)}`);
@@ -1324,17 +1324,17 @@ export default function PastorMembrosPage() {
         <>
       <div className="mb-4">
         <h2 className="text-4xl font-extrabold tracking-tight text-slate-900">Membros</h2>
-        <p className="mt-1 text-base text-slate-600">Gestao de membros com visualizacao, filtros e documentos.</p>
+        <p className="mt-1 text-base text-slate-600">Gestão de membros com visualização, filtros e documentos.</p>
       </div>
 
       <section className="mb-5 grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-7">
         <MiniCard title="Total de membros" value={counters.total} subtitle="membros encontrados" gradient={memberTone.total} />
         <MiniCard title="Pastor" value={counters.pastor} subtitle="pastores" gradient={memberTone.pastor} />
-        <MiniCard title="Presbitero" value={counters.presbitero} subtitle="presbiteros" gradient={memberTone.presbitero} />
-        <MiniCard title="Diacono" value={counters.diacono} subtitle="diaconos" gradient={memberTone.diacono} />
+        <MiniCard title="Presbítero" value={counters.presbitero} subtitle="presbíteros" gradient={memberTone.presbitero} />
+        <MiniCard title="Diácono" value={counters.diacono} subtitle="diáconos" gradient={memberTone.diacono} />
         <MiniCard title="Cooperador" value={counters.obreiro} subtitle="cooperadores" gradient={memberTone.obreiro} />
-        <MiniCard title="Membros ativos" value={counters.batizados} subtitle="ministerio membro" gradient={memberTone.batizados} />
-        {/* Comentario: card clicavel â€” ao clicar mostra so os inativos, clica de novo volta aos ativos */}
+        <MiniCard title="Membros ativos" value={counters.batizados} subtitle="ministério membro" gradient={memberTone.batizados} />
+        {/* Comentario: card clicavel — ao clicar mostra so os inativos, clica de novo volta aos ativos */}
         <MiniCard
           title="Inativos"
           value={inativosCount}
@@ -1464,7 +1464,7 @@ export default function PastorMembrosPage() {
         />
       ) : null}
 
-      {/* â”€â”€ Aba ImpressÃ£o em lote â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+      {/* ── Aba Impressão em lote ───────────────────────────────────────── */}
       {tab === "impressao" ? (
         <Card className="rounded-2xl border border-slate-200 bg-white shadow-sm">
           <CardHeader>
@@ -1569,12 +1569,12 @@ export default function PastorMembrosPage() {
                               {c.member_avatar_url ? (
                                 <img src={c.member_avatar_url} alt="" className="h-10 w-8 rounded border border-slate-200 object-cover" />
                               ) : (
-                                <div className="flex h-10 w-8 items-center justify-center rounded bg-slate-100 text-xs text-slate-400">â€”</div>
+                                <div className="flex h-10 w-8 items-center justify-center rounded bg-slate-100 text-xs text-slate-400">—</div>
                               )}
                             </td>
-                            <td className="px-3 py-2 font-medium text-slate-900">{c.member_name || "â€”"}</td>
-                            <td className="px-3 py-2 text-slate-600">{c.member_cpf || "â€”"}</td>
-                            <td className="px-3 py-2 text-slate-600">{c.member_minister_role || "â€”"}</td>
+                            <td className="px-3 py-2 font-medium text-slate-900">{c.member_name || "—"}</td>
+                            <td className="px-3 py-2 text-slate-600">{c.member_cpf || "—"}</td>
+                            <td className="px-3 py-2 text-slate-600">{c.member_minister_role || "—"}</td>
                             <td className="px-3 py-2">
                               {c.printed_at ? (
                                 <Badge variant="outline" className="border-emerald-200 bg-emerald-50 text-emerald-700">
@@ -1695,7 +1695,7 @@ export default function PastorMembrosPage() {
                   </div>
                   <div className="flex flex-wrap gap-2">
                     <Badge variant="outline" className="border-blue-200 bg-blue-50 text-blue-700">
-                      Cargo: {member.minister_role || "â€”"}
+                      Cargo: {member.minister_role || "—"}
                     </Badge>
                     <Badge variant="outline" className={statusBadge(member.is_active !== false)}>
                       {member.is_active === false ? "Inativo" : "Ativo"}
@@ -1706,7 +1706,7 @@ export default function PastorMembrosPage() {
                       <DropdownMenuTrigger asChild>
                         <Button size="sm" variant="outline" className="h-8 px-2">
                           <MoreVertical className="mr-1 h-4 w-4" />
-                          Acoes
+                          Ações
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
@@ -1820,7 +1820,7 @@ export default function PastorMembrosPage() {
                     <Select value={carteirinhaTemplate} onValueChange={(value) => setCarteirinhaTemplate(value as CarteirinhaTemplate)}>
                       <SelectTrigger><SelectValue /></SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="padrao">Carteirinha IPDA - Padrao</SelectItem>
+                        <SelectItem value="padrao">Carteirinha IPDA - Padrão</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
@@ -1830,7 +1830,7 @@ export default function PastorMembrosPage() {
                     <Select value={fichaTemplate} onValueChange={(value) => setFichaTemplate(value as FichaTemplate)}>
                       <SelectTrigger><SelectValue /></SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="padrao">Ficha de membro - Padrao</SelectItem>
+                        <SelectItem value="padrao">Ficha de membro - Padrão</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
@@ -1838,7 +1838,7 @@ export default function PastorMembrosPage() {
               </div>
             ) : null}
 
-            {/* BotÃ£o de preenchimento manual da carteirinha removido: documento so aparece quando existir no banco */}
+            {/* Botão de preenchimento manual da carteirinha removido: documento so aparece quando existir no banco */}
 
             {tab === "ficha_membro" ? (
               <div className="flex justify-end">
@@ -1879,20 +1879,20 @@ export default function PastorMembrosPage() {
                 <Input value={form.igreja_nome} onChange={(e) => setForm((prev) => ({ ...prev, igreja_nome: e.target.value }))} />
               </div>
               <div className="space-y-1">
-                <Label>MatrÃ­cula</Label>
+                <Label>Matrícula</Label>
                 <Input value={form.matricula} onChange={(e) => setForm((prev) => ({ ...prev, matricula: e.target.value }))} />
               </div>
             </div>
 
             <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
               <div className="space-y-1 xl:col-span-2"><Label>Nome completo</Label><Input value={form.nome_completo} onChange={(e) => setForm((prev) => ({ ...prev, nome_completo: e.target.value }))} /></div>
-              <div className="space-y-1"><Label>FunÃ§Ã£o ministerial</Label><Input value={form.funcao_ministerial} onChange={(e) => setForm((prev) => ({ ...prev, funcao_ministerial: e.target.value }))} /></div>
+              <div className="space-y-1"><Label>Função ministerial</Label><Input value={form.funcao_ministerial} onChange={(e) => setForm((prev) => ({ ...prev, funcao_ministerial: e.target.value }))} /></div>
               <div className="space-y-1"><Label>Data de nascimento</Label><Input type="date" value={form.data_nascimento} onChange={(e) => setForm((prev) => ({ ...prev, data_nascimento: e.target.value }))} /></div>
             </div>
 
             <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-              <div className="space-y-1 xl:col-span-2"><Label>EndereÃ§o</Label><Input value={form.endereco} onChange={(e) => setForm((prev) => ({ ...prev, endereco: e.target.value }))} /></div>
-              <div className="space-y-1"><Label>NÃºmero</Label><Input value={form.numero} onChange={(e) => setForm((prev) => ({ ...prev, numero: e.target.value }))} /></div>
+              <div className="space-y-1 xl:col-span-2"><Label>Endereço</Label><Input value={form.endereco} onChange={(e) => setForm((prev) => ({ ...prev, endereco: e.target.value }))} /></div>
+              <div className="space-y-1"><Label>Número</Label><Input value={form.numero} onChange={(e) => setForm((prev) => ({ ...prev, numero: e.target.value }))} /></div>
               <div className="space-y-1"><Label>Bairro</Label><Input value={form.bairro} onChange={(e) => setForm((prev) => ({ ...prev, bairro: e.target.value }))} /></div>
             </div>
 
@@ -1945,7 +1945,7 @@ export default function PastorMembrosPage() {
                 {carteirinhaPronta ? (
                   <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4">
                     <p className="text-sm font-semibold text-emerald-700">Carteirinha pronta para uso.</p>
-                    <p className="mt-1 text-xs text-emerald-700">O arquivo final estÃ¡ disponÃ­vel para visualizaÃ§Ã£o e download.</p>
+                    <p className="mt-1 text-xs text-emerald-700">O arquivo final está disponível para visualização e download.</p>
                     <div className="mt-3 flex flex-wrap gap-2">
                       <Button size="sm" onClick={() => window.open(carteirinhaLink, "_blank", "noopener,noreferrer")}>
                         Visualizar carteirinha
@@ -1968,7 +1968,7 @@ export default function PastorMembrosPage() {
                 ) : null}
                 {!carteirinhaPronta ? (
                   <div className="rounded-xl border border-slate-200 bg-white p-3 text-sm text-slate-600">
-                    A carteirinha ainda nÃ£o estÃ¡ pronta. Aguarde a confecÃ§Ã£o para visualizar.
+                    A carteirinha ainda não está pronta. Aguarde a confecção para visualizar.
                   </div>
                 ) : null}
               </div>
@@ -1976,7 +1976,7 @@ export default function PastorMembrosPage() {
 
             {tab === "ficha_membro" ? (
               <div className="space-y-3 rounded-xl border border-slate-200 p-4">
-                {/* BotÃ£o para gerar a ficha â€” sÃ³ aparece quando nÃ£o hÃ¡ URL pronta */}
+                {/* Botão para gerar a ficha — só aparece quando não há URL pronta */}
                 {!fichaPronta ? (
                   <div className="flex flex-wrap items-center gap-2">
                     <Button
@@ -1991,11 +1991,11 @@ export default function PastorMembrosPage() {
                   </div>
                 ) : null}
 
-                {/* Quando a ficha estiver PRONTA exibe caixa verde com botÃµes de visualizar e baixar */}
+                {/* Quando a ficha estiver PRONTA exibe caixa verde com botões de visualizar e baixar */}
                 {fichaPronta ? (
                   <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4">
                     <p className="text-sm font-semibold text-emerald-700">Ficha do membro pronta.</p>
-                    <p className="mt-1 text-xs text-emerald-700">O arquivo final estÃ¡ disponÃ­vel para visualizaÃ§Ã£o e download.</p>
+                    <p className="mt-1 text-xs text-emerald-700">O arquivo final está disponível para visualização e download.</p>
                     <div className="mt-3 flex flex-wrap gap-2">
                       <Button
                         size="sm"
@@ -2016,22 +2016,22 @@ export default function PastorMembrosPage() {
                 {manualFichaMembro ? (
                   <div className="grid gap-3 md:grid-cols-3">
                     <div className="space-y-1">
-                      <Label>TÃ­tulo da ficha</Label>
+                      <Label>Título da ficha</Label>
                       <Input value={form.ficha_titulo} onChange={(e) => setForm((prev) => ({ ...prev, ficha_titulo: e.target.value }))} />
                     </div>
                     <div className="space-y-1">
-                      <Label>SubtÃ­tulo da ficha</Label>
+                      <Label>Subtítulo da ficha</Label>
                       <Input value={form.ficha_subtitulo} onChange={(e) => setForm((prev) => ({ ...prev, ficha_subtitulo: e.target.value }))} />
                     </div>
                   <div className="space-y-1">
-                    <Label>RodapÃ© endereÃ§o</Label>
+                    <Label>Rodapé endereço</Label>
                     <Input value={rodapeAuto || form.ficha_rodape} disabled />
                   </div>
                 </div>
                 ) : null}
                 {!fichaPronta ? (
                   <div className="overflow-hidden rounded-xl border border-slate-200">
-                    <iframe title="PrÃ©-visualizaÃ§Ã£o ficha de membro" className="h-[640px] w-full bg-white" srcDoc={fichaMembroHtml} />
+                    <iframe title="Pré-visualização ficha de membro" className="h-[640px] w-full bg-white" srcDoc={fichaMembroHtml} />
                   </div>
                 ) : null}
               </div>
@@ -2042,7 +2042,7 @@ export default function PastorMembrosPage() {
                 <h4 className="text-sm font-semibold text-slate-800">Ficha de cadastro de obreiro(a) - dados pessoais</h4>
                 <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
                   <div className="space-y-1">
-                    <Label>FunÃ§Ã£o no termo</Label>
+                    <Label>Função no termo</Label>
                     <Select
                       value={form.compromisso_funcao}
                       onValueChange={(value) => setForm((prev) => ({ ...prev, compromisso_funcao: value }))}
@@ -2055,17 +2055,17 @@ export default function PastorMembrosPage() {
                         <SelectItem value="Cooperador">Cooperador</SelectItem>
                         <SelectItem value="Obreiro">Obreiro</SelectItem>
                         <SelectItem value="Membro">Membro</SelectItem>
-                        <SelectItem value="Voluntario Financeiro">VoluntÃ¡rio Financeiro</SelectItem>
+                        <SelectItem value="Voluntario Financeiro">Voluntário Financeiro</SelectItem>
                         <SelectItem value="Dirigente">Dirigente</SelectItem>
                         <SelectItem value="Conselheiro Espiritual">Conselheiro Espiritual</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
                   <div className="space-y-1 xl:col-span-2">
-                    <Label>EndereÃ§o da congregaÃ§Ã£o</Label>
+                    <Label>Endereço da congregação</Label>
                     <Input value={form.congregacao_endereco} onChange={(e) => setForm((prev) => ({ ...prev, congregacao_endereco: e.target.value }))} />
                   </div>
-                  <div className="space-y-1"><Label>NÃºmero</Label><Input value={form.congregacao_numero} onChange={(e) => setForm((prev) => ({ ...prev, congregacao_numero: e.target.value }))} /></div>
+                  <div className="space-y-1"><Label>Número</Label><Input value={form.congregacao_numero} onChange={(e) => setForm((prev) => ({ ...prev, congregacao_numero: e.target.value }))} /></div>
                   <div className="space-y-1"><Label>Bairro</Label><Input value={form.congregacao_bairro} onChange={(e) => setForm((prev) => ({ ...prev, congregacao_bairro: e.target.value }))} /></div>
                   <div className="space-y-1"><Label>Cidade</Label><Input value={form.congregacao_cidade} onChange={(e) => setForm((prev) => ({ ...prev, congregacao_cidade: e.target.value }))} /></div>
                   <div className="space-y-1 xl:col-span-2"><Label>Antiga sede central</Label><Input value={form.antiga_sede_central} onChange={(e) => setForm((prev) => ({ ...prev, antiga_sede_central: e.target.value }))} /></div>
@@ -2076,50 +2076,50 @@ export default function PastorMembrosPage() {
                   <div className="space-y-1"><Label>UF de nascimento</Label><Input value={form.uf_nascimento} onChange={(e) => setForm((prev) => ({ ...prev, uf_nascimento: e.target.value }))} /></div>
                   <div className="space-y-1"><Label>Data de casamento</Label><Input type="date" value={form.data_casamento} onChange={(e) => setForm((prev) => ({ ...prev, data_casamento: e.target.value }))} /></div>
                   <div className="space-y-1 xl:col-span-2"><Label>Passaporte</Label><Input value={form.passaporte} onChange={(e) => setForm((prev) => ({ ...prev, passaporte: e.target.value }))} /></div>
-                  <div className="space-y-1"><Label>ProfissÃ£o</Label><Input value={form.profissao} onChange={(e) => setForm((prev) => ({ ...prev, profissao: e.target.value }))} /></div>
-                  <div className="space-y-1"><Label>OcupaÃ§Ã£o atual</Label><Input value={form.ocupacao_atual} onChange={(e) => setForm((prev) => ({ ...prev, ocupacao_atual: e.target.value }))} /></div>
+                  <div className="space-y-1"><Label>Profissão</Label><Input value={form.profissao} onChange={(e) => setForm((prev) => ({ ...prev, profissao: e.target.value }))} /></div>
+                  <div className="space-y-1"><Label>Ocupação atual</Label><Input value={form.ocupacao_atual} onChange={(e) => setForm((prev) => ({ ...prev, ocupacao_atual: e.target.value }))} /></div>
                   <div className="space-y-1 xl:col-span-2"><Label>Nome do pai</Label><Input value={form.nome_pai} onChange={(e) => setForm((prev) => ({ ...prev, nome_pai: e.target.value }))} /></div>
-                  <div className="space-y-1 xl:col-span-2"><Label>Nome da mÃ£e</Label><Input value={form.nome_mae} onChange={(e) => setForm((prev) => ({ ...prev, nome_mae: e.target.value }))} /></div>
+                  <div className="space-y-1 xl:col-span-2"><Label>Nome da mãe</Label><Input value={form.nome_mae} onChange={(e) => setForm((prev) => ({ ...prev, nome_mae: e.target.value }))} /></div>
                 </div>
 
                 <h4 className="text-sm font-semibold text-slate-800">Dados familiares</h4>
                 <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-                  <div className="space-y-1"><Label>Tem filhos (sim/nÃ£o)</Label><Input value={form.tem_filhos} onChange={(e) => setForm((prev) => ({ ...prev, tem_filhos: e.target.value }))} /></div>
-                  <div className="space-y-1"><Label>NÂº dependentes</Label><Input value={form.dependentes_qtd} onChange={(e) => setForm((prev) => ({ ...prev, dependentes_qtd: e.target.value }))} /></div>
+                  <div className="space-y-1"><Label>Tem filhos (sim/não)</Label><Input value={form.tem_filhos} onChange={(e) => setForm((prev) => ({ ...prev, tem_filhos: e.target.value }))} /></div>
+                  <div className="space-y-1"><Label>Nº dependentes</Label><Input value={form.dependentes_qtd} onChange={(e) => setForm((prev) => ({ ...prev, dependentes_qtd: e.target.value }))} /></div>
                   <div className="space-y-1 xl:col-span-2"><Label>Filho(a) 1 - nome</Label><Input value={form.filho1_nome} onChange={(e) => setForm((prev) => ({ ...prev, filho1_nome: e.target.value }))} /></div>
                   <div className="space-y-1"><Label>Filho(a) 1 - nascimento</Label><Input type="date" value={form.filho1_nascimento} onChange={(e) => setForm((prev) => ({ ...prev, filho1_nascimento: e.target.value }))} /></div>
                   <div className="space-y-1 xl:col-span-2"><Label>Filho(a) 2 - nome</Label><Input value={form.filho2_nome} onChange={(e) => setForm((prev) => ({ ...prev, filho2_nome: e.target.value }))} /></div>
                   <div className="space-y-1"><Label>Filho(a) 2 - nascimento</Label><Input type="date" value={form.filho2_nascimento} onChange={(e) => setForm((prev) => ({ ...prev, filho2_nascimento: e.target.value }))} /></div>
                   <div className="space-y-1 xl:col-span-2"><Label>Filho(a) 3 - nome</Label><Input value={form.filho3_nome} onChange={(e) => setForm((prev) => ({ ...prev, filho3_nome: e.target.value }))} /></div>
                   <div className="space-y-1"><Label>Filho(a) 3 - nascimento</Label><Input type="date" value={form.filho3_nascimento} onChange={(e) => setForm((prev) => ({ ...prev, filho3_nascimento: e.target.value }))} /></div>
-                  <div className="space-y-1"><Label>DoenÃ§a na famÃ­lia (sim/nÃ£o)</Label><Input value={form.doenca_familia} onChange={(e) => setForm((prev) => ({ ...prev, doenca_familia: e.target.value }))} /></div>
-                  <div className="space-y-1 xl:col-span-3"><Label>Qual doenÃ§a</Label><Input value={form.doenca_familia_qual} onChange={(e) => setForm((prev) => ({ ...prev, doenca_familia_qual: e.target.value }))} /></div>
-                  <div className="space-y-1 xl:col-span-2"><Label>Nome do(a) cÃ´njuge</Label><Input value={form.nome_conjuge} onChange={(e) => setForm((prev) => ({ ...prev, nome_conjuge: e.target.value }))} /></div>
-                  <div className="space-y-1"><Label>CÃ´njuge - nascimento</Label><Input type="date" value={form.conjuge_nascimento} onChange={(e) => setForm((prev) => ({ ...prev, conjuge_nascimento: e.target.value }))} /></div>
-                  <div className="space-y-1"><Label>CÃ´njuge - RG</Label><Input value={form.conjuge_rg} onChange={(e) => setForm((prev) => ({ ...prev, conjuge_rg: e.target.value }))} /></div>
-                  <div className="space-y-1"><Label>CÃ´njuge - CPF</Label><Input value={form.conjuge_cpf} onChange={(e) => setForm((prev) => ({ ...prev, conjuge_cpf: e.target.value }))} /></div>
-                  <div className="space-y-1"><Label>CÃ´njuge Ã© crente</Label><Input value={form.conjuge_e_crente} onChange={(e) => setForm((prev) => ({ ...prev, conjuge_e_crente: e.target.value }))} /></div>
-                  <div className="space-y-1 xl:col-span-2"><Label>Outro ministÃ©rio (qual)</Label><Input value={form.conjuge_outro_ministerio} onChange={(e) => setForm((prev) => ({ ...prev, conjuge_outro_ministerio: e.target.value }))} /></div>
+                  <div className="space-y-1"><Label>Doença na família (sim/não)</Label><Input value={form.doenca_familia} onChange={(e) => setForm((prev) => ({ ...prev, doenca_familia: e.target.value }))} /></div>
+                  <div className="space-y-1 xl:col-span-3"><Label>Qual doença</Label><Input value={form.doenca_familia_qual} onChange={(e) => setForm((prev) => ({ ...prev, doenca_familia_qual: e.target.value }))} /></div>
+                  <div className="space-y-1 xl:col-span-2"><Label>Nome do(a) cônjuge</Label><Input value={form.nome_conjuge} onChange={(e) => setForm((prev) => ({ ...prev, nome_conjuge: e.target.value }))} /></div>
+                  <div className="space-y-1"><Label>Cônjuge - nascimento</Label><Input type="date" value={form.conjuge_nascimento} onChange={(e) => setForm((prev) => ({ ...prev, conjuge_nascimento: e.target.value }))} /></div>
+                  <div className="space-y-1"><Label>Cônjuge - RG</Label><Input value={form.conjuge_rg} onChange={(e) => setForm((prev) => ({ ...prev, conjuge_rg: e.target.value }))} /></div>
+                  <div className="space-y-1"><Label>Cônjuge - CPF</Label><Input value={form.conjuge_cpf} onChange={(e) => setForm((prev) => ({ ...prev, conjuge_cpf: e.target.value }))} /></div>
+                  <div className="space-y-1"><Label>Cônjuge é crente</Label><Input value={form.conjuge_e_crente} onChange={(e) => setForm((prev) => ({ ...prev, conjuge_e_crente: e.target.value }))} /></div>
+                  <div className="space-y-1 xl:col-span-2"><Label>Outro ministério (qual)</Label><Input value={form.conjuge_outro_ministerio} onChange={(e) => setForm((prev) => ({ ...prev, conjuge_outro_ministerio: e.target.value }))} /></div>
                 </div>
 
                 <h4 className="text-sm font-semibold text-slate-800">Dados ministeriais do(a) obreiro(a)</h4>
                 <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-                  <div className="space-y-1 xl:col-span-2"><Label>DenominaÃ§Ã£o em que aceitou a Jesus</Label><Input value={form.denominacao_aceitou_jesus} onChange={(e) => setForm((prev) => ({ ...prev, denominacao_aceitou_jesus: e.target.value }))} /></div>
-                  <div className="space-y-1"><Label>Data da conversÃ£o</Label><Input type="date" value={form.data_conversao} onChange={(e) => setForm((prev) => ({ ...prev, data_conversao: e.target.value }))} /></div>
-                  <div className="space-y-1"><Label>Batismo nas Ã¡guas</Label><Input type="date" value={form.data_batismo_aguas} onChange={(e) => setForm((prev) => ({ ...prev, data_batismo_aguas: e.target.value }))} /></div>
-                  <div className="space-y-1 xl:col-span-2"><Label>FunÃ§Ã£o ministerial (texto)</Label><Input value={form.funcao_ministerial_secundaria} onChange={(e) => setForm((prev) => ({ ...prev, funcao_ministerial_secundaria: e.target.value }))} /></div>
-                  <div className="space-y-1"><Label>OrdenaÃ§Ã£o cooperador</Label><Input value={form.ordenacao_cooperador} onChange={(e) => setForm((prev) => ({ ...prev, ordenacao_cooperador: e.target.value }))} /></div>
-                  <div className="space-y-1"><Label>OrdenaÃ§Ã£o diÃ¡cono</Label><Input value={form.ordenacao_diacono} onChange={(e) => setForm((prev) => ({ ...prev, ordenacao_diacono: e.target.value }))} /></div>
-                  <div className="space-y-1"><Label>OrdenaÃ§Ã£o presbÃ­tero</Label><Input value={form.ordenacao_presbitero} onChange={(e) => setForm((prev) => ({ ...prev, ordenacao_presbitero: e.target.value }))} /></div>
-                  <div className="space-y-1"><Label>OrdenaÃ§Ã£o evangelista</Label><Input value={form.ordenacao_evangelista} onChange={(e) => setForm((prev) => ({ ...prev, ordenacao_evangelista: e.target.value }))} /></div>
-                  <div className="space-y-1"><Label>OrdenaÃ§Ã£o voluntÃ¡rio</Label><Input value={form.ordenacao_voluntario} onChange={(e) => setForm((prev) => ({ ...prev, ordenacao_voluntario: e.target.value }))} /></div>
+                  <div className="space-y-1 xl:col-span-2"><Label>Denominação em que aceitou a Jesus</Label><Input value={form.denominacao_aceitou_jesus} onChange={(e) => setForm((prev) => ({ ...prev, denominacao_aceitou_jesus: e.target.value }))} /></div>
+                  <div className="space-y-1"><Label>Data da conversão</Label><Input type="date" value={form.data_conversao} onChange={(e) => setForm((prev) => ({ ...prev, data_conversao: e.target.value }))} /></div>
+                  <div className="space-y-1"><Label>Batismo nas águas</Label><Input type="date" value={form.data_batismo_aguas} onChange={(e) => setForm((prev) => ({ ...prev, data_batismo_aguas: e.target.value }))} /></div>
+                  <div className="space-y-1 xl:col-span-2"><Label>Função ministerial (texto)</Label><Input value={form.funcao_ministerial_secundaria} onChange={(e) => setForm((prev) => ({ ...prev, funcao_ministerial_secundaria: e.target.value }))} /></div>
+                  <div className="space-y-1"><Label>Ordenação cooperador</Label><Input value={form.ordenacao_cooperador} onChange={(e) => setForm((prev) => ({ ...prev, ordenacao_cooperador: e.target.value }))} /></div>
+                  <div className="space-y-1"><Label>Ordenação diácono</Label><Input value={form.ordenacao_diacono} onChange={(e) => setForm((prev) => ({ ...prev, ordenacao_diacono: e.target.value }))} /></div>
+                  <div className="space-y-1"><Label>Ordenação presbítero</Label><Input value={form.ordenacao_presbitero} onChange={(e) => setForm((prev) => ({ ...prev, ordenacao_presbitero: e.target.value }))} /></div>
+                  <div className="space-y-1"><Label>Ordenação evangelista</Label><Input value={form.ordenacao_evangelista} onChange={(e) => setForm((prev) => ({ ...prev, ordenacao_evangelista: e.target.value }))} /></div>
+                  <div className="space-y-1"><Label>Ordenação voluntário</Label><Input value={form.ordenacao_voluntario} onChange={(e) => setForm((prev) => ({ ...prev, ordenacao_voluntario: e.target.value }))} /></div>
                   <div className="space-y-1"><Label>Possui credencial</Label><Input value={form.possui_credencial} onChange={(e) => setForm((prev) => ({ ...prev, possui_credencial: e.target.value }))} /></div>
                   <div className="space-y-1"><Label>Recebe prebenda</Label><Input value={form.recebe_prebenda} onChange={(e) => setForm((prev) => ({ ...prev, recebe_prebenda: e.target.value }))} /></div>
-                  <div className="space-y-1"><Label>HÃ¡ quanto tempo</Label><Input value={form.prebenda_tempo} onChange={(e) => setForm((prev) => ({ ...prev, prebenda_tempo: e.target.value }))} /></div>
+                  <div className="space-y-1"><Label>Há quanto tempo</Label><Input value={form.prebenda_tempo} onChange={(e) => setForm((prev) => ({ ...prev, prebenda_tempo: e.target.value }))} /></div>
                   <div className="space-y-1"><Label>Desde</Label><Input value={form.prebenda_desde} onChange={(e) => setForm((prev) => ({ ...prev, prebenda_desde: e.target.value }))} /></div>
                   <div className="space-y-1"><Label>Dirige alguma IPDA</Label><Input value={form.dirige_alguma_ipda} onChange={(e) => setForm((prev) => ({ ...prev, dirige_alguma_ipda: e.target.value }))} /></div>
                   <div className="space-y-1 xl:col-span-2"><Label>Qual IPDA</Label><Input value={form.dirige_ipda_qual} onChange={(e) => setForm((prev) => ({ ...prev, dirige_ipda_qual: e.target.value }))} /></div>
-                  <div className="space-y-1 xl:col-span-2"><Label>EndereÃ§o da atual congregaÃ§Ã£o</Label><Input value={form.endereco_atual_congregacao} onChange={(e) => setForm((prev) => ({ ...prev, endereco_atual_congregacao: e.target.value }))} /></div>
+                  <div className="space-y-1 xl:col-span-2"><Label>Endereço da atual congregação</Label><Input value={form.endereco_atual_congregacao} onChange={(e) => setForm((prev) => ({ ...prev, endereco_atual_congregacao: e.target.value }))} /></div>
                   <div className="space-y-1"><Label>Bairro</Label><Input value={form.bairro_congregacao} onChange={(e) => setForm((prev) => ({ ...prev, bairro_congregacao: e.target.value }))} /></div>
                   <div className="space-y-1"><Label>Cidade</Label><Input value={form.cidade_congregacao} onChange={(e) => setForm((prev) => ({ ...prev, cidade_congregacao: e.target.value }))} /></div>
                   <div className="space-y-1"><Label>UF</Label><Input value={form.uf_congregacao} onChange={(e) => setForm((prev) => ({ ...prev, uf_congregacao: e.target.value }))} /></div>
@@ -2134,17 +2134,17 @@ export default function PastorMembrosPage() {
                     <p className="text-xs text-slate-500">{cepLookupLoading ? "Buscando endereco..." : "Endereco preenchido automaticamente pelo CEP."}</p>
                   </div>
                   <div className="space-y-1"><Label>Dirigente</Label><Input value={form.dirigente_congregacao} onChange={(e) => setForm((prev) => ({ ...prev, dirigente_congregacao: e.target.value }))} /></div>
-                  <div className="space-y-1"><Label>Telefone congregaÃ§Ã£o</Label><Input value={form.tel_congregacao} onChange={(e) => setForm((prev) => ({ ...prev, tel_congregacao: e.target.value }))} /></div>
+                  <div className="space-y-1"><Label>Telefone congregação</Label><Input value={form.tel_congregacao} onChange={(e) => setForm((prev) => ({ ...prev, tel_congregacao: e.target.value }))} /></div>
                   <div className="space-y-1"><Label>Sede setorial</Label><Input value={form.sede_setorial} onChange={(e) => setForm((prev) => ({ ...prev, sede_setorial: e.target.value }))} /></div>
                   <div className="space-y-1"><Label>Sucursal</Label><Input value={form.sucursal} onChange={(e) => setForm((prev) => ({ ...prev, sucursal: e.target.value }))} /></div>
                 </div>
 
-                <h4 className="text-sm font-semibold text-slate-800">ContinuaÃ§Ã£o - dados ministeriais</h4>
+                <h4 className="text-sm font-semibold text-slate-800">Continuação - dados ministeriais</h4>
                 <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-                  <div className="space-y-1"><Label>JÃ¡ dirigiu no exterior</Label><Input value={form.ja_dirigiu_exterior} onChange={(e) => setForm((prev) => ({ ...prev, ja_dirigiu_exterior: e.target.value }))} /></div>
+                  <div className="space-y-1"><Label>Já dirigiu no exterior</Label><Input value={form.ja_dirigiu_exterior} onChange={(e) => setForm((prev) => ({ ...prev, ja_dirigiu_exterior: e.target.value }))} /></div>
                   <div className="space-y-1 xl:col-span-2"><Label>Em quais cidades</Label><Input value={form.cidades_exterior} onChange={(e) => setForm((prev) => ({ ...prev, cidades_exterior: e.target.value }))} /></div>
-                  <div className="space-y-1"><Label>Quais paÃ­ses</Label><Input value={form.paises_exterior} onChange={(e) => setForm((prev) => ({ ...prev, paises_exterior: e.target.value }))} /></div>
-                  <div className="space-y-1"><Label>DoenÃ§a no exterior (sim/nÃ£o)</Label><Input value={form.doenca_exterior} onChange={(e) => setForm((prev) => ({ ...prev, doenca_exterior: e.target.value }))} /></div>
+                  <div className="space-y-1"><Label>Quais países</Label><Input value={form.paises_exterior} onChange={(e) => setForm((prev) => ({ ...prev, paises_exterior: e.target.value }))} /></div>
+                  <div className="space-y-1"><Label>Doença no exterior (sim/não)</Label><Input value={form.doenca_exterior} onChange={(e) => setForm((prev) => ({ ...prev, doenca_exterior: e.target.value }))} /></div>
                   <div className="space-y-1"><Label>Quem</Label><Input value={form.doenca_exterior_quem} onChange={(e) => setForm((prev) => ({ ...prev, doenca_exterior_quem: e.target.value }))} /></div>
                   <div className="space-y-1 xl:col-span-2"><Label>Quais</Label><Input value={form.doenca_exterior_quais} onChange={(e) => setForm((prev) => ({ ...prev, doenca_exterior_quais: e.target.value }))} /></div>
                   <div className="space-y-1 xl:col-span-4"><Label>Motivo da volta ao Brasil</Label><Textarea value={form.motivo_volta_brasil} onChange={(e) => setForm((prev) => ({ ...prev, motivo_volta_brasil: e.target.value }))} /></div>
@@ -2152,35 +2152,35 @@ export default function PastorMembrosPage() {
                   <div className="space-y-1"><Label>Quais idiomas</Label><Input value={form.idioma_quais} onChange={(e) => setForm((prev) => ({ ...prev, idioma_quais: e.target.value }))} /></div>
                   <div className="space-y-1"><Label>Escolaridade</Label><Input value={form.escolaridade} onChange={(e) => setForm((prev) => ({ ...prev, escolaridade: e.target.value }))} /></div>
                   <div className="space-y-1"><Label>Ano de destaque</Label><Input value={form.desempenho_ano} onChange={(e) => setForm((prev) => ({ ...prev, desempenho_ano: e.target.value }))} /></div>
-                  <div className="space-y-1 xl:col-span-4"><Label>OpiniÃ£o sobre maior desempenho ministerial</Label><Textarea value={form.desempenho_ministerio} onChange={(e) => setForm((prev) => ({ ...prev, desempenho_ministerio: e.target.value }))} /></div>
-                  <div className="space-y-1"><Label>JÃ¡ foi disciplinado</Label><Input value={form.foi_disciplinado} onChange={(e) => setForm((prev) => ({ ...prev, foi_disciplinado: e.target.value }))} /></div>
+                  <div className="space-y-1 xl:col-span-4"><Label>Opinião sobre maior desempenho ministerial</Label><Textarea value={form.desempenho_ministerio} onChange={(e) => setForm((prev) => ({ ...prev, desempenho_ministerio: e.target.value }))} /></div>
+                  <div className="space-y-1"><Label>Já foi disciplinado</Label><Input value={form.foi_disciplinado} onChange={(e) => setForm((prev) => ({ ...prev, foi_disciplinado: e.target.value }))} /></div>
                   <div className="space-y-1"><Label>Quantas vezes</Label><Input value={form.disciplinado_quantas_vezes} onChange={(e) => setForm((prev) => ({ ...prev, disciplinado_quantas_vezes: e.target.value }))} /></div>
                   <div className="space-y-1 xl:col-span-2"><Label>Motivo da disciplina</Label><Input value={form.disciplinado_motivo} onChange={(e) => setForm((prev) => ({ ...prev, disciplinado_motivo: e.target.value }))} /></div>
                   <div className="space-y-1"><Label>Fez curso ministerial</Label><Input value={form.curso_ministerial} onChange={(e) => setForm((prev) => ({ ...prev, curso_ministerial: e.target.value }))} /></div>
                   <div className="space-y-1 xl:col-span-3"><Label>Qual curso</Label><Input value={form.curso_ministerial_qual} onChange={(e) => setForm((prev) => ({ ...prev, curso_ministerial_qual: e.target.value }))} /></div>
                 </div>
 
-                <h4 className="text-sm font-semibold text-slate-800">HistÃ³rico de gestÃ£o em IPDAs</h4>
+                <h4 className="text-sm font-semibold text-slate-800">Histórico de gestão em IPDAs</h4>
                 <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-                  <div className="space-y-1"><Label>HistÃ³rico 1 - ano</Label><Input value={form.historico_gestao_1_ano} onChange={(e) => setForm((prev) => ({ ...prev, historico_gestao_1_ano: e.target.value }))} /></div>
-                  <div className="space-y-1"><Label>HistÃ³rico 1 - IPDA</Label><Input value={form.historico_gestao_1_ipda} onChange={(e) => setForm((prev) => ({ ...prev, historico_gestao_1_ipda: e.target.value }))} /></div>
-                  <div className="space-y-1"><Label>HistÃ³rico 1 - UF</Label><Input value={form.historico_gestao_1_uf} onChange={(e) => setForm((prev) => ({ ...prev, historico_gestao_1_uf: e.target.value }))} /></div>
-                  <div className="space-y-1"><Label>HistÃ³rico 1 - tempo</Label><Input value={form.historico_gestao_1_tempo} onChange={(e) => setForm((prev) => ({ ...prev, historico_gestao_1_tempo: e.target.value }))} /></div>
-                  <div className="space-y-1"><Label>HistÃ³rico 2 - ano</Label><Input value={form.historico_gestao_2_ano} onChange={(e) => setForm((prev) => ({ ...prev, historico_gestao_2_ano: e.target.value }))} /></div>
-                  <div className="space-y-1"><Label>HistÃ³rico 2 - IPDA</Label><Input value={form.historico_gestao_2_ipda} onChange={(e) => setForm((prev) => ({ ...prev, historico_gestao_2_ipda: e.target.value }))} /></div>
-                  <div className="space-y-1"><Label>HistÃ³rico 2 - UF</Label><Input value={form.historico_gestao_2_uf} onChange={(e) => setForm((prev) => ({ ...prev, historico_gestao_2_uf: e.target.value }))} /></div>
-                  <div className="space-y-1"><Label>HistÃ³rico 2 - tempo</Label><Input value={form.historico_gestao_2_tempo} onChange={(e) => setForm((prev) => ({ ...prev, historico_gestao_2_tempo: e.target.value }))} /></div>
-                  <div className="space-y-1"><Label>HistÃ³rico 3 - ano</Label><Input value={form.historico_gestao_3_ano} onChange={(e) => setForm((prev) => ({ ...prev, historico_gestao_3_ano: e.target.value }))} /></div>
-                  <div className="space-y-1"><Label>HistÃ³rico 3 - IPDA</Label><Input value={form.historico_gestao_3_ipda} onChange={(e) => setForm((prev) => ({ ...prev, historico_gestao_3_ipda: e.target.value }))} /></div>
-                  <div className="space-y-1"><Label>HistÃ³rico 3 - UF</Label><Input value={form.historico_gestao_3_uf} onChange={(e) => setForm((prev) => ({ ...prev, historico_gestao_3_uf: e.target.value }))} /></div>
-                  <div className="space-y-1"><Label>HistÃ³rico 3 - tempo</Label><Input value={form.historico_gestao_3_tempo} onChange={(e) => setForm((prev) => ({ ...prev, historico_gestao_3_tempo: e.target.value }))} /></div>
+                  <div className="space-y-1"><Label>Histórico 1 - ano</Label><Input value={form.historico_gestao_1_ano} onChange={(e) => setForm((prev) => ({ ...prev, historico_gestao_1_ano: e.target.value }))} /></div>
+                  <div className="space-y-1"><Label>Histórico 1 - IPDA</Label><Input value={form.historico_gestao_1_ipda} onChange={(e) => setForm((prev) => ({ ...prev, historico_gestao_1_ipda: e.target.value }))} /></div>
+                  <div className="space-y-1"><Label>Histórico 1 - UF</Label><Input value={form.historico_gestao_1_uf} onChange={(e) => setForm((prev) => ({ ...prev, historico_gestao_1_uf: e.target.value }))} /></div>
+                  <div className="space-y-1"><Label>Histórico 1 - tempo</Label><Input value={form.historico_gestao_1_tempo} onChange={(e) => setForm((prev) => ({ ...prev, historico_gestao_1_tempo: e.target.value }))} /></div>
+                  <div className="space-y-1"><Label>Histórico 2 - ano</Label><Input value={form.historico_gestao_2_ano} onChange={(e) => setForm((prev) => ({ ...prev, historico_gestao_2_ano: e.target.value }))} /></div>
+                  <div className="space-y-1"><Label>Histórico 2 - IPDA</Label><Input value={form.historico_gestao_2_ipda} onChange={(e) => setForm((prev) => ({ ...prev, historico_gestao_2_ipda: e.target.value }))} /></div>
+                  <div className="space-y-1"><Label>Histórico 2 - UF</Label><Input value={form.historico_gestao_2_uf} onChange={(e) => setForm((prev) => ({ ...prev, historico_gestao_2_uf: e.target.value }))} /></div>
+                  <div className="space-y-1"><Label>Histórico 2 - tempo</Label><Input value={form.historico_gestao_2_tempo} onChange={(e) => setForm((prev) => ({ ...prev, historico_gestao_2_tempo: e.target.value }))} /></div>
+                  <div className="space-y-1"><Label>Histórico 3 - ano</Label><Input value={form.historico_gestao_3_ano} onChange={(e) => setForm((prev) => ({ ...prev, historico_gestao_3_ano: e.target.value }))} /></div>
+                  <div className="space-y-1"><Label>Histórico 3 - IPDA</Label><Input value={form.historico_gestao_3_ipda} onChange={(e) => setForm((prev) => ({ ...prev, historico_gestao_3_ipda: e.target.value }))} /></div>
+                  <div className="space-y-1"><Label>Histórico 3 - UF</Label><Input value={form.historico_gestao_3_uf} onChange={(e) => setForm((prev) => ({ ...prev, historico_gestao_3_uf: e.target.value }))} /></div>
+                  <div className="space-y-1"><Label>Histórico 3 - tempo</Label><Input value={form.historico_gestao_3_tempo} onChange={(e) => setForm((prev) => ({ ...prev, historico_gestao_3_tempo: e.target.value }))} /></div>
                 </div>
 
                 <h4 className="text-sm font-semibold text-slate-800">Termo de compromisso do obreiro</h4>
                 <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
                   <div className="space-y-1"><Label>Cidade do termo</Label><Input value={form.data_termo_cidade} onChange={(e) => setForm((prev) => ({ ...prev, data_termo_cidade: e.target.value }))} /></div>
                   <div className="space-y-1"><Label>Dia</Label><Input value={form.data_termo_dia} onChange={(e) => setForm((prev) => ({ ...prev, data_termo_dia: e.target.value }))} /></div>
-                  <div className="space-y-1"><Label>MÃªs</Label><Input value={form.data_termo_mes} onChange={(e) => setForm((prev) => ({ ...prev, data_termo_mes: e.target.value }))} /></div>
+                  <div className="space-y-1"><Label>Mês</Label><Input value={form.data_termo_mes} onChange={(e) => setForm((prev) => ({ ...prev, data_termo_mes: e.target.value }))} /></div>
                   <div className="space-y-1"><Label>Ano</Label><Input value={form.data_termo_ano} onChange={(e) => setForm((prev) => ({ ...prev, data_termo_ano: e.target.value }))} /></div>
                 </div>
                 <div className="grid gap-3 md:grid-cols-2">
@@ -2190,7 +2190,7 @@ export default function PastorMembrosPage() {
                   <div className="space-y-1"><Label>Testemunha 2 - Documento</Label><Input value={form.testemunha2_documento} onChange={(e) => setForm((prev) => ({ ...prev, testemunha2_documento: e.target.value }))} /></div>
                 </div>
                 <div className="space-y-1">
-                  <Label>ObservaÃ§Ãµes do termo</Label>
+                  <Label>Observações do termo</Label>
                   <Textarea value={form.observacoes_termo} onChange={(e) => setForm((prev) => ({ ...prev, observacoes_termo: e.target.value }))} />
                 </div>
               </div>

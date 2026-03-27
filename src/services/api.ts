@@ -79,7 +79,7 @@ export function getFriendlyErrorMessage(err: unknown): string {
       case "invalid_preach_date_format":
         return "Data invalida. Use o formato correto.";
       case "preach_date_in_past":
-        return "Nao e permitido criar carta com data no passado.";
+        return "Não é permitido criar carta com data no passado.";
       case "preach_date_out_of_current_month":
         return `A data deve estar dentro do mes vigente. Maximo: ${maxDate || "fim do mes"}.`;
       case "missing_church_origin":
@@ -91,7 +91,7 @@ export function getFriendlyErrorMessage(err: unknown): string {
       case "invalid_preach_period":
         return "Selecione o horario da pregacao: Manha, Tarde ou Noite.";
       case "insert_failed":
-        return "Nao foi possivel salvar a carta. Verifique os dados e tente novamente.";
+        return "Não foi possível salvar a carta. Verifique os dados e tente novamente.";
       default:
         return detail || "Dados invalidos. Verifique e tente novamente.";
     }

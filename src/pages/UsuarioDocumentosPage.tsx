@@ -321,7 +321,7 @@ export default function UsuarioDocumentosPage() {
         {isCadastroPendente ? (
           <Card className="border border-amber-200 bg-amber-50">
             <CardContent className="py-3 text-sm text-amber-800">
-              Seu cadastro esta pendente de liberacao. A visualizacao de documentos sera liberada apos aprovacao.
+              Seu cadastro está pendente de liberação. A visualização de documentos será liberada após aprovação.
             </CardContent>
           </Card>
         ) : null}
@@ -339,7 +339,7 @@ export default function UsuarioDocumentosPage() {
               <div className="flex flex-wrap items-center gap-2">
                 <Button onClick={enviarParaConfeccao} disabled={sendingDoc || isCadastroPendente || !userId}>
                   <Send className="mr-2 h-4 w-4" />
-                  Enviar ficha para confeccao
+                  Enviar ficha para confecção
                 </Button>
                 {fetchingDocsStatus ? <span className="text-xs text-slate-500">Verificando status...</span> : null}
               </div>
@@ -377,7 +377,7 @@ export default function UsuarioDocumentosPage() {
                 A carteirinha ainda não está pronta. Aguarde a confecção para visualizar.
               </div>
             ) : null}
-            {/* Ficha: mostra sempre a pre-visualizacao com todos os dados do membro */}
+            {/* Ficha: mostra sempre a pré-visualização com todos os dados do membro */}
             {docTab === "ficha" ? (
               <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
                 <iframe title="Ficha do membro" className="h-[720px] w-full" srcDoc={isCadastroPendente ? "" : fichaHtml} />

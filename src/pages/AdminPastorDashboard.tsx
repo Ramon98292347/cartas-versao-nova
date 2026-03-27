@@ -225,7 +225,7 @@ export default function AdminPastorDashboard() {
   const pendentes = unreadCount || (isAdmin ? churchRows.reduce((acc, r) => acc + r.pendentes_liberacao, 0) : (metrics?.pendentesLiberacao || 0));
   const pastorDaLista = obreiros.find((m) => m?.role === "pastor");
   const headerAvatarUrl = usuario?.avatar_url || pastorDaLista?.avatar_url || null;
-  const headerNome = usuario?.nome || pastorDaLista?.full_name || "UsuÃ¡rio";
+  const headerNome = usuario?.nome || pastorDaLista?.full_name || "Usuário";
 
   return (
     <div className="min-h-screen bg-[#f3f5f9]">

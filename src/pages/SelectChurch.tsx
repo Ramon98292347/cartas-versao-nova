@@ -38,7 +38,7 @@ export default function SelectChurch() {
 
   async function confirm() {
     if (!pendingCpf) {
-      toast.error("SessÃ£o de escolha de igreja invÃ¡lida. FaÃ§a login novamente.");
+      toast.error("Sessão de escolha de igreja inválida. Faça login novamente.");
       nav("/");
       return;
     }

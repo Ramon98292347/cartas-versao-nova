@@ -66,7 +66,7 @@ export default function AdminMembrosPage() {
   // Comentario: showChurchList controla se o dropdown de opcoes de igrejas esta visivel.
   const [showChurchList, setShowChurchList] = useState(false);
   const [section, setSection] = useState<"membros" | "presenca">("membros");
-  // Comentario: filtro de ativos/inativos â€” undefined = todos, false = so inativos
+  // Comentario: filtro de ativos/inativos — undefined = todos, false = so inativos
   const [filterActive, setFilterActive] = useState<boolean | undefined>(undefined);
 
   const { data: churches = [], isLoading: loadingChurches, isFetching: fetchingChurches } = useQuery({
@@ -296,11 +296,11 @@ export default function AdminMembrosPage() {
         <section className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-7">
           <MiniCard title="Total de membros" value={counters.total} subtitle="cadastros na igreja" gradient={memberTone.total} />
           <MiniCard title="Pastor" value={counters.pastor} subtitle="cargo pastor" gradient={memberTone.pastor} />
-          <MiniCard title="Presbitero" value={counters.presbitero} subtitle="cargo presbitero" gradient={memberTone.presbitero} />
-          <MiniCard title="Diacono" value={counters.diacono} subtitle="cargo diacono" gradient={memberTone.diacono} />
+          <MiniCard title="Presbítero" value={counters.presbitero} subtitle="cargo presbítero" gradient={memberTone.presbitero} />
+          <MiniCard title="Diácono" value={counters.diacono} subtitle="cargo diácono" gradient={memberTone.diacono} />
           <MiniCard title="Cooperador" value={counters.obreiro} subtitle="cargo cooperador" gradient={memberTone.obreiro} />
-          <MiniCard title="Membros ativos" value={counters.membrosAtivos} subtitle="ministerio membro" gradient={memberTone.ativo} />
-          {/* Comentario: card clicavel â€” ao clicar mostra so os inativos na tabela */}
+          <MiniCard title="Membros ativos" value={counters.membrosAtivos} subtitle="ministério membro" gradient={memberTone.ativo} />
+          {/* Comentario: card clicavel — ao clicar mostra so os inativos na tabela */}
           <MiniCard
             title="Inativos"
             value={inativosCount}
@@ -333,7 +333,7 @@ export default function AdminMembrosPage() {
               style={{ borderBottomColor: section === "presenca" ? "#2563EB" : "transparent", color: section === "presenca" ? "#2563EB" : "#6B7280" }}
               onClick={() => setSection("presenca")}
             >
-              PresenÃ§a
+              Presença
             </Button>
           </div>
         </section>

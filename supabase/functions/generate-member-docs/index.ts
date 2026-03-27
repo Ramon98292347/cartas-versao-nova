@@ -204,10 +204,12 @@ Deno.serve(async (req) => {
         .maybeSingle();
       if (pastorErr) return json({ ok: false, error: "db_error_pastor_signature", details: pastorErr.message }, 500);
       pastorSignatureUrl = String(pastor?.signature_url || "");
-      if (!dados.assinatura_pastor_url) dados.assinatura_pastor_url = pastorSignatureUrl;
-      if (!dados.pastor_responsavel_nome) dados.pastor_responsavel_nome = String(pastor?.full_name || "");
-      if (!dados.pastor_responsavel_telefone) dados.pastor_responsavel_telefone = String(pastor?.phone || "");
-      if (!dados.pastor_responsavel_email) dados.pastor_responsavel_email = String(pastor?.email || "");
+      // Comentario: sempre força assinatura e dados do pastor da igreja do membro.
+      // Isso evita reaproveitar URL antiga enviada pelo front de outro pastor/igreja.
+      dados.assinatura_pastor_url = pastorSignatureUrl;
+      dados.pastor_responsavel_nome = String(pastor?.full_name || "");
+      dados.pastor_responsavel_telefone = String(pastor?.phone || "");
+      dados.pastor_responsavel_email = String(pastor?.email || "");
     }
 
     let fichaFinalUrl = "";

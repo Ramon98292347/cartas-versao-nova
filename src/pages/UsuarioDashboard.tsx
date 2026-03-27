@@ -785,7 +785,7 @@ async function openPdf(letter: PastorLetter) {
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="outline" className="w-full" disabled={isCadastroPendente}>
-                  <MoreHorizontal className="mr-2 h-4 w-4" /> Acoes
+                  <MoreHorizontal className="mr-2 h-4 w-4" /> Ações
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent className="w-64">
@@ -896,7 +896,7 @@ async function openPdf(letter: PastorLetter) {
                       <p className="text-xs text-slate-600">Origem: {letter.church_origin || "-"}</p>
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
-                          <Button variant="outline" className="w-full"><MoreHorizontal className="mr-2 h-4 w-4" /> Acoes</Button>
+                          <Button variant="outline" className="w-full"><MoreHorizontal className="mr-2 h-4 w-4" /> Ações</Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent>
                           <DropdownMenuItem disabled={!canOpen} onClick={() => openPdf(letter)}>
