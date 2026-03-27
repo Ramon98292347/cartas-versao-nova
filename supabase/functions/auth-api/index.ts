@@ -736,7 +736,9 @@ async function handleGetPastorContact(req: Request, body: Record<string, unknown
 async function handlePublicRegister(body: Record<string, unknown>) {
   const cpf = onlyDigits(String(body.cpf || ""));
   const fullName = String(body.full_name || "").trim();
+  const ministerRoleRaw = String(body.minister_role || "").trim().toLowerCase();
   const ministerRole = normalizeMinisterRole(String(body.minister_role || ""));
+  const birthDate = String(body.birth_date || "").trim() || null;
   const profession = String(body.profession || "").trim() || null;
   const baptismDate = String(body.baptism_date || "").trim() || null;
   const ordinationDate = String(body.ordination_date || "").trim() || null;
@@ -756,6 +758,18 @@ async function handlePublicRegister(body: Record<string, unknown>) {
   if (!isValidCpf(cpf)) return json({ ok: false, error: "invalid_cpf" }, 400);
   if (!fullName) return json({ ok: false, error: "missing_full_name" }, 400);
   if (!ministerRole) return json({ ok: false, error: "missing_minister_role" }, 400);
+  if (!birthDate) return json({ ok: false, error: "missing_birth_date" }, 400);
+  if (!baptismDate) return json({ ok: false, error: "missing_baptism_date" }, 400);
+  if (ministerRoleRaw !== "membro" && !ordinationDate) return json({ ok: false, error: "missing_ordination_date" }, 400);
+  if (!profession) return json({ ok: false, error: "missing_profession" }, 400);
+  if (!phone) return json({ ok: false, error: "missing_phone" }, 400);
+  if (!email) return json({ ok: false, error: "missing_email" }, 400);
+  if (!avatarUrl) return json({ ok: false, error: "missing_avatar_url" }, 400);
+  if (!cep || cep.length !== 8) return json({ ok: false, error: "invalid_cep" }, 400);
+  if (!addressStreet) return json({ ok: false, error: "missing_address_street" }, 400);
+  if (!addressNeighborhood) return json({ ok: false, error: "missing_address_neighborhood" }, 400);
+  if (!addressCity) return json({ ok: false, error: "missing_address_city" }, 400);
+  if (!addressState || addressState.length !== 2) return json({ ok: false, error: "invalid_address_state" }, 400);
   if (!totvsId) return json({ ok: false, error: "missing_totvs_id" }, 400);
   if (password.length < 6) return json({ ok: false, error: "password_too_short", detail: "A senha deve ter ao menos 6 caracteres." }, 400);
 
@@ -804,6 +818,7 @@ async function handlePublicRegister(body: Record<string, unknown>) {
       full_name: fullName,
       role: "obreiro",
       minister_role: ministerRole,
+      birth_date: birthDate,
       profession,
       baptism_date: baptismDate,
       ordination_date: ordinationDate,

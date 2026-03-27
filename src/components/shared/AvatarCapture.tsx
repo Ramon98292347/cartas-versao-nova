@@ -392,7 +392,7 @@ export function AvatarCapture({ onFileReady, disabled = false, currentUrl }: Ava
               type="button"
               variant="outline"
               size="sm"
-              onClick={() => { removerFoto(); void iniciarCamera(facingModeRef.current); }}
+              onClick={() => { removerFoto(); void iniciarCamera("user"); }}
               disabled={disabled}
             >
               <RefreshCw className="h-4 w-4 mr-1" />
@@ -479,7 +479,7 @@ export function AvatarCapture({ onFileReady, disabled = false, currentUrl }: Ava
               type="button"
               variant="outline"
               size="sm"
-              onClick={() => void iniciarCamera(facingModeRef.current)}
+              onClick={() => void iniciarCamera("user")}
               disabled={disabled || processing || loadingModels}
             >
               {loadingModels

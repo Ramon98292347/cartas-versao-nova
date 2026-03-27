@@ -11,6 +11,7 @@ export const api = {
     cpf: string;
     full_name: string;
     minister_role: string;
+    birth_date?: string | null;
     profession?: string | null;
     baptism_date?: string | null;
     ordination_date?: string | null;

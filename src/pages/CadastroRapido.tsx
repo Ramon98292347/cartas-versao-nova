@@ -47,6 +47,10 @@ function churchClassLabel(result: ChurchSearchResult) {
   return result.class;
 }
 
+function isMembroRole(value: string) {
+  return String(value || "").trim().toLowerCase() === "membro";
+}
+
 export default function CadastroRapido() {
   const nav = useNavigate();
   const [loading, setLoading] = useState(false);
@@ -56,6 +60,7 @@ export default function CadastroRapido() {
   const [email, setEmail] = useState("");
   const [totvs, setTotvs] = useState("");
   const [ministerRole, setMinisterRole] = useState("membro");
+  const [birthDate, setBirthDate] = useState("");
   const [profession, setProfession] = useState("");
   const [baptismDate, setBaptismDate] = useState("");
   const [ordinationDate, setOrdinationDate] = useState("");
@@ -181,6 +186,12 @@ export default function CadastroRapido() {
     void buscarCepAutomatico();
   }, [cep]);
 
+  useEffect(() => {
+    if (isMembroRole(ministerRole) && ordinationDate) {
+      setOrdinationDate("");
+    }
+  }, [ministerRole, ordinationDate]);
+
   async function submit() {
     const cpfRaw = normalizeCpf(cpf);
     if (!isValidCpf(cpfRaw)) {
@@ -197,6 +208,51 @@ export default function CadastroRapido() {
     }
     if (!ministerRole.trim()) {
       toast.error("Selecione o cargo ministerial.");
+      return;
+    }
+    if (!baptismDate) {
+      toast.error("Informe a data de batismo.");
+      return;
+    }
+    if (!birthDate) {
+      toast.error("Informe a data de nascimento.");
+      return;
+    }
+    if (!isMembroRole(ministerRole) && !ordinationDate) {
+      toast.error("Para obreiro/cooperador até pastor, a data de ordenação é obrigatória.");
+      return;
+    }
+    if (!profession.trim()) {
+      toast.error("Informe a profissão.");
+      return;
+    }
+    if (!telefone.trim()) {
+      toast.error("Informe o telefone.");
+      return;
+    }
+    if (!email.trim()) {
+      toast.error("Informe o e-mail.");
+      return;
+    }
+    const cepDigits = onlyDigits(cep);
+    if (cepDigits.length !== 8) {
+      toast.error("Informe um CEP válido.");
+      return;
+    }
+    if (!addressStreet.trim()) {
+      toast.error("Informe a rua.");
+      return;
+    }
+    if (!addressNeighborhood.trim()) {
+      toast.error("Informe o bairro.");
+      return;
+    }
+    if (!addressCity.trim()) {
+      toast.error("Informe a cidade.");
+      return;
+    }
+    if (!addressState.trim() || addressState.trim().length !== 2) {
+      toast.error("Informe a UF com 2 letras.");
       return;
     }
     if (senha.length < 6) {
@@ -225,19 +281,20 @@ export default function CadastroRapido() {
         cpf: cpfRaw,
         full_name: nome,
         minister_role: ministerRole,
-        profession: profession || null,
-        baptism_date: baptismDate || null,
+        profession,
+        birth_date: birthDate,
+        baptism_date: baptismDate,
         ordination_date: ordinationDate || null,
-        phone: telefone || null,
-        email: email || null,
+        phone: telefone,
+        email,
         avatar_url: avatarUrl,
-        cep: onlyDigits(cep) || null,
-        address_street: addressStreet || null,
+        cep: cepDigits,
+        address_street: addressStreet,
         address_number: addressNumber || null,
         address_complement: addressComplement || null,
-        address_neighborhood: addressNeighborhood || null,
-        address_city: addressCity || null,
-        address_state: addressState || null,
+        address_neighborhood: addressNeighborhood,
+        address_city: addressCity,
+        address_state: addressState,
         password: senha,
         totvs_id: totvs,
       });
@@ -269,7 +326,7 @@ export default function CadastroRapido() {
           <CardContent className="space-y-4">
             <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-2 md:col-span-2">
-                <Label>Foto 3x4 (opcional)</Label>
+                <Label>Foto 3x4 *</Label>
                 {/* AvatarCapture: inclui botões de câmera/galeria, remoção de fundo por IA e preview 3x4 */}
                 <AvatarCapture
                   onFileReady={(file) => setAvatarFile(file)}
@@ -278,17 +335,17 @@ export default function CadastroRapido() {
               </div>
 
               <div className="space-y-2 md:col-span-2">
-                <Label>Nome completo</Label>
+                <Label>Nome completo *</Label>
                 <Input value={nome} onChange={(e) => setNome(e.target.value)} placeholder="Nome completo" />
               </div>
 
               <div className="space-y-2">
-                <Label>CPF</Label>
+                <Label>CPF *</Label>
                 <Input value={maskCpf(cpf)} onChange={(e) => setCpf(e.target.value)} placeholder="000.000.000-00" inputMode="numeric" />
               </div>
 
               <div className="space-y-2">
-                <Label>Telefone</Label>
+                <Label>Telefone *</Label>
                 <Input
                   value={telefone}
                   onChange={(e) => setTelefone(formatPhoneBr(e.target.value))}
@@ -297,12 +354,12 @@ export default function CadastroRapido() {
               </div>
 
               <div className="space-y-2 md:col-span-2">
-                <Label>E-mail (opcional)</Label>
+                <Label>E-mail *</Label>
                 <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="email@exemplo.com" />
               </div>
 
               <div className="space-y-2">
-                <Label>Cargo ministerial</Label>
+                <Label>Cargo ministerial *</Label>
                 {/* Comentario: os values tem que bater com as chaves do normalizeMinisterRole na auth-api (sem acento, lowercase) */}
                 <select
                   value={ministerRole}
@@ -319,22 +376,29 @@ export default function CadastroRapido() {
               </div>
 
               <div className="space-y-2">
-                <Label>Data de batismo</Label>
-                <Input type="date" value={baptismDate} onChange={(e) => setBaptismDate(e.target.value)} />
+                <Label>Data de nascimento *</Label>
+                <Input type="date" value={birthDate} onChange={(e) => setBirthDate(e.target.value)} />
               </div>
 
               <div className="space-y-2">
-                <Label>Data de ordenacao</Label>
-                <Input type="date" value={ordinationDate} onChange={(e) => setOrdinationDate(e.target.value)} />
+                <Label>Data de batismo *</Label>
+                <Input type="date" value={baptismDate} onChange={(e) => setBaptismDate(e.target.value)} />
               </div>
 
+              {!isMembroRole(ministerRole) && (
+                <div className="space-y-2">
+                  <Label>Data de ordenação *</Label>
+                  <Input type="date" value={ordinationDate} onChange={(e) => setOrdinationDate(e.target.value)} />
+                </div>
+              )}
+
               <div className="space-y-2 md:col-span-2">
-                <Label>Profissao</Label>
+                <Label>Profissão *</Label>
                 <Input value={profession} onChange={(e) => setProfession(e.target.value)} placeholder="Profissao" />
               </div>
 
               <div className="space-y-2">
-                <Label>CEP</Label>
+                <Label>CEP *</Label>
                 <Input
                   value={maskCep(cep)}
                   onChange={(e) => setCep(e.target.value)}
@@ -345,38 +409,38 @@ export default function CadastroRapido() {
               </div>
 
               <div className="space-y-2">
-                <Label>Numero</Label>
+                <Label>Número</Label>
                 <Input value={addressNumber} onChange={(e) => setAddressNumber(e.target.value)} placeholder="Numero" />
               </div>
 
               <div className="space-y-2 md:col-span-2">
-                <Label>Rua</Label>
+                <Label>Rua *</Label>
                 <Input value={addressStreet} onChange={(e) => setAddressStreet(e.target.value)} placeholder="Rua" />
               </div>
 
               <div className="space-y-2">
-                <Label>Bairro</Label>
+                <Label>Bairro *</Label>
                 <Input value={addressNeighborhood} onChange={(e) => setAddressNeighborhood(e.target.value)} placeholder="Bairro" />
               </div>
 
               <div className="space-y-2">
                 <Label>Complemento</Label>
-                <Input value={addressComplement} onChange={(e) => setAddressComplement(e.target.value)} placeholder="Complemento (opcional)" />
+                <Input value={addressComplement} onChange={(e) => setAddressComplement(e.target.value)} placeholder="Complemento" />
               </div>
 
               <div className="space-y-2">
-                <Label>Cidade</Label>
+                <Label>Cidade *</Label>
                 <Input value={addressCity} onChange={(e) => setAddressCity(e.target.value)} placeholder="Cidade" />
               </div>
 
               <div className="space-y-2">
-                <Label>UF</Label>
+                <Label>UF *</Label>
                 <Input value={addressState} onChange={(e) => setAddressState(e.target.value.toUpperCase().slice(0, 2))} placeholder="UF" />
               </div>
 
               {/* Campo A: Buscar estadual ou setorial com autocomplete via edge function */}
               <div className="space-y-2 md:col-span-2">
-                <Label>Buscar igreja Estadual ou Setorial, por nome ou TOTVS</Label>
+                <Label>Buscar igreja Estadual ou Setorial, por nome ou TOTVS *</Label>
                 <div className="relative">
                   {searchingEstadual ? (
                     <Loader2 className="pointer-events-none absolute left-3 top-1/2 z-10 h-4 w-4 -translate-y-1/2 animate-spin text-slate-400" />
@@ -432,7 +496,7 @@ export default function CadastroRapido() {
 
               {/* Campo B: Selecionar a igreja especifica com autocomplete via edge function */}
               <div className="space-y-2 md:col-span-2">
-                <Label>TOTVS da igreja (obrigatorio)</Label>
+                <Label>TOTVS da igreja (obrigatório) *</Label>
                 <div className="relative">
                   {searchingIgreja ? (
                     <Loader2 className="pointer-events-none absolute left-3 top-1/2 z-10 h-4 w-4 -translate-y-1/2 animate-spin text-slate-400" />
@@ -495,7 +559,7 @@ export default function CadastroRapido() {
               </div>
 
               <div className="space-y-2">
-                <Label>Senha</Label>
+                <Label>Senha *</Label>
                 <div className="relative">
                   <Input
                     type={showSenha ? "text" : "password"}
@@ -516,7 +580,7 @@ export default function CadastroRapido() {
               </div>
 
               <div className="space-y-2">
-                <Label>Confirmar senha</Label>
+                <Label>Confirmar senha *</Label>
                 <div className="relative">
                   <Input
                     type={showConfirmarSenha ? "text" : "password"}

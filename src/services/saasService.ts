@@ -2353,6 +2353,7 @@ export async function publicRegisterMember(payload: {
   cpf: string;
   full_name: string;
   minister_role: string;
+  birth_date?: string | null;
   profession?: string | null;
   baptism_date?: string | null;
   ordination_date?: string | null;
@@ -2380,6 +2381,7 @@ export async function publicRegisterMember(payload: {
     cpf,
     full_name: payload.full_name.trim(),
     minister_role: payload.minister_role.trim(),
+    birth_date: payload.birth_date || null,
     profession: payload.profession || null,
     baptism_date: payload.baptism_date || null,
     ordination_date: payload.ordination_date || null,
