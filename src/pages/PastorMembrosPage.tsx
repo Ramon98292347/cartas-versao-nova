@@ -766,7 +766,7 @@ export default function PastorMembrosPage() {
       listMembers({
         page: membersPage,
         page_size: membersPageSize,
-        roles: ["pastor", "obreiro"],
+        roles: ["pastor", "obreiro", "secretario", "financeiro"],
         church_totvs_id: membersChurchTotvsFilter,
         is_active: filterActive,
       }),
@@ -790,7 +790,7 @@ export default function PastorMembrosPage() {
         const chunk = await listMembers({
           page,
           page_size: requestedPageSize,
-          roles: ["pastor", "obreiro"],
+          roles: ["pastor", "obreiro", "secretario", "financeiro"],
           church_totvs_id: membersChurchTotvsFilter,
           is_active: filterActive,
         });
@@ -816,7 +816,7 @@ export default function PastorMembrosPage() {
       listMembers({
         page: 1,
         page_size: 1,
-        roles: ["pastor", "obreiro"],
+        roles: ["pastor", "obreiro", "secretario", "financeiro"],
         church_totvs_id: membersChurchTotvsFilter,
         is_active: false,
       }),
@@ -901,7 +901,7 @@ export default function PastorMembrosPage() {
         const chunk = await listMembers({
           page,
           page_size: requestedPageSize,
-          roles: ["pastor", "obreiro"],
+          roles: ["pastor", "obreiro", "secretario", "financeiro"],
           church_totvs_id: membersChurchTotvsFilter,
           is_active: filterActive,
         });
