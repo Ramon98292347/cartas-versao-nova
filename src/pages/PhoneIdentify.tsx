@@ -101,6 +101,7 @@ export default function PhoneIdentify() {
       : {};
   const cachedTotvs = typeof window !== "undefined" ? localStorage.getItem("ipda_last_totvs") || "" : "";
   const isCachedAdmin = String(cachedUser?.role || "").toLowerCase() === "admin";
+  const cpfLookup = cpf.replace(/\D/g, "").length === 11 ? cpf.replace(/\D/g, "") : cachedCpf;
   const cachedScope = Array.isArray(cachedSession?.scope_totvs_ids) ? cachedSession.scope_totvs_ids.filter(Boolean).map(String) : [];
   const announcementScope = isCachedAdmin ? cachedScope : [];
   // Comentario: divulgacao da tela de login deve respeitar a igreja do proprio usuario.
@@ -111,30 +112,30 @@ export default function PhoneIdentify() {
   );
 
   const { data: announcements = [] } = useQuery({
-    queryKey: ["announcements-login", cachedCpf, announcementTotvs, announcementScope.join(",")],
+    queryKey: ["announcements-login", cpfLookup, announcementTotvs, announcementScope.join(",")],
     queryFn: () => {
       // Prioridade 1: CPF salvo no cache → busca divulgacoes direto pelo CPF via edge function (sem JWT)
-      if (cachedCpf.length === 11) return listAnnouncementsPublicByCpf(cachedCpf, 10);
+      if (cpfLookup.length === 11) return listAnnouncementsPublicByCpf(cpfLookup, 10);
       // Prioridade 2: admin com escopo de igrejas
       if (announcementScope.length) return listAnnouncementsPublicByScope(announcementScope, 30);
       // Prioridade 3: totvs salvo do ultimo login
       return listAnnouncementsPublicByTotvs(announcementTotvs, 10);
     },
-    enabled: cachedCpf.length === 11 || Boolean(announcementTotvs) || announcementScope.length > 0,
+    enabled: cpfLookup.length === 11 || Boolean(announcementTotvs) || announcementScope.length > 0,
     refetchInterval: 10000,
   });
 
   const { data: birthdays = [] } = useQuery({
-    queryKey: ["birthdays-today-login", announcementTotvs, announcementScope.join(","), birthdayTotvsScope.join(",")],
+    queryKey: ["birthdays-today-login", cpfLookup, announcementTotvs, announcementScope.join(","), birthdayTotvsScope.join(",")],
     queryFn: () =>
-      cachedCpf.length === 11
-        ? listBirthdaysTodayPublicByCpf(cachedCpf, 20)
+      cpfLookup.length === 11
+        ? listBirthdaysTodayPublicByCpf(cpfLookup, 20)
         : announcementScope.length
         ? listBirthdaysTodayPublicByScope(announcementScope, 20)
         : birthdayTotvsScope.length > 1
           ? listBirthdaysTodayPublicByScope(birthdayTotvsScope, 20)
           : listBirthdaysTodayPublicByTotvs(birthdayTotvsScope[0] || announcementTotvs, 10),
-    enabled: cachedCpf.length === 11 || birthdayTotvsScope.length > 0 || announcementScope.length > 0,
+    enabled: cpfLookup.length === 11 || birthdayTotvsScope.length > 0 || announcementScope.length > 0,
     refetchInterval: 10000,
   });
 
