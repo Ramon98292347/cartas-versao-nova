@@ -654,3 +654,15 @@ Observacao de deploy:
   - `npx supabase functions deploy birthday-notify`
   - `npx supabase functions deploy letters-api`
   - `npx supabase functions deploy generate-member-docs`
+
+---
+
+## 21. Regra Fixa do Carrossel (Login) - 2026-03-26
+
+Decisao registrada para evitar regressao futura:
+- O carrossel da tela de login deve permanecer no comportamento original.
+- Nao aplicar cache local persistente (localStorage) para itens de divulgacao/aniversario no login.
+- Manter atualizacao em tempo real via consulta periodica (refetch) para refletir mudancas do dia.
+
+Arquivo de referencia:
+- `src/pages/PhoneIdentify.tsx`
