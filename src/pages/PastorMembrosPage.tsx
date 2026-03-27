@@ -677,6 +677,7 @@ export default function PastorMembrosPage() {
   const { session, usuario } = useUser();
   const queryClient = useQueryClient();
   const activeTotvsId = String(session?.totvs_id || usuario?.default_totvs_id || usuario?.totvs || "");
+  const churchClass = String(session?.church_class || "").toLowerCase();
   const [tab, setTab] = useState<MemberTab>("lista");
   const [view, setView] = useState<MemberView>("lista");
   const [selectedMemberId, setSelectedMemberId] = useState("");
@@ -707,6 +708,13 @@ export default function PastorMembrosPage() {
   const [lastCepLookup, setLastCepLookup] = useState("");
   const carteirinhaHtml = useMemo(() => buildCarteirinhaHtml(form), [form]);
   const fichaMembroHtml = useMemo(() => buildFichaMembroHtml(form), [form]);
+  const forceSingleChurchFilter = filterTotvs !== "all";
+  const useScopeList = !forceSingleChurchFilter && churchClass === "estadual";
+  const membersChurchTotvsFilter = forceSingleChurchFilter
+    ? filterTotvs
+    : useScopeList
+      ? undefined
+      : activeTotvsId || undefined;
 
   // â”€â”€ Aba ImpressÃ£o em lote â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   // Comentario: selectedPrintIds guarda os IDs das carteirinhas selecionadas para imprimir
@@ -753,13 +761,13 @@ export default function PastorMembrosPage() {
   }, [tab, refetchReady, refetchBatchDocs]);
 
   const { data, isLoading: loadingMembers, isFetching: fetchingMembers, refetch: refetchMembers } = useQuery({
-    queryKey: ["pastor-members-page", membersPage, membersPageSize, filterTotvs, filterActive],
+    queryKey: ["pastor-members-page", membersPage, membersPageSize, filterTotvs, filterActive, churchClass, activeTotvsId],
     queryFn: () =>
       listMembers({
         page: membersPage,
         page_size: membersPageSize,
         roles: ["pastor", "obreiro"],
-        church_totvs_id: filterTotvs === "all" ? undefined : filterTotvs,
+        church_totvs_id: membersChurchTotvsFilter,
         is_active: filterActive,
       }),
     staleTime: 30_000,
@@ -771,7 +779,7 @@ export default function PastorMembrosPage() {
   const membersTotalPages = Math.max(1, Math.ceil(membersTotal / membersPageSize));
 
   const { data: membersForCounters } = useQuery({
-    queryKey: ["pastor-members-counters-all", filterTotvs, filterActive],
+    queryKey: ["pastor-members-counters-all", filterTotvs, filterActive, churchClass, activeTotvsId],
     queryFn: async () => {
       const requestedPageSize = 500;
       let page = 1;
@@ -783,7 +791,7 @@ export default function PastorMembrosPage() {
           page,
           page_size: requestedPageSize,
           roles: ["pastor", "obreiro"],
-          church_totvs_id: filterTotvs === "all" ? undefined : filterTotvs,
+          church_totvs_id: membersChurchTotvsFilter,
           is_active: filterActive,
         });
         const items = Array.isArray(chunk.workers) ? chunk.workers : [];
@@ -803,13 +811,13 @@ export default function PastorMembrosPage() {
 
   // Comentario: busca a contagem de membros inativos para exibir no card
   const { data: inativosData } = useQuery({
-    queryKey: ["pastor-members-inativos-count", filterTotvs],
+    queryKey: ["pastor-members-inativos-count", filterTotvs, churchClass, activeTotvsId],
     queryFn: () =>
       listMembers({
         page: 1,
         page_size: 1,
         roles: ["pastor", "obreiro"],
-        church_totvs_id: filterTotvs === "all" ? undefined : filterTotvs,
+        church_totvs_id: membersChurchTotvsFilter,
         is_active: false,
       }),
     staleTime: 60_000,
@@ -882,7 +890,7 @@ export default function PastorMembrosPage() {
 
   const rodapeAuto = useMemo(() => churchFooter || form.ficha_rodape || "", [churchFooter, form.ficha_rodape]);
   const { data: docsMembersData } = useQuery({
-    queryKey: ["pastor-members-docs-all", filterTotvs, filterActive],
+    queryKey: ["pastor-members-docs-all", filterTotvs, filterActive, churchClass, activeTotvsId],
     queryFn: async () => {
       const requestedPageSize = 500;
       let page = 1;
@@ -894,7 +902,7 @@ export default function PastorMembrosPage() {
           page,
           page_size: requestedPageSize,
           roles: ["pastor", "obreiro"],
-          church_totvs_id: filterTotvs === "all" ? undefined : filterTotvs,
+          church_totvs_id: membersChurchTotvsFilter,
           is_active: filterActive,
         });
         const items = Array.isArray(chunk.workers) ? chunk.workers : [];
@@ -1044,15 +1052,37 @@ export default function PastorMembrosPage() {
     void autofillCep();
   }, [form.cep_congregacao]);
 
+  const uniqueMembersForCounters = useMemo(() => {
+    if (!Array.isArray(membersForCounters)) return [];
+    const byId = new Map<string, UserListItem>();
+    for (const member of membersForCounters) {
+      const key = String(member.id || "");
+      if (!key) continue;
+      byId.set(key, member);
+    }
+    return Array.from(byId.values());
+  }, [membersForCounters]);
+
   const counters = useMemo(() => {
-    if (Array.isArray(membersForCounters)) {
+    if (membersTotal <= membersPageSize) {
       return {
-        total: membersForCounters.length,
-        pastor: membersForCounters.filter((w) => normalizeMinisterRole(w.minister_role) === "pastor").length,
-        presbitero: membersForCounters.filter((w) => normalizeMinisterRole(w.minister_role) === "presbitero").length,
-        diacono: membersForCounters.filter((w) => normalizeMinisterRole(w.minister_role) === "diacono").length,
-        obreiro: membersForCounters.filter((w) => normalizeMinisterRole(w.minister_role) === "cooperador").length,
-        batizados: membersForCounters.filter((w) => normalizeMinisterRole(w.minister_role) === "membro").length,
+        total: workers.length,
+        pastor: workers.filter((w) => normalizeMinisterRole(w.minister_role) === "pastor").length,
+        presbitero: workers.filter((w) => normalizeMinisterRole(w.minister_role) === "presbitero").length,
+        diacono: workers.filter((w) => normalizeMinisterRole(w.minister_role) === "diacono").length,
+        obreiro: workers.filter((w) => normalizeMinisterRole(w.minister_role) === "cooperador").length,
+        batizados: workers.filter((w) => normalizeMinisterRole(w.minister_role) === "membro").length,
+      };
+    }
+
+    if (uniqueMembersForCounters.length > 0) {
+      return {
+        total: uniqueMembersForCounters.length,
+        pastor: uniqueMembersForCounters.filter((w) => normalizeMinisterRole(w.minister_role) === "pastor").length,
+        presbitero: uniqueMembersForCounters.filter((w) => normalizeMinisterRole(w.minister_role) === "presbitero").length,
+        diacono: uniqueMembersForCounters.filter((w) => normalizeMinisterRole(w.minister_role) === "diacono").length,
+        obreiro: uniqueMembersForCounters.filter((w) => normalizeMinisterRole(w.minister_role) === "cooperador").length,
+        batizados: uniqueMembersForCounters.filter((w) => normalizeMinisterRole(w.minister_role) === "membro").length,
       };
     }
     if (data?.metrics) {
@@ -1073,7 +1103,7 @@ export default function PastorMembrosPage() {
       obreiro: workers.filter((w) => normalizeMinisterRole(w.minister_role) === "cooperador").length,
       batizados: workers.filter((w) => normalizeMinisterRole(w.minister_role) === "membro").length,
     };
-  }, [membersForCounters, data?.metrics, workers]);
+  }, [membersTotal, membersPageSize, uniqueMembersForCounters, data?.metrics, workers]);
 
   useEffect(() => {
     if (membersPage >= membersTotalPages) return;
