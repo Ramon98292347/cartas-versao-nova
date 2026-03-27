@@ -1372,8 +1372,8 @@ export default function PastorMembrosPage() {
               <SelectContent>
                 <SelectItem value="all">Todos os cargos</SelectItem>
                 <SelectItem value="pastor">Pastor</SelectItem>
-                <SelectItem value="presbitero">PresbÃ­tero</SelectItem>
-                <SelectItem value="diacono">DiÃ¡cono</SelectItem>
+                <SelectItem value="presbitero">Presbítero</SelectItem>
+                <SelectItem value="diacono">Diácono</SelectItem>
                 <SelectItem value="cooperador">Cooperador</SelectItem>
                 <SelectItem value="membro">Membro</SelectItem>
               </SelectContent>
@@ -2010,8 +2010,8 @@ export default function PastorMembrosPage() {
                       <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="Pastor">Pastor</SelectItem>
-                        <SelectItem value="PresbÃ­tero">PresbÃ­tero</SelectItem>
-                        <SelectItem value="DiÃ¡cono">DiÃ¡cono</SelectItem>
+                        <SelectItem value="Presbítero">Presbítero</SelectItem>
+                        <SelectItem value="Diácono">Diácono</SelectItem>
                         <SelectItem value="Cooperador">Cooperador</SelectItem>
                         <SelectItem value="Obreiro">Obreiro</SelectItem>
                         <SelectItem value="Membro">Membro</SelectItem>
