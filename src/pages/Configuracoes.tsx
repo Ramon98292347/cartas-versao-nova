@@ -41,6 +41,7 @@ export default function ConfiguracoesPage() {
     setLoadingExport(true);
     try {
       const roles = roleFilter === "todos" ? ["pastor", "obreiro"] : [roleFilter];
+      const churchTotvsId = String(session?.totvs_id || "").trim() || undefined;
       let page = 1;
       const pageSize = 200;
       let total = 0;
@@ -52,6 +53,7 @@ export default function ConfiguracoesPage() {
           page,
           page_size: pageSize,
           roles: roles as Array<"pastor" | "obreiro">,
+          church_totvs_id: churchTotvsId,
         });
         total = res.total || 0;
         rows.push(...res.workers);
